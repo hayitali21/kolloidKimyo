@@ -1,5 +1,5 @@
 "use strict";
-/* Labs 8 & 9 uchun yengil ko'prik: menyu, 12-lab ro'yxati, progress va Instagram havola */
+/* Labs 8 & 9 uchun ko'prik: menyu, 12-lab ro'yxati, progress va random effektli Instagram niki */
 (function () {
   const CATALOG = [
     { id: 1,  file: "01-kondensatsion.html",  short: "Kondensatsion usul" },
@@ -16,6 +16,7 @@
     { id: 12, file: "12-emulsiya-kopik.html", short: "Emulsiyalar va koʻpiklar" }
   ];
   const KEY = "kolloidKimyo_progress_v1";
+  const IG_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4.5"/><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor" stroke="none"/></svg>`;
   function load() {
     try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { return {}; }
   }
@@ -42,8 +43,29 @@
         .kk-menu .n{width:22px;height:22px;border-radius:6px;background:#0f2e33;color:#fff;font-family:monospace;font-size:11px;font-weight:700;display:grid;place-items:center;flex:none}
         .kk-menu a.cur .n{background:#f2a541;color:#1d1405}
         .kk-menu .ok{margin-left:auto;font-size:11px;font-family:monospace;color:#1f9d6b;font-weight:700}
-        .kk-ig{font-size:11px;color:rgba(255,255,255,.35);text-decoration:none;white-space:nowrap;padding:2px 6px;font-family:monospace;transition:color .2s}
-        .kk-ig:hover{color:rgba(255,255,255,.78)}
+        .kk-ig{position:relative;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:#f4faf9;text-decoration:none;white-space:nowrap;padding:5px 12px;border-radius:999px;background:rgba(255,255,255,.11);border:1px solid rgba(255,255,255,.24);font-family:ui-monospace,Consolas,monospace;letter-spacing:.02em;overflow:hidden;transition:transform .22s ease,box-shadow .22s ease,background .22s ease,letter-spacing .22s ease}
+        .kk-ig svg{width:14px;height:14px;flex:none;transition:transform .35s ease}
+        .kk-ig:hover{transform:translateY(-2px);color:#fff}
+        .kk-ig.ig-fx-0{background:linear-gradient(120deg,rgba(255,255,255,.12),rgba(242,165,65,.32),rgba(255,255,255,.12));background-size:220% 100%;border-color:rgba(242,165,65,.65);animation:kkShim 3.2s linear infinite}
+        @keyframes kkShim{0%{background-position:200% 0}100%{background-position:-20% 0}}
+        .kk-ig.ig-fx-1{background:linear-gradient(135deg,#f09433,#e6683c 28%,#dc2743 58%,#bc1888);border-color:rgba(255,255,255,.35);box-shadow:0 3px 12px rgba(220,39,67,.35);color:#fff}
+        .kk-ig.ig-fx-2{background:rgba(15,46,51,.92);border-color:#46e0a8;color:#8fffd2;box-shadow:0 0 10px rgba(70,224,168,.25)}
+        .kk-ig.ig-fx-2::after{content:"_";margin-left:1px;animation:kkBlk 1s steps(2,start) infinite}
+        @keyframes kkBlk{0%,49%{opacity:1}50%,100%{opacity:0}}
+        .kk-ig.ig-fx-3{background:rgba(34,195,214,.2);border-color:rgba(95,240,255,.55);color:#b6f9ff;animation:kkFlt 2.8s ease-in-out infinite}
+        @keyframes kkFlt{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+        .kk-ig.ig-fx-4{background:rgba(255,255,255,.13);border-color:rgba(255,214,112,.68);color:#ffe9ad;animation:kkPls 2.4s ease-in-out infinite}
+        .kk-ig.ig-fx-4::before{content:"✦";font-size:10px;color:#ffd166;animation:kkSpn 4s linear infinite}
+        @keyframes kkPls{0%,100%{box-shadow:0 0 0 0 rgba(255,209,102,.45)}50%{box-shadow:0 0 0 6px rgba(255,209,102,0)}}
+        @keyframes kkSpn{to{transform:rotate(360deg)}}
+        .kk-ig.ig-fx-5{background:rgba(255,255,255,.12);border-color:rgba(255,138,101,.65);color:#ffd9cc}
+        .kk-ig.ig-fx-5::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.38),transparent);transform:translateX(-120%);animation:kkSwp 2.6s ease-in-out infinite}
+        @keyframes kkSwp{0%{transform:translateX(-120%)}55%,100%{transform:translateX(130%)}}
+        .kk-ig.ig-fx-6{background:linear-gradient(90deg,#1b484f,#2c6d75,#1b484f);background-size:200% 100%;border-color:#7ee8d2;color:#e8fffb;animation:kkWav 3.5s ease infinite}
+        .kk-ig.ig-fx-6:hover svg{transform:rotate(360deg) scale(1.15)}
+        @keyframes kkWav{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+        .kk-ig.ig-fx-7{background:rgba(255,111,165,.22);border-color:rgba(255,148,194,.68);color:#ffe0ee;animation:kkBrt 2.6s ease-in-out infinite}
+        @keyframes kkBrt{0%,100%{transform:scale(1)}50%{transform:scale(1.035)}}
       `;
       document.head.appendChild(style);
       const header = document.querySelector("header");
@@ -66,15 +88,23 @@
         document.addEventListener("click", () => menu.classList.remove("open"));
       }
       const footer = document.querySelector("footer");
-      if (footer && !footer.querySelector(".kk-ig")) {
-        const a = document.createElement("a");
-        a.className = "kk-ig";
-        a.href = "https://instagram.com/hayitali1612";
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        a.textContent = "hayitali1612";
-        a.title = "Instagram: @hayitali1612";
-        footer.appendChild(a);
+      if (footer) {
+        let a = footer.querySelector(".kk-ig");
+        if (!a) {
+          a = document.createElement("a");
+          a.className = "kk-ig";
+          a.href = "https://instagram.com/hayitali1612";
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+          a.title = "Instagram: @hayitali1612";
+          footer.appendChild(a);
+        }
+        a.innerHTML = `${IG_SVG}<span>@hayitali1612</span>`;
+        const prev = Number(sessionStorage.getItem("kk_last_ig_fx"));
+        const pool = [0, 1, 2, 3, 4, 5, 6, 7].filter(i => i !== prev);
+        const fx = pool[Math.floor(Math.random() * pool.length)];
+        try { sessionStorage.setItem("kk_last_ig_fx", String(fx)); } catch {}
+        a.classList.add("ig-fx-" + fx);
       }
     }
   };
