@@ -1,0 +1,1166 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="author" content="Qayumov Hayitali">
+<meta name="description" content="5-laboratoriya ishi: Kolloid eritmalarning koagullanishi. Jelatinani atsetat bufer seriyasida suvsiz etil spirt bilan degidratlash va izoelektrik nuqtani (pH 4,7) aniqlash.">
+<title>5-laboratoriya: Koagullanish va izoelektrik nuqta — Kolloid Kimyo</title>
+<link rel="stylesheet" href="../assets/lab-core.css">
+<style>
+  .tube-pills { display:grid; grid-template-columns:repeat(9, 1fr); gap:4px; margin-bottom:8px; }
+  .tube-pills button {
+    padding:6px 2px; font-family:var(--mono); font-size:11.5px; font-weight:700;
+    background:#fff; border:1.5px solid var(--line); border-radius:7px;
+  }
+  .tube-pills button.sel { border-color:var(--accent); background:#fff4df; color:#1b1204; }
+  .tube-pills button.done { background:#e3f7ee; border-color:var(--ok); color:#126b47; }
+  .tube-pills button.ien { box-shadow:0 0 0 2px rgba(232,155,60,.45); }
+  .reag-row { display:flex; align-items:center; justify-content:space-between; gap:6px; padding:5px 0; border-bottom:1px dashed var(--line); font-size:12.5px; }
+  .reag-row:last-child { border-bottom:none; }
+  .reag-row b { font-family:var(--mono); }
+  .reag-row button { padding:5px 9px; font-size:11.8px; }
+  .pill-row { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .pill-row button { flex:1; min-width:80px; font-size:12.2px; padding:7px 6px; }
+</style>
+</head>
+<body>
+<header class="lab-head">
+  <a class="home-link" href="../index.html">← Bosh sahifa</a>
+  <div class="lab-switch-wrap" id="labSwitchWrap"></div>
+  <div class="brand">5-lab · Degidratlash va IEN<small>Jelatinani koagullash · izoelektrik nuqta</small></div>
+  <nav class="tabs" id="tabs"></nav>
+  <div class="scorechip" id="chip">0 ball</div>
+</header>
+
+<main class="lab-main">
+  <div id="stageWrap">
+    <svg id="scene" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+  <aside id="panel"></aside>
+</main>
+
+<footer class="lab-foot">
+  <span class="lbl">VAQT TEZLIGI</span>
+  <button data-sp="1">×1</button>
+  <button data-sp="10">×10</button>
+  <button data-sp="30">×30</button>
+  <button data-sp="60">×60</button>
+  <span class="sp"></span>
+  <button id="btnTable">📋 2-jadval / Jurnal</button>
+  <button id="btnHint">💡 Maslahat</button>
+  <button id="btnTheory">📘 Nazariya</button>
+  <button id="btnSnd">🔊 Ovoz</button>
+  <button id="btnFull">⛶</button>
+  <a class="ig-credit" href="https://instagram.com/hayitali1612" target="_blank" rel="noopener noreferrer" title="Instagram: @hayitali1612">hayitali1612</a>
+</footer>
+
+<div id="toasts"></div>
+<div id="modal"><div class="card" id="modalCard"></div></div>
+
+<script src="../assets/lab-core.js"></script>
+<script>
+"use strict";
+const LAB_ID = 5;
+const { el, clamp, lerp, f1, shuf, toast, modal, closeModal, svgChart, refsHTML } = LabUI;
+
+/* ============ 2-JADVAL: ANIQ RETSEPT (9 TA PROBIRKA, HAR BIRI 8,00 ML) ============ */
+const TABLE2 = [
+  { id: 1, ac01: 0.12, naac: 2.0, ac10: 0.0, h2o: 3.88, gel: 2.0, pH: 6.0, charge: "−−−", maxTurb: 0,  floc: 0.00, desc: "Toʻliq tiniq (−)" },
+  { id: 2, ac01: 0.25, naac: 2.0, ac10: 0.0, h2o: 3.75, gel: 2.0, pH: 5.6, charge: "−−",  maxTurb: 10, floc: 0.00, desc: "Juda zaif opalesensiya (+)" },
+  { id: 3, ac01: 0.50, naac: 2.0, ac10: 0.0, h2o: 3.50, gel: 2.0, pH: 5.3, charge: "−",   maxTurb: 34, floc: 0.15, desc: "Oʻrtacha loyqalanish (++)" },
+  { id: 4, ac01: 1.00, naac: 2.0, ac10: 0.0, h2o: 3.00, gel: 2.0, pH: 5.0, charge: "−",   maxTurb: 68, floc: 0.45, desc: "Kuchli loyqa + choʻkma (+++)" },
+  { id: 5, ac01: 2.00, naac: 2.0, ac10: 0.0, h2o: 2.00, gel: 2.0, pH: 4.7, charge: "0 (IEN)", maxTurb: 98, floc: 1.00, desc: "Pagʻa-pagʻa choʻkma (++++, IEN)" },
+  { id: 6, ac01: 4.00, naac: 2.0, ac10: 0.0, h2o: 0.00, gel: 2.0, pH: 4.1, charge: "+",   maxTurb: 66, floc: 0.42, desc: "Kuchli loyqa + choʻkma (+++)" },
+  { id: 7, ac01: 0.00, naac: 2.0, ac10: 0.8, h2o: 3.20, gel: 2.0, pH: 4.1, charge: "+",   maxTurb: 62, floc: 0.38, desc: "Kuchli loyqa + choʻkma (+++)" },
+  { id: 8, ac01: 0.00, naac: 2.0, ac10: 1.6, h2o: 2.40, gel: 2.0, pH: 3.8, charge: "++",  maxTurb: 28, floc: 0.10, desc: "Oʻrtacha loyqalanish (++)" },
+  { id: 9, ac01: 0.00, naac: 2.0, ac10: 3.2, h2o: 0.80, gel: 2.0, pH: 3.5, charge: "+++", maxTurb: 0,  floc: 0.00, desc: "Toʻliq tiniq (−)" }
+];
+
+/* ============ HOLAT (STATE) ============ */
+const S = {
+  stage: 0, // 0: 9 probirka tayyorlash, 1: Suvsiz spirt, 2: 30-60 min kuzatuv va grafik, 3: Hisobot
+  speed: 30,
+  numbered: false,
+  selTube: 5, // 1..9
+  manualFilledCount: 0,
+  tubes: TABLE2.map(r => ({
+    id: r.id,
+    ac01: false, naac: false, ac10: false, h2o: false, gel: false,
+    etMl: 0,
+    swirled: false
+  })),
+  // Stage 2: Etanol
+  etThreshold: 4.6, // #5 probirkada dastlabki sal loyqalanish hajmi (ml)
+  etRecorded: null, // qayd etilgan spirt hajmi (ml)
+  etAllDone: false,
+  pourAnim: null,   // { tubeId, color, t }
+  // Stage 3: 30-60 min kutish va tahlil
+  agingRun: false,
+  agingMin: 0,      // 0..60 daqiqa
+  inspectTube: 5,
+  ienGuess: null,
+  ienOk: false,
+  clearGuess: null,
+  clearOk: false,
+  q: { s1: {}, s2: {}, s3: {} },
+  quiz: {}
+};
+
+function tubeFilled(t) {
+  const r = TABLE2[t.id - 1];
+  const needAc01 = r.ac01 > 0 ? t.ac01 : true;
+  const needAc10 = r.ac10 > 0 ? t.ac10 : true;
+  const needH2o = r.h2o > 0 ? t.h2o : true;
+  return needAc01 && t.naac && needAc10 && needH2o && t.gel;
+}
+
+function tubeVol(t) {
+  const r = TABLE2[t.id - 1];
+  let v = 0;
+  if (t.ac01) v += r.ac01;
+  if (t.naac) v += r.naac;
+  if (t.ac10) v += r.ac10;
+  if (t.h2o) v += r.h2o;
+  if (t.gel) v += r.gel;
+  return v + t.etMl;
+}
+
+function allTubesPrepared() {
+  return S.numbered && S.tubes.every(tubeFilled);
+}
+
+// Har bir probirkadagi joriy loyqalik (0..100)
+function getTubeTurbidity(id) {
+  const t = S.tubes[id - 1];
+  const r = TABLE2[id - 1];
+  if (t.etMl <= 0) return 0;
+  // 2-bosqichda #5 probirkada dastlabki sal loyqalanish (spirt >= 4.4 ml)
+  const initialFaint = id === 5 && t.etMl >= S.etThreshold - 0.2
+    ? clamp((t.etMl - (S.etThreshold - 0.4)) * 18, 0, 26)
+    : 0;
+  if (S.agingMin <= 0) return initialFaint;
+  // 3-bosqich: 0..60 min davomida rivojlanish
+  const speedFactor = id === 5 ? 1.45 : (id === 4 || id === 6 || id === 7) ? 1.05 : 0.78;
+  const prog = clamp(1 - Math.exp(-(S.agingMin / 22) * speedFactor), 0, 1);
+  // Agar spirt yetarli quyilgan bo'lsa (kamida 4.2 ml)
+  const etScale = clamp(t.etMl / S.etThreshold, 0, 1.15);
+  return clamp(Math.max(initialFaint, r.maxTurb * prog * etScale), 0, 100);
+}
+
+function getTubeFloc(id) {
+  const r = TABLE2[id - 1];
+  if (S.agingMin < 12 || S.tubes[id - 1].etMl < 3.5) return 0;
+  const prog = clamp((S.agingMin - 12) / 38, 0, 1);
+  return r.floc * prog;
+}
+
+/* ============ SAVOLLAR ============ */
+const STAGE_QS = {
+  0: [
+    {
+      id: "s1q1",
+      p: "1. Nima uchun 2-jadvaldagi barcha 9 ta probirkada aralashmaning umumiy hajmi aynan 8,00 ml qilib olinadi?",
+      opts: [
+        "Barcha probirkalarda jelatina konsentratsiyasi (0,25%) bir xil boʻlishini taʼminlash uchun",
+        "Probirka hajmi 8 ml dan oshmasligi uchun",
+        "Barcha probirkalarda pH bir xil boʻlishi uchun",
+        "Sirka kislotani iqtisod qilish uchun"
+      ],
+      ok: 0
+    },
+    {
+      id: "s1q2",
+      p: "2. 0,1 n / 1,0 n sirka kislota (CH₃COOH) va 0,1 n natriy atsetat (CH₃COONa) aralashmasi qanday vazifani bajaradi?",
+      opts: [
+        "pH qiymati 6,0 dan 3,5 gacha aniq oʻzgaruvchi atsetat bufer sistemasini hosil qiladi",
+        "Jelatinani oksidlab parchalaydi",
+        "Jelatina uchun degidratlovchi modda boʻlib xizmat qiladi",
+        "Faqat eritma rangini oʻzgartiradi"
+      ],
+      ok: 0
+    }
+  ],
+  1: [
+    {
+      id: "s2q1",
+      p: "1. Suvsiz etil spirtni qoʻshishda nima sababdan aynan #5 probirkadan (pH = 4,7) boshlanadi?",
+      opts: [
+        "pH = 4,7 jelatinaning izoelektrik nuqtasi boʻlib, unda zarracha zaryadsiz va eng kam spirtda loyqalanadi",
+        "5-probirkada jelatina konsentratsiyasi eng yuqori",
+        "5-probirkada suv eng koʻp solingan",
+        "Tartibning ahamiyati yoʻq, ixtiyoriy tanlangan"
+      ],
+      ok: 0
+    },
+    {
+      id: "s2q2",
+      p: "2. Suvsiz etil spirt gidrofil jelatina zoliga qanday taʼsir koʻrsatadi?",
+      opts: [
+        "Suvni oʻziga tortib, jelatina makromolekulalari atrofidagi gidrat qobiqni buzadi (degidratlaydi)",
+        "Jelatina makromolekulalariga qoʻshimcha elektr zaryad beradi",
+        "pH qiymatini 7,0 ga tenglashtiradi",
+        "Jelatinani kimyoviy gidroliz qiladi"
+      ],
+      ok: 0
+    }
+  ],
+  2: [
+    {
+      id: "s3q1",
+      p: "1. Nima uchun #1 (pH 6,0) va #9 (pH 3,5) probirkalardagi eritmalar spirt bilan degidratlanganda ham tiniq qoldi?",
+      opts: [
+        "Izoelektrik nuqtadan uzoqda jelatina zarrachalari katta (− yoki +) elektr zaryadga ega boʻlib, oʻzaro itarilish ularni barqaror tutadi",
+        "Ularga spirt qoʻshilmagan",
+        "Ularda jelatina umuman yoʻq",
+        "pH 6,0 va 3,5 da spirt bugʻlanib ketadi"
+      ],
+      ok: 0
+    },
+    {
+      id: "s3q2",
+      p: "2. Jelatina makromolekulasi pH < 4,7 (kislotali) va pH > 4,7 (kam kislotali) muhitlarda qanday zaryadlanadi?",
+      opts: [
+        "pH < 4,7 da musbat (+, −NH₃⁺ ustun), pH > 4,7 da manfiy (−, −COO⁻ ustun)",
+        "Har ikkala muhitda ham manfiy (−)",
+        "pH < 4,7 da manfiy (−), pH > 4,7 da musbat (+)",
+        "pH oʻzgarganda zaryad oʻzgarmaydi"
+      ],
+      ok: 0
+    }
+  ]
+};
+
+const QUIZ = [
+  {
+    id: "q1",
+    p: "1. Gidrofil kolloidlarning (masalan, jelatina, oqsil) agregativ barqarorligi qaysi ikki asosiy omilga bogʻliq?",
+    opts: [
+      "Zarrachaning elektr zaryadi va uning atrofidagi gidrat (solvat) qobiqqa",
+      "Faqat zarracha rangiga va zichligiga",
+      "Faqat probirka diametriga va yorugʻlikka",
+      "Faqat Braun harakatiga"
+    ],
+    ok: 0
+  },
+  {
+    id: "q2",
+    p: "2. Amfolit (oqsil, jelatina) zarrachasining umumiy elektr zaryadi nolga teng boʻladigan pH qiymati nima deyiladi?",
+    opts: ["Izoelektrik nuqta (IEN)", "Koagullanish ostonasi", "Ekvivalent nuqta", "Kritik mitsella konsentratsiyasi"],
+    ok: 0
+  },
+  {
+    id: "q3",
+    p: "3. 2-jadval boʻyicha jelatinaning izoelektrik nuqtasi qaysi probirkada va qaysi pH da kuzatildi?",
+    opts: ["5-probirka, pH = 4,7", "1-probirka, pH = 6,0", "9-probirka, pH = 3,5", "2-probirka, pH = 5,6"],
+    ok: 0
+  },
+  {
+    id: "q4",
+    p: "4. Izoelektrik nuqtada (pH = 4,7) spirt qoʻshilmasdan oldin jelatina zoli nima hisobiga barqaror turadi?",
+    opts: [
+      "Faqat gidrat qobiq (gidratlanish) hisobiga, chunki elektr zaryadi nolga teng",
+      "Kuchli musbat zaryad hisobiga",
+      "Kuchli manfiy zaryad hisobiga",
+      "Elektrolitlar yoʻqligi sababli"
+    ],
+    ok: 0
+  },
+  {
+    id: "q5",
+    p: "5. Degidratlashdan 30–60 min oʻtgach #3, #4, #6, #7 probirkalarda ham asta-sekin loyqalanish va choʻkish yuz berishining sababi nima?",
+    opts: [
+      "IEN ga yaqin boʻlgani uchun zaryad kichik, gidrat qobiq buzilgach eritmadagi elektrolitlar taʼsirida koagullanadi",
+      "Ularga spirt 2 baravar koʻp quyilgan",
+      "Ularda harorat 100 °C ga koʻtarilgan",
+      "Sirka kislota jelatinani eritib yuborgan"
+    ],
+    ok: 0
+  }
+];
+
+/* ============ BALLAR HISOBI (0..100) ============ */
+function total() {
+  // Stage 1: 20 amaliy + 6 savol = 26
+  const filledCnt = S.tubes.filter(tubeFilled).length;
+  let p1 = (S.numbered ? 4 : 0) + Math.round((filledCnt / 9) * 16);
+  let q1 = STAGE_QS[0].reduce((a, q) => a + (S.q.s1[q.id] === q.ok ? 3 : 0), 0);
+
+  // Stage 2: 18 amaliy + 6 savol = 24
+  let p2 = (S.etRecorded !== null ? 9 : 0) + (S.etAllDone ? 9 : 0);
+  let q2 = STAGE_QS[1].reduce((a, q) => a + (S.q.s2[q.id] === q.ok ? 3 : 0), 0);
+
+  // Stage 3: 24 amaliy + 6 savol = 30
+  let p3 = (S.agingMin >= 30 ? 8 : Math.round((S.agingMin / 30) * 8)) + (S.ienOk ? 8 : 0) + (S.clearOk ? 8 : 0);
+  let q3 = STAGE_QS[2].reduce((a, q) => a + (S.q.s3[q.id] === q.ok ? 3 : 0), 0);
+
+  // Quiz: 5 * 4 = 20
+  let qz = QUIZ.reduce((a, q) => a + (S.quiz[q.id] === q.ok ? 4 : 0), 0);
+  const tot = p1 + q1 + p2 + q2 + p3 + q3 + qz;
+  return { p1, q1, p2, q2, p3, q3, qz, tot };
+}
+
+function stageDone(i) {
+  if (i === 0) return allTubesPrepared() && STAGE_QS[0].every(q => S.q.s1[q.id] === q.ok);
+  if (i === 1) return S.etAllDone && STAGE_QS[1].every(q => S.q.s2[q.id] === q.ok);
+  if (i === 2) return S.agingMin >= 30 && S.ienOk && S.clearOk && STAGE_QS[2].every(q => S.q.s3[q.id] === q.ok);
+  return false;
+}
+
+const TAB_NAMES = ["1. 9 probirka (2-jadval)", "2. Spirt bilan degidratlash", "3. 30–60 min & Grafik", "4. Hisobot"];
+function renderTabs() {
+  const t = total();
+  const doneAll = stageDone(0) && stageDone(1) && stageDone(2) && QUIZ.every(q => S.quiz[q.id] !== undefined);
+  el("chip").textContent = `${t.tot} / 100 ball`;
+  el("tabs").innerHTML = TAB_NAMES.map((nm, i) => {
+    const cls = [S.stage === i ? "cur" : "", (i < 3 && stageDone(i)) || (i === 3 && doneAll) ? "done" : ""].join(" ");
+    return `<button class="${cls}" onclick="goStage(${i})">${nm}</button>`;
+  }).join("");
+  LabProgress.save(LAB_ID, t.tot, doneAll || t.tot >= 75);
+}
+
+window.goStage = function(i) {
+  if (i === 1 && !allTubesPrepared()) {
+    SFX.play("warn");
+    return toast("Avval 1-bosqichda barcha 9 ta probirkani 2-jadval boʻyicha toʻldiring!", "warn");
+  }
+  if (i === 2 && !S.etAllDone) {
+    SFX.play("warn");
+    return toast("Avval 2-bosqichda barcha 9 ta probirkaga suvsiz etil spirt quying!", "warn");
+  }
+  SFX.play("click");
+  S.stage = i;
+  if (i === 1) S.selTube = 5;
+  renderAll();
+};
+
+/* ============ ANIMATSIYA (requestAnimationFrame) ============ */
+let lastTs = performance.now();
+let animPhase = 0;
+
+function tick(now) {
+  const dt = Math.min(0.08, (now - lastTs) / 1000);
+  lastTs = now;
+  animPhase += dt;
+
+  if (S.pourAnim) {
+    S.pourAnim.t += dt;
+    if (S.pourAnim.t > 0.65) S.pourAnim = null;
+  }
+
+  let quickUpdate = false;
+  if (S.agingRun && S.agingMin < 60) {
+    const prevMin = Math.floor(S.agingMin);
+    S.agingMin = clamp(S.agingMin + dt * (S.speed / 8), 0, 60);
+    if (Math.floor(S.agingMin) !== prevMin) quickUpdate = true;
+    if (S.agingMin >= 60) {
+      S.agingRun = false;
+      SFX.play("bell");
+      toast("60 daqiqa oʻtdi! 5-probirkada pagʻa-pagʻa choʻkma, #1 va #9 esa toʻliq tiniq!", "ok", 4500);
+      quickUpdate = true;
+    }
+  }
+
+  updateSceneLive();
+  if (quickUpdate) {
+    const clk = el("agingClock");
+    if (clk) clk.innerHTML = `${Math.floor(S.agingMin)} min<small>Kutish vaqti (30–60 min)</small>`;
+    if (S.stage === 2 && (Math.floor(S.agingMin) % 5 === 0 || S.agingMin >= 60)) {
+      renderPanel();
+    }
+    renderTabs();
+  }
+  requestAnimationFrame(tick);
+}
+
+/* ============ SVG SAHNA ============ */
+function commonDefs() {
+  return `<defs>
+    <linearGradient id="wallG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d5e3e1"/><stop offset="100%" stop-color="#b4c9c6"/>
+    </linearGradient>
+    <linearGradient id="benchG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5d787d"/><stop offset="14%" stop-color="#445d62"/><stop offset="100%" stop-color="#2a3d40"/>
+    </linearGradient>
+    <linearGradient id="woodG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#c69158"/><stop offset="50%" stop-color="#9f6d3a"/><stop offset="100%" stop-color="#7a5126"/>
+    </linearGradient>
+    <linearGradient id="glassG" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.62"/>
+      <stop offset="25%" stop-color="#ffffff" stop-opacity="0.1"/>
+      <stop offset="80%" stop-color="#dff2f5" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.48"/>
+    </linearGradient>
+    <linearGradient id="liqClear" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d7f3fa" stop-opacity="0.72"/><stop offset="100%" stop-color="#a8deee" stop-opacity="0.82"/>
+    </linearGradient>
+    <filter id="shd" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#091d20" flood-opacity="0.24"/>
+    </filter>
+  </defs>
+  <rect x="0" y="0" width="1000" height="474" fill="url(#wallG)"/>
+  <g opacity="0.2" stroke="#5d7c7e" stroke-width="1">
+    <line x1="0" y1="120" x2="1000" y2="120"/><line x1="0" y1="240" x2="1000" y2="240"/><line x1="0" y1="360" x2="1000" y2="360"/>
+  </g>
+  <rect x="0" y="470" width="1000" height="130" fill="url(#benchG)"/>
+  <rect x="0" y="468" width="1000" height="5" fill="#81a1a5"/>`;
+}
+
+// 9 ta probirka joylashuvi: x = 100 + (i)*94, i=0..8 -> 100..852
+function tubeX(id) { return 108 + (id - 1) * 98; }
+
+function renderRackSVG(showCharge, clickFn) {
+  let tubesHtml = "";
+  TABLE2.forEach((r, idx) => {
+    const id = r.id;
+    const t = S.tubes[idx];
+    const x = tubeX(id);
+    const v = tubeVol(t);
+    const liqH = clamp((v / 16) * 140, 0, 146);
+    const liqY = 444 - liqH;
+    const isSel = (S.stage === 0 || S.stage === 1) ? S.selTube === id : S.inspectTube === id;
+    const isDone = S.stage === 0 ? tubeFilled(t) : (S.stage === 1 ? t.etMl > 0 : false);
+
+    tubesHtml += `<g class="clk ${isSel ? "glow" : ""}" onclick="${clickFn}(${id})">
+      <!-- Probirka tanasi -->
+      <path d="M${x - 19},260 L${x - 19},430 Q${x - 19},450 ${x},450 Q${x + 19},450 ${x + 19},430 L${x + 19},260" fill="#f1fafc" fill-opacity="0.58" stroke="${isSel ? "#e89b3c" : "#44656b"}" stroke-width="${isSel ? 2.8 : 2}"/>
+      <clipPath id="tc${id}">
+        <path d="M${x - 17},262 L${x - 17},429 Q${x - 17},448 ${x},448 Q${x + 17},448 ${x + 17},429 L${x + 17},262 Z"/>
+      </clipPath>
+      <g clip-path="url(#tc${id})">
+        <!-- Tiniq suyuqlik -->
+        <rect id="tLiq${id}" x="${x - 18}" y="${liqY.toFixed(1)}" width="36" height="${(liqH + 8).toFixed(1)}" fill="url(#liqClear)"/>
+        <!-- Loyqalik qatlami (oq-sutli) -->
+        <rect id="tTurb${id}" x="${x - 18}" y="${liqY.toFixed(1)}" width="36" height="${(liqH + 8).toFixed(1)}" fill="#ffffff" opacity="0"/>
+        <!-- Pag'a-pag'a cho'kma guruhi -->
+        <g id="tFloc${id}"></g>
+      </g>
+      <!-- Menisk va shisha yaltirashi -->
+      ${v > 0 ? `<ellipse cx="${x}" cy="${liqY.toFixed(1)}" rx="16.5" ry="3" fill="#e5f8fd" stroke="#62a8be" stroke-width="0.9"/>` : ""}
+      <path d="M${x - 19},260 L${x - 19},430 Q${x - 19},450 ${x},450 Q${x + 19},450 ${x + 19},430 L${x + 19},260" fill="url(#glassG)"/>
+      <ellipse cx="${x}" cy="260" rx="20" ry="3.5" fill="none" stroke="#44656b" stroke-width="1.8"/>
+
+      <!-- Mum qalam raqami -->
+      ${S.numbered ? `
+        <rect x="${x - 12}" y="274" width="24" height="18" rx="4" fill="${id === 5 ? "#fff1d0" : "#ffffff"}" fill-opacity="0.9" stroke="${id === 5 ? "#d18224" : "#89a5a8"}" stroke-width="1"/>
+        <text x="${x}" y="287" text-anchor="middle" font-family="var(--mono)" font-size="11.5" font-weight="800" fill="${id === 5 ? "#8a4e00" : "#132629"}">#${id}</text>
+      ` : ""}
+
+      <!-- pH va hajm yorlig'i -->
+      <text x="${x}" y="492" text-anchor="middle" font-family="var(--mono)" font-size="11.5" font-weight="700" fill="${id === 5 ? "#ffcf73" : "#edf5f4"}">pH ${f1(r.pH, 1)}</text>
+      <text x="${x}" y="510" text-anchor="middle" font-family="var(--mono)" font-size="10.5" fill="#bdd4d1">${f1(v, 1)} ml ${isDone ? "✓" : ""}</text>
+
+      <!-- Zaryad / loyqalik indikatori -->
+      ${showCharge ? `
+        <rect x="${x - 24}" y="520" width="48" height="22" rx="6" fill="${id === 5 ? "#e89b3c" : "#1a3c42"}" stroke="${id === 5 ? "#fff0cf" : "#446a70"}"/>
+        <text x="${x}" y="535" text-anchor="middle" font-family="var(--mono)" font-size="10.5" font-weight="800" fill="${id === 5 ? "#1b1204" : "#a9ded8"}">${id === 5 ? "0 IEN" : r.charge}</text>
+        <text id="tPct${id}" x="${x}" y="558" text-anchor="middle" font-family="var(--mono)" font-size="10.5" font-weight="700" fill="#ffe7bd">0%</text>
+      ` : ""}
+    </g>`;
+  });
+
+  // Yog'och shtativ (orqa va old taxtalar)
+  return `<g filter="url(#shd)">
+    <rect x="64" y="454" width="872" height="18" rx="4" fill="url(#woodG)" stroke="#593816" stroke-width="1.5"/>
+    <rect x="64" y="316" width="872" height="14" rx="3" fill="url(#woodG)" stroke="#593816" stroke-width="1.4" opacity="0.92"/>
+    <rect x="74" y="316" width="14" height="154" fill="#825529" stroke="#593816"/>
+    <rect x="912" y="316" width="14" height="154" fill="#825529" stroke="#593816"/>
+  </g>
+  ${tubesHtml}
+  <!-- Shtativ oldingi chegarasi (probirkalar teshikdan o'tgan effekti) -->
+  <rect x="64" y="324" width="872" height="7" rx="2" fill="#b47e45" stroke="#593816" stroke-width="1" opacity="0.88"/>`;
+}
+
+function buildScene1() {
+  const bx = tubeX(S.selTube);
+  return `${commonDefs()}
+  <text x="28" y="36" font-size="18" font-weight="800" fill="#132629">1-bosqich: 9 ta probirkada atsetat bufer + jelatina seriyasi (2-jadval)</text>
+  <text x="28" y="56" font-size="13" fill="#3b5a5e">Har bir probirkada umumiy hajm 8,00 ml · pH 6,0 → 3,5 · Tanlangan probirka: #${S.selTube} (pH ${f1(TABLE2[S.selTube - 1].pH, 1)})</text>
+
+  <!-- Yuqori qator: Mum qalam + 3 byuretka + 2 pipetka -->
+  <g class="clk ${!S.numbered ? "glow" : ""}" onclick="actNum()" transform="translate(46,84)" filter="url(#shd)">
+    <rect x="0" y="0" width="112" height="108" rx="12" fill="#fffaf0" stroke="${S.numbered ? "#1f9d6b" : "#e89b3c"}" stroke-width="2"/>
+    <path d="M30,62 L76,22 L86,32 L40,72 L24,76 Z" fill="#2c4a52" stroke="#132629" stroke-width="1.4"/>
+    <polygon points="24,76 30,62 40,72" fill="#e89b3c"/>
+    <text x="56" y="96" text-anchor="middle" font-size="11.5" font-weight="800" fill="#132629">${S.numbered ? "✓ Raqamlandi" : "Mum qalam"}</text>
+  </g>
+
+  ${[
+    { k: "ac01", x: 184, lbl: "0,1 n CH₃COOH", sub: "Byuretka 1", col: "#c8e6f5" },
+    { k: "ac10", x: 326, lbl: "1,0 n CH₃COOH", sub: "Byuretka 2", col: "#a8d8f0" },
+    { k: "h2o",  x: 468, lbl: "Distill. H₂O",  sub: "Byuretka 3", col: "#d9f4fb" },
+    { k: "naac", x: 610, lbl: "0,1 n CH₃COONa", sub: "Pipetka (2 ml)", col: "#e0f2e6" },
+    { k: "gel",  x: 752, lbl: "1% Jelatina",    sub: "Pipetka (2 ml)", col: "#f7eccb" }
+  ].map(b => {
+    const r = TABLE2[S.selTube - 1];
+    const t = S.tubes[S.selTube - 1];
+    const amt = r[b.k];
+    const done = amt === 0 || t[b.k];
+    const active = S.numbered && amt > 0 && !t[b.k];
+    return `<g class="clk ${active ? "glow" : ""}" onclick="addReag('${b.k}')" transform="translate(${b.x},80)" filter="url(#shd)">
+      <rect x="0" y="0" width="128" height="118" rx="12" fill="#ffffff" stroke="${done ? "#1f9d6b" : active ? "#e89b3c" : "#b8ccc9"}" stroke-width="${active ? 2.4 : 1.6}"/>
+      <!-- Byuretka/Pipetka ikonkasi -->
+      <rect x="55" y="10" width="18" height="54" rx="4" fill="#eef8fa" stroke="#45676d" stroke-width="1.5"/>
+      <rect x="57" y="24" width="14" height="38" rx="2" fill="${b.col}"/>
+      <line x1="64" y1="64" x2="64" y2="74" stroke="#45676d" stroke-width="2.5"/>
+      <text x="64" y="90" text-anchor="middle" font-size="11" font-weight="800" fill="#132629">${b.lbl}</text>
+      <text x="64" y="106" text-anchor="middle" font-family="var(--mono)" font-size="10.5" fill="${amt === 0 ? "#8aa1a4" : done ? "#1f9d6b" : "#b86b00"}">${amt === 0 ? "kerak emas (—)" : done ? `✓ ${f1(amt, 2)} ml` : `+ ${f1(amt, 2)} ml`}</text>
+    </g>`;
+  }).join("")}
+
+  <!-- Tanlangan probirka ko'rsatkichi -->
+  <polygon points="${bx},246 ${bx - 9},232 ${bx + 9},232" fill="#e89b3c"/>
+  <g id="pourDrops"></g>
+
+  ${renderRackSVG(false, "selectTube")}
+  `;
+}
+
+function buildScene2() {
+  const bx = tubeX(S.selTube);
+  const t = S.tubes[S.selTube - 1];
+  return `${commonDefs()}
+  <text x="28" y="36" font-size="18" font-weight="800" fill="#132629">2-bosqich: Suvsiz etil spirt (C₂H₅OH) bilan degidratlash</text>
+  <text x="28" y="56" font-size="13" fill="#3b5a5e">${S.etRecorded === null ? "Avval #5 probirkaga (pH 4,7 — IEN) sal loyqalanish paydo boʻlguncha spirt tomizing!" : `Qayd etilgan spirt hajmi: ${f1(S.etRecorded, 1)} ml — qolgan barcha probirkalarga bir xil hajmda quying!`}</text>
+
+  <!-- Harakatlanuvchi 25 ml spirt byuretkasi (tanlangan probirka ustida) -->
+  <g class="clk glow" onclick="dripEthanol()" transform="translate(${bx - 28},74)" filter="url(#shd)">
+    <rect x="20" y="0" width="16" height="148" rx="3" fill="#eef9fb" stroke="#3c5e64" stroke-width="2"/>
+    <rect x="22" y="${26 + Math.min(90, t.etMl * 10)}" width="12" height="${Math.max(10, 120 - Math.min(90, t.etMl * 10))}" fill="#e6f5ff" opacity="0.88"/>
+    <!-- Shkala chiziqlari -->
+    <g stroke="#3c5e64" stroke-width="1">
+      <line x1="20" y1="28" x2="28" y2="28"/><line x1="20" y1="52" x2="28" y2="52"/>
+      <line x1="20" y1="76" x2="28" y2="76"/><line x1="20" y1="100" x2="28" y2="100"/><line x1="20" y1="124" x2="28" y2="124"/>
+    </g>
+    <!-- Jo'mrak -->
+    <rect x="10" y="148" width="36" height="8" rx="3" fill="#e89b3c" stroke="#6e4107"/>
+    <path d="M25,156 L31,156 L29,176 L27,176 Z" fill="#eef9fb" stroke="#3c5e64" stroke-width="1.5"/>
+    <!-- Yorliq -->
+    <rect x="-42" y="16" width="58" height="44" rx="7" fill="#0f2e33"/>
+    <text x="-13" y="34" text-anchor="middle" font-size="10" font-weight="800" fill="#ffcf73">C₂H₅OH</text>
+    <text x="-13" y="50" text-anchor="middle" font-family="var(--mono)" font-size="11" font-weight="700" fill="#8df5c3">${f1(t.etMl, 1)} ml</text>
+  </g>
+
+  <g id="pourDrops"></g>
+
+  ${renderRackSVG(false, "selectTube2")}
+  `;
+}
+
+function buildScene3() {
+  return `${commonDefs()}
+  <text x="28" y="36" font-size="18" font-weight="800" fill="#132629">3-bosqich: 30–60 daqiqa kuzatuv — loyqalik va pagʻa-pagʻa choʻkma</text>
+  <text x="28" y="56" font-size="13" fill="#3b5a5e">Vaqt oʻtishi bilan #5 (pH 4,7) da kuchli choʻkma, #3,#4,#6,#7 da oʻrtacha loyqalik, #1 va #9 da esa toʻliq tiniqlik saqlanadi</text>
+
+  <!-- Raqamli laboratoriya taymeri + molekula sxemasi -->
+  <g transform="translate(64,84)" filter="url(#shd)">
+    <rect x="0" y="0" width="236" height="122" rx="14" fill="#183036" stroke="#0d1d21" stroke-width="2"/>
+    <text x="118" y="26" text-anchor="middle" font-size="11" font-weight="700" fill="#8db4ba">KUTISH TAYMERI (30–60 MIN)</text>
+    <text id="svgTimerTxt" x="118" y="68" text-anchor="middle" font-family="var(--mono)" font-size="34" font-weight="800" fill="#8df5c3">${String(Math.floor(S.agingMin)).padStart(2, "0")}:00</text>
+    <g class="clk" onclick="toggleAging()">
+      <rect x="38" y="82" width="160" height="28" rx="8" fill="${S.agingRun ? "#1f9d6b" : "#e89b3c"}"/>
+      <text x="118" y="100" text-anchor="middle" font-size="12" font-weight="800" fill="${S.agingRun ? "#fff" : "#1b1204"}">${S.agingRun ? "⏸ PAUZA" : S.agingMin >= 60 ? "↺ QAYTA KUZATISH" : "▶ VAQTNI BOSHLASH"}</text>
+    </g>
+  </g>
+
+  <!-- Gidrofil barqarorlik sxemasi -->
+  <g transform="translate(328,84)" filter="url(#shd)">
+    <rect x="0" y="0" width="608" height="122" rx="14" fill="#ffffff" fill-opacity="0.94" stroke="#c3d8d5" stroke-width="1.6"/>
+    <text x="304" y="24" text-anchor="middle" font-size="12.5" font-weight="800" fill="#0f2e33">Jelatina makromolekulalarining pH ga bogʻliq holati (degidratlashdan keyin)</text>
+    <!-- pH > 4.7 -->
+    <circle cx="102" cy="70" r="22" fill="#4696c4" opacity="0.22" stroke="#1e6e9c" stroke-width="2"/>
+    <text x="102" y="75" text-anchor="middle" font-size="15" font-weight="800" fill="#134c6e">− − −</text>
+    <text x="102" y="108" text-anchor="middle" font-size="10.5" font-weight="700" fill="#35585c">pH 6,0 (#1): −COO⁻ (tiniq)</text>
+    <!-- pH = 4.7 IEN -->
+    <circle cx="304" cy="70" r="22" fill="#e89b3c" opacity="0.32" stroke="#b56c0e" stroke-width="2.2"/>
+    <circle cx="294" cy="64" r="5" fill="#fff" stroke="#a66208"/><circle cx="313" cy="74" r="6" fill="#fff" stroke="#a66208"/><circle cx="303" cy="79" r="5" fill="#fff" stroke="#a66208"/>
+    <text x="304" y="108" text-anchor="middle" font-size="10.5" font-weight="800" fill="#9c5500">pH 4,7 (#5 IEN): Zaryad = 0 (CHOʻKMA!)</text>
+    <!-- pH < 4.7 -->
+    <circle cx="506" cy="70" r="22" fill="#d64545" opacity="0.2" stroke="#b52d2d" stroke-width="2"/>
+    <text x="506" y="75" text-anchor="middle" font-size="15" font-weight="800" fill="#8c1a1a">+ + +</text>
+    <text x="506" y="108" text-anchor="middle" font-size="10.5" font-weight="700" fill="#35585c">pH 3,5 (#9): −NH₃⁺ (tiniq)</text>
+  </g>
+
+  ${renderRackSVG(true, "inspectTube3")}
+  `;
+}
+
+function buildSceneReport() {
+  const t = total();
+  return `${commonDefs()}
+  <rect x="70" y="54" width="860" height="390" rx="20" fill="#ffffff" fill-opacity="0.95" stroke="#c5d8d5" stroke-width="2" filter="url(#shd)"/>
+  <text x="500" y="102" text-anchor="middle" font-size="22" font-weight="800" fill="#0f2e33">5-LABORATORIYA ISHI NATIJALARI</text>
+  <text x="500" y="128" text-anchor="middle" font-size="14" fill="#587276">Jelatinani degidratlash yoʻli bilan koagullash · Izoelektrik nuqta</text>
+
+  <!-- 9 ta probirkaning yakuniy vizual ustunlari -->
+  <g transform="translate(120,164)">
+    ${TABLE2.map((r, i) => {
+      const tb = getTubeTurbidity(r.id);
+      const h = Math.max(4, tb * 1.45);
+      const x = i * 86;
+      return `<rect x="${x + 16}" y="${160 - h}" width="38" height="${h}" rx="5" fill="${r.id === 5 ? "#e89b3c" : "#1b484f"}"/>
+        <text x="${x + 35}" y="${154 - h}" text-anchor="middle" font-family="var(--mono)" font-size="11" font-weight="700" fill="#132629">${Math.round(tb)}%</text>
+        <text x="${x + 35}" y="178" text-anchor="middle" font-family="var(--mono)" font-size="11.5" font-weight="700" fill="${r.id === 5 ? "#b56908" : "#132629"}">#${r.id}</text>
+        <text x="${x + 35}" y="194" text-anchor="middle" font-size="10.5" fill="#587276">pH ${f1(r.pH, 1)}</text>`;
+    }).join("")}
+  </g>
+  <text x="500" y="408" text-anchor="middle" font-family="var(--mono)" font-size="18" font-weight="800" fill="#0f2e33">IEN: pH = 4,7 (#5) · Umumiy ball: ${t.tot} / 100</text>`;
+}
+
+function renderScene() {
+  const svg = el("scene");
+  if (S.stage === 0) svg.innerHTML = buildScene1();
+  else if (S.stage === 1) svg.innerHTML = buildScene2();
+  else if (S.stage === 2) svg.innerHTML = buildScene3();
+  else svg.innerHTML = buildSceneReport();
+  updateSceneLive();
+}
+
+function updateSceneLive() {
+  // Har bir probirkadagi loyqalik va pag'a-pag'a cho'kmani yangilash
+  if (S.stage <= 2) {
+    TABLE2.forEach(r => {
+      const id = r.id;
+      const tb = getTubeTurbidity(id);
+      const fl = getTubeFloc(id);
+      const turbEl = el(`tTurb${id}`);
+      if (turbEl) turbEl.setAttribute("opacity", (tb / 100 * 0.92).toFixed(3));
+      const pctEl = el(`tPct${id}`);
+      if (pctEl) pctEl.textContent = `${Math.round(tb)}%`;
+
+      const flEl = el(`tFloc${id}`);
+      if (flEl) {
+        if (fl > 0.04) {
+          const x = tubeX(id);
+          const cnt = Math.floor(4 + fl * 18);
+          let html = "";
+          // Cho'kma tagida oq qatlam
+          const sedH = fl * 26;
+          html += `<rect x="${x - 17}" y="${(448 - sedH).toFixed(1)}" width="34" height="${(sedH + 4).toFixed(1)}" fill="#fffdf6" opacity="0.95"/>`;
+          // Sekin cho'kayotgan pag'a-pag'a iviqlar
+          for (let i = 0; i < cnt; i++) {
+            const sx = x - 12 + ((i * 19 + id * 7) % 24);
+            const drop = ((animPhase * 8 + i * 23) % 72);
+            const sy = 342 + drop * (0.65 + fl * 0.35);
+            const rr = 2 + (i % 3) * 1.1;
+            html += `<circle cx="${sx.toFixed(1)}" cy="${Math.min(443, sy).toFixed(1)}" r="${rr}" fill="#ffffff" stroke="#d5d0be" stroke-width="0.6" opacity="0.92"/>`;
+          }
+          flEl.innerHTML = html;
+        } else {
+          flEl.innerHTML = "";
+        }
+      }
+    });
+
+    // Tomchi animatsiyasi
+    const dr = el("pourDrops");
+    if (dr) {
+      if (S.pourAnim) {
+        const px = tubeX(S.pourAnim.tubeId);
+        const py = lerp(246, 360, clamp(S.pourAnim.t / 0.65, 0, 1));
+        dr.innerHTML = `<ellipse cx="${px}" cy="${py.toFixed(1)}" rx="3.5" ry="6" fill="${S.pourAnim.color}" stroke="#5b95aa" stroke-width="0.8"/>`;
+      } else {
+        dr.innerHTML = "";
+      }
+    }
+
+    const st = el("svgTimerTxt");
+    if (st) {
+      const m = Math.floor(S.agingMin);
+      const sec = Math.floor((S.agingMin - m) * 60);
+      st.textContent = `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+    }
+  }
+}
+
+/* ============ AMALLAR ============ */
+window.actNum = function() {
+  if (S.numbered) return toast("Probirkalar allaqachon 1 dan 9 gacha raqamlangan.", "warn");
+  S.numbered = true;
+  SFX.play("paper");
+  toast("Mum qalam bilan barcha 9 ta probirka #1–#9 raqamlandi!", "ok");
+  renderAll();
+};
+
+window.selectTube = function(id) {
+  S.selTube = id;
+  SFX.play("click");
+  renderAll();
+};
+
+window.addReag = function(key) {
+  if (!S.numbered) return toast("Avval mum qalam bilan probirkalarni raqamlang!", "warn");
+  const r = TABLE2[S.selTube - 1];
+  const t = S.tubes[S.selTube - 1];
+  if (r[key] === 0) return toast(`#${S.selTube} probirka uchun 2-jadvalda bu reaktiv kerak emas (—)!`, "warn");
+  if (t[key]) return toast(`Bu reaktiv #${S.selTube} probirkaga allaqachon quyilgan.`, "warn");
+  const wasFilled = tubeFilled(t);
+  t[key] = true;
+  S.pourAnim = { tubeId: S.selTube, color: key === "gel" ? "#f5e3aa" : "#bceaf7", t: 0 };
+  SFX.play(key === "gel" || key === "naac" ? "pipette" : "pour");
+  if (!wasFilled && tubeFilled(t)) {
+    S.manualFilledCount++;
+    SFX.play("ok");
+    toast(`#${S.selTube} probirka (pH ${f1(r.pH, 1)}) toʻliq 8,00 ml ga toʻldirildi!`, "ok");
+  }
+  renderAll();
+};
+
+window.fillOneQuick = function(id) {
+  if (!S.numbered) S.numbered = true;
+  const r = TABLE2[id - 1];
+  const t = S.tubes[id - 1];
+  if (r.ac01 > 0) t.ac01 = true;
+  t.naac = true;
+  if (r.ac10 > 0) t.ac10 = true;
+  if (r.h2o > 0) t.h2o = true;
+  t.gel = true;
+  S.pourAnim = { tubeId: id, color: "#f5e3aa", t: 0 };
+  SFX.play("pour");
+  toast(`#${id} probirka 2-jadval boʻyicha 8,00 ml qilib tayyorlandi.`, "ok");
+  renderAll();
+};
+
+window.fillRestAuto = function() {
+  if (!S.numbered) return toast("Avval mum qalam bilan raqamlang!", "warn");
+  const filledCnt = S.tubes.filter(tubeFilled).length;
+  if (filledCnt < 2) return toast("Avval kamida 2 ta probirkani (jumladan #5 ni) qoʻlda toʻldirib koʻring!", "warn");
+  TABLE2.forEach((r, i) => {
+    const t = S.tubes[i];
+    if (r.ac01 > 0) t.ac01 = true;
+    t.naac = true;
+    if (r.ac10 > 0) t.ac10 = true;
+    if (r.h2o > 0) t.h2o = true;
+    t.gel = true;
+  });
+  SFX.play("ok");
+  toast("Qolgan barcha probirkalar 2-jadval boʻyicha aniq 8,00 ml qilib toʻldirildi!", "ok");
+  renderAll();
+};
+
+/* Stage 2: Suvsiz etil spirt */
+window.selectTube2 = function(id) {
+  if (S.etRecorded === null && id !== 5) {
+    SFX.play("warn");
+    return toast("Koʻrsatmaga koʻra spirt qoʻshishni AVVAL #5 probirkadan (pH 4,7 — IEN) boshlash shart!", "warn", 4200);
+  }
+  S.selTube = id;
+  SFX.play("click");
+  renderAll();
+};
+
+window.dripEthanol = function(amt = 0.4) {
+  if (S.etRecorded === null && S.selTube !== 5) {
+    SFX.play("warn");
+    return toast("Avval #5 probirkaga (pH = 4,7) spirt tomizing!", "warn");
+  }
+  const t = S.tubes[S.selTube - 1];
+  if (S.etRecorded === null) {
+    if (t.etMl >= 7.0) return toast("Spirt meʼyordan oshib ketdi — #5 probirkani qayta boshlang yoki hajmni qayd eting.", "warn");
+    t.etMl = +(t.etMl + amt).toFixed(1);
+    S.pourAnim = { tubeId: 5, color: "#d6eeff", t: 0 };
+    SFX.play("drip");
+    if (t.etMl >= S.etThreshold - 0.1 && t.etMl <= S.etThreshold + 0.5) {
+      toast(`#5 probirkada (${f1(t.etMl, 1)} ml) yengil loyqalanish paydo boʻldi! Endi hajmni qayd eting.`, "ok", 4200);
+    }
+  } else {
+    if (t.etMl > 0) return toast(`#${S.selTube} probirkaga allaqachon ${f1(t.etMl, 1)} ml spirt quyilgan.`, "warn");
+    t.etMl = S.etRecorded;
+    t.swirled = true;
+    S.pourAnim = { tubeId: S.selTube, color: "#d6eeff", t: 0 };
+    SFX.play("pour");
+    if (S.tubes.every(x => x.etMl > 0)) {
+      S.etAllDone = true;
+      SFX.play("ok");
+      toast("Barcha 9 ta probirkaga bir xil hajmda suvsiz etil spirt quyildi! 3-bosqichga oʻting.", "ok", 4500);
+    }
+  }
+  renderAll();
+};
+
+window.swirlTube5 = function() {
+  S.tubes[4].swirled = true;
+  SFX.play("shake");
+  toast("#5 probirka chayqatib aralashtirildi.", "");
+  renderAll();
+};
+
+window.recordEthanol5 = function() {
+  const v = S.tubes[4].etMl;
+  if (v < S.etThreshold - 0.3) {
+    SFX.play("warn");
+    return toast(`Hali eritma tiniq (${f1(v, 1)} ml)! Sal loyqalanish paydo boʻlguncha (~4,6 ml) spirt qoʻshing.`, "warn", 3800);
+  }
+  S.etRecorded = v;
+  S.tubes[4].swirled = true;
+  SFX.play("ok");
+  toast(`Qayd etildi: V(spirt) = ${f1(v, 1)} ml! Endi qolgan 8 ta probirkaga ham aynan ${f1(v, 1)} ml dan quying.`, "ok", 4500);
+  renderAll();
+};
+
+window.pourEthanolAllRest = function() {
+  if (S.etRecorded === null) return toast("Avval #5 probirkada kerakli spirt hajmini aniqlab qayd eting!", "warn");
+  S.tubes.forEach(t => { t.etMl = S.etRecorded; t.swirled = true; });
+  S.etAllDone = true;
+  SFX.play("shake");
+  setTimeout(() => SFX.play("ok"), 320);
+  toast(`Barcha 9 ta probirkaga bir xil ${f1(S.etRecorded, 1)} ml dan suvsiz etil spirt quyilib chayqatildi!`, "ok", 4500);
+  renderAll();
+};
+
+/* Stage 3: Kutish va tahlil */
+window.inspectTube3 = function(id) {
+  S.inspectTube = id;
+  SFX.play("click");
+  renderAll();
+};
+
+window.toggleAging = function() {
+  if (S.agingMin >= 60) S.agingMin = 0;
+  S.agingRun = !S.agingRun;
+  SFX.play(S.agingRun ? "beep" : "click");
+  renderAll();
+};
+
+window.jumpAging = function(mins) {
+  S.agingRun = false;
+  S.agingMin = mins;
+  SFX.play("bell");
+  toast(`Vaqt ${mins} daqiqaga oʻtkazildi. Probirkalardagi loyqalik va choʻkmani tahlil qiling!`, "ok");
+  renderAll();
+};
+
+window.guessIEN = function(phVal) {
+  if (S.agingMin < 30) return toast("Avval kamida 30 daqiqa kutish natijasini kuzating!", "warn");
+  S.ienGuess = phVal;
+  if (phVal === 4.7) {
+    S.ienOk = true; SFX.play("ok");
+    toast("Toʻgʻri! Jelatinaning izoelektrik nuqtasi pH = 4,7 (#5 probirka).", "ok");
+  } else {
+    SFX.play("err");
+    toast("Qayta qarang: eng kuchli loyqalanish va pagʻa-pagʻa choʻkma qaysi probirkada?", "err");
+  }
+  renderAll();
+};
+
+window.guessClear = function(pair) {
+  if (S.agingMin < 30) return toast("Avval kamida 30 daqiqa kutish natijasini kuzating!", "warn");
+  S.clearGuess = pair;
+  if (pair === "1-9") {
+    S.clearOk = true; SFX.play("ok");
+    toast("Toʻgʻri! #1 (pH 6,0) va #9 (pH 3,5) kuchli zaryad tufayli toʻliq tiniq qoldi.", "ok");
+  } else {
+    SFX.play("err");
+    toast("Shtativdagi eng chetki probirkalarga qarang — qaysilari 0% loyqalikda qoldi?", "err");
+  }
+  renderAll();
+};
+
+window.ansStageQ = function(stageIdx, qid, optIdx) {
+  const qObj = STAGE_QS[stageIdx].find(x => x.id === qid);
+  const store = stageIdx === 0 ? S.q.s1 : stageIdx === 1 ? S.q.s2 : S.q.s3;
+  store[qid] = optIdx;
+  SFX.play(optIdx === qObj.ok ? "ok" : "err");
+  if (optIdx === qObj.ok) toast("Toʻgʻri javob! (+3 ball)", "ok");
+  else toast("Notoʻgʻri. Qayta urinib koʻring!", "err");
+  renderAll();
+};
+
+window.ansQuiz = function(qid, optIdx) {
+  const qObj = QUIZ.find(x => x.id === qid);
+  S.quiz[qid] = optIdx;
+  SFX.play(optIdx === qObj.ok ? "ok" : "err");
+  renderAll();
+};
+
+/* ============ YON PANEL ============ */
+function renderStageQs(stageIdx) {
+  const store = stageIdx === 0 ? S.q.s1 : stageIdx === 1 ? S.q.s2 : S.q.s3;
+  return `<div class="box"><h4>Nazorat savollari</h4>` +
+    STAGE_QS[stageIdx].map((q, qi) => {
+      const order = shuf(q.opts.length, 51 + stageIdx * 19 + qi * 11);
+      const picked = store[q.id];
+      return `<div class="q"><p>${q.p}</p>` +
+        order.map(oi => {
+          const cls = picked === oi ? (oi === q.ok ? "right" : "wrong") : "";
+          return `<button class="${cls}" onclick="ansStageQ(${stageIdx},'${q.id}',${oi})">${q.opts[oi]}</button>`;
+        }).join("") + `</div>`;
+    }).join("") + `</div>`;
+}
+
+function turbidityChart() {
+  return svgChart({
+    title: "Jelatina loyqaligi (%) ning pH ga bogʻlanishi (IEN = 4,7)",
+    xl: "pH", yl: "Loyqalik, %",
+    x0: 3.3, xm: 6.2, y0: 0, ym: 105,
+    series: [{
+      color: "#d18224",
+      dot: "#0f2e33",
+      pts: TABLE2.map(r => ({ x: r.pH, y: +getTubeTurbidity(r.id).toFixed(1) }))
+    }]
+  });
+}
+
+function renderPanel() {
+  const p = el("panel");
+  if (S.stage === 0) {
+    const r = TABLE2[S.selTube - 1];
+    const t = S.tubes[S.selTube - 1];
+    const filledCnt = S.tubes.filter(tubeFilled).length;
+    p.innerHTML = `
+      <h2>1-bosqich: 9 ta probirka (2-jadval)</h2>
+      <p class="sub">25 ml li 9 ta quruq probirkani raqamlang va 2-jadval boʻyicha atsetat bufer + 1% jelatina seriyasini (jami 8,00 ml) tayyorlang.</p>
+      <div class="box">
+        <h4>Probirkani tanlash (${filledCnt}/9 tayyor)</h4>
+        <button class="next ${S.numbered ? "on" : "pri"}" style="margin:0 0 8px" onclick="actNum()">${S.numbered ? "✓ Probirkalar #1–#9 raqamlangan" : "✏️ 1. Mum qalam bilan #1–#9 raqamlash"}</button>
+        <div class="tube-pills">
+          ${TABLE2.map((x, i) => `<button class="${S.selTube === x.id ? "sel" : ""} ${tubeFilled(S.tubes[i]) ? "done" : ""} ${x.id === 5 ? "ien" : ""}" onclick="selectTube(${x.id})">#${x.id}</button>`).join("")}
+        </div>
+        <div class="kv"><span>Tanlangan probirka:</span><b>#${r.id} (pH = ${f1(r.pH, 1)}${r.id === 5 ? ", IEN" : ""})</b></div>
+        <div class="kv"><span>Joriy hajm / Maqsad:</span><b>${f1(tubeVol(t), 2)} / 8,00 ml</b></div>
+      </div>
+
+      <div class="box">
+        <h4>#${r.id} probirka retsepti (2-jadval)</h4>
+        ${[
+          { k: "ac01", nm: "0,1 n CH₃COOH (byuretka)" },
+          { k: "naac", nm: "0,1 n CH₃COONa (pipetka)" },
+          { k: "ac10", nm: "1,0 n CH₃COOH (byuretka)" },
+          { k: "h2o",  nm: "Distillangan suv (byuretka)" },
+          { k: "gel",  nm: "1% jelatina (pipetka)" }
+        ].map(item => {
+          const amt = r[item.k];
+          const done = amt === 0 || t[item.k];
+          return `<div class="reag-row">
+            <span>${item.nm}</span>
+            <b>${amt === 0 ? "—" : f1(amt, 2) + " ml"}</b>
+            <button onclick="addReag('${item.k}')" class="${done && amt > 0 ? "on" : ""}" ${!S.numbered || amt === 0 || t[item.k] ? "disabled" : ""}>${amt === 0 ? "—" : t[item.k] ? "✓" : "Quyish"}</button>
+          </div>`;
+        }).join("")}
+        <div class="row" style="margin-top:8px">
+          <button style="flex:1" onclick="fillOneQuick(${r.id})" ${!S.numbered || tubeFilled(t) ? "disabled" : ""}>⚡ #${r.id} ni toʻliq quyish</button>
+          <button class="pri" style="flex:1" onclick="fillRestAuto()" ${!S.numbered || filledCnt < 2 || filledCnt === 9 ? "disabled" : ""}>✨ Qolganlarini toʻldirish</button>
+        </div>
+        ${filledCnt < 2 ? `<p class="note" style="margin-top:6px">Kamida 2 ta probirkani toʻldiring, soʻng «Qolganlarini toʻldirish» faollashadi.</p>` : ""}
+      </div>
+      ${renderStageQs(0)}
+      ${allTubesPrepared() ? `<button class="next pri" onclick="goStage(1)">Keyingi: 2-bosqich (Suvsiz etil spirt) →</button>` : ""}
+    `;
+  } else if (S.stage === 1) {
+    const t5 = S.tubes[4];
+    const doneCnt = S.tubes.filter(x => x.etMl > 0).length;
+    p.innerHTML = `
+      <h2>2-bosqich: Suvsiz etil spirt</h2>
+      <p class="sub">Avval <b>#5 probirkaga (pH = 4,7 — IEN)</b> chayqatib turib suvsiz etil spirt tomizing. Sal loyqalanish paydo boʻlgach hajmni qayd eting va qolgan 8 ta probirkaga ham aynan shuncha quying.</p>
+      <div class="box">
+        <h4>1-qadam: #5 probirkani titrlash (pH = 4,7)</h4>
+        <div class="big">${f1(t5.etMl, 1)} ml<small>#5 probirkaga quyilgan suvsiz C₂H₅OH</small></div>
+        <div class="kv"><span>#5 holati:</span><b>${t5.etMl >= S.etThreshold - 0.2 ? "Sal loyqalandi! ✓" : "Hali tiniq"}</b></div>
+        <div class="grid3" style="margin-top:8px">
+          <button class="pri" onclick="dripEthanol(0.5)" ${S.etRecorded !== null ? "disabled" : ""}>+0,5 ml</button>
+          <button onclick="dripEthanol(0.2)" ${S.etRecorded !== null ? "disabled" : ""}>+0,2 ml</button>
+          <button onclick="swirlTube5()" ${S.etRecorded !== null ? "disabled" : ""}>🔄 Chayqatish</button>
+        </div>
+        <button class="next ${S.etRecorded !== null ? "on" : "dark"}" onclick="recordEthanol5()" ${S.etRecorded !== null ? "disabled" : ""}>${S.etRecorded !== null ? `✓ Qayd etildi: ${f1(S.etRecorded, 1)} ml` : "📌 Loyqalanish paydo boʻldi — hajmni qayd etish"}</button>
+      </div>
+
+      <div class="box">
+        <h4>2-qadam: Qolgan 8 probirkaga teng hajm (${S.etRecorded !== null ? f1(S.etRecorded, 1) + " ml" : "—"})</h4>
+        <div class="tube-pills">
+          ${TABLE2.map((x, i) => `<button class="${S.selTube === x.id ? "sel" : ""} ${S.tubes[i].etMl > 0 ? "done" : ""}" onclick="selectTube2(${x.id})">#${x.id}</button>`).join("")}
+        </div>
+        <div class="kv"><span>Spirt quyilgan probirkalar:</span><b>${doneCnt} / 9</b></div>
+        <div class="row" style="margin-top:6px">
+          <button style="flex:1" onclick="dripEthanol()" ${S.etRecorded === null || S.tubes[S.selTube - 1].etMl > 0 ? "disabled" : ""}>💧 #${S.selTube} ga ${S.etRecorded ? f1(S.etRecorded, 1) : ""} ml</button>
+          <button class="pri" style="flex:1" onclick="pourEthanolAllRest()" ${S.etRecorded === null || S.etAllDone ? "disabled" : ""}>✨ Barchasiga teng quyish</button>
+        </div>
+      </div>
+      ${renderStageQs(1)}
+      ${S.etAllDone ? `<button class="next pri" onclick="goStage(2)">Keyingi: 3-bosqich (30–60 min & Grafik) →</button>` : ""}
+    `;
+  } else if (S.stage === 2) {
+    const r = TABLE2[S.inspectTube - 1];
+    const tb = getTubeTurbidity(S.inspectTube);
+    p.innerHTML = `
+      <h2>3-bosqich: 30–60 min kutish va IEN grafigi</h2>
+      <p class="sub">Yarim–bir soat davomida barcha 9 probirkadagi loyqalik va pagʻa-pagʻa choʻkma hosil boʻlishini kuzating.</p>
+      <div class="box">
+        <h4>Kutish vaqti boshqaruvi</h4>
+        <div class="big" id="agingClock">${Math.floor(S.agingMin)} min<small>Kutish vaqti (30–60 min)</small></div>
+        <div class="row">
+          <button class="${S.agingRun ? "on" : "pri"}" style="flex:1" onclick="toggleAging()">${S.agingRun ? "⏸ Pauza" : "▶ Vaqtni boshlash"}</button>
+          <button onclick="jumpAging(30)">30 min</button>
+          <button onclick="jumpAging(60)">60 min</button>
+        </div>
+      </div>
+
+      <div class="box">
+        <h4>Tanlangan probirka: #${r.id} (pH ${f1(r.pH, 1)})</h4>
+        <div class="kv"><span>Zarracha zaryadi:</span><b>${r.charge}</b></div>
+        <div class="kv"><span>Optik loyqalik:</span><b>${Math.round(tb)}%</b></div>
+        <div class="kv"><span>Kuzatuv:</span><b>${S.agingMin < 5 ? "Kutilmoqda..." : r.desc}</b></div>
+        <div style="margin-top:8px">${turbidityChart()}</div>
+      </div>
+
+      <div class="box">
+        <h4>Tajriba xulosalarini tasdiqlang</h4>
+        <p class="note" style="font-weight:700;color:var(--ink)">1. Jelatinaning izoelektrik nuqtasi (maksimal choʻkma) qaysi pH da?</p>
+        <div class="pill-row">
+          ${[6.0, 5.3, 4.7, 3.5].map(v => `<button onclick="guessIEN(${v})" class="${S.ienGuess === v ? (v === 4.7 ? "on" : "bad") : ""}">pH ${f1(v, 1)}</button>`).join("")}
+        </div>
+        <p class="note" style="font-weight:700;color:var(--ink);margin-top:10px">2. Qaysi probirkalar degidratlanganda ham toʻliq tiniq (0%) qoldi?</p>
+        <div class="pill-row">
+          <button onclick="guessClear('1-9')" class="${S.clearGuess === "1-9" ? "on" : ""}">#1 va #9</button>
+          <button onclick="guessClear('4-6')" class="${S.clearGuess === "4-6" ? "bad" : ""}">#4 va #6</button>
+          <button onclick="guessClear('5')" class="${S.clearGuess === "5" ? "bad" : ""}">Faqat #5</button>
+        </div>
+      </div>
+      ${renderStageQs(2)}
+      ${stageDone(2) ? `<button class="next pri" onclick="goStage(3)">Yakuniy hisobot va testga oʻtish →</button>` : ""}
+    `;
+  } else {
+    renderReport();
+  }
+}
+
+function renderReport() {
+  const t = total();
+  const grade = t.tot >= 90 ? "Aʼlo (5)" : t.tot >= 75 ? "Yaxshi (4)" : t.tot >= 60 ? "Qoniqarli (3)" : "Tugallanmagan";
+  el("panel").innerHTML = `<div class="rep">
+    <h2>5-laboratoriya hisoboti</h2>
+    <div class="score">
+      <div class="n">${t.tot}</div>
+      <div><b>${grade}</b><br><span style="font-size:12px;opacity:.82">1-bosqich: ${t.p1 + t.q1}/26 · 2-bosqich: ${t.p2 + t.q2}/24 · 3-bosqich: ${t.p3 + t.q3}/30 · Test: ${t.qz}/20</span></div>
+    </div>
+
+    <div class="box">
+      <h4>2-jadval va koagullanish natijalari</h4>
+      <table class="j">
+        <thead><tr><th>#</th><th>pH</th><th>Spirt</th><th>Loyqalik</th><th>Holat</th></tr></thead>
+        <tbody>
+          ${TABLE2.map(r => `<tr class="${r.id === 5 ? "hl" : ""}">
+            <td>#${r.id}</td><td>${f1(r.pH, 1)}</td><td>${f1(S.tubes[r.id - 1].etMl, 1)} ml</td>
+            <td>${Math.round(getTubeTurbidity(r.id))}%</td><td>${r.charge}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+      <div style="margin-top:8px">${turbidityChart()}</div>
+    </div>
+
+    <div class="box">
+      <h4>Yakuniy test (5 savol × 4 ball = 20 ball)</h4>
+      ${QUIZ.map((q, qi) => {
+        const order = shuf(q.opts.length, 505 + qi * 17);
+        const picked = S.quiz[q.id];
+        return `<div class="q"><p>${q.p}</p>` +
+          order.map(oi => {
+            const cls = picked === oi ? (oi === q.ok ? "right" : "wrong") : "";
+            return `<button class="${cls}" onclick="ansQuiz('${q.id}',${oi})">${q.opts[oi]}</button>`;
+          }).join("") + `</div>`;
+      }).join("")}
+    </div>
+
+    <div class="row noprint">
+      <button class="pri" style="flex:1" onclick="window.print()">🖨️ Hisobotni chop etish</button>
+      <button class="ghost" onclick="location.reload()">↺ Qaytadan boshlash</button>
+    </div>
+  </div>`;
+}
+
+function renderAll() {
+  renderTabs();
+  renderScene();
+  renderPanel();
+}
+
+/* ============ MODALLAR ============ */
+function showTheory() {
+  modal(`
+    <h1>📘 5-laboratoriya nazariyasi</h1>
+    <p><b>Mavzu:</b> Kolloid eritmalarning koagullanishi. Jelatinani degidratlash yoʻli bilan koagullash va izoelektrik nuqtani aniqlash.</p>
+    <h3>1. Gidrofil kolloidlar barqarorligining ikki omili</h3>
+    <p>Gidrofil kolloidlar (jelatina, oqsillar, kraxmal) ning barqarorligi ikki omil bilan taʼminlanadi:</p>
+    <ul>
+      <li><b>Elektr zaryadi (elektrostatik omil):</b> bir xil zaryadli makromolekulalar oʻzaro itariladi.</li>
+      <li><b>Gidrat qobiq (solvatatsiya omili):</b> qutbli guruhlar atrofida mustahkam suv molekulalari qatlami hosil boʻladi.</li>
+    </ul>
+    <h3>2. Izoelektrik nuqta (IEN)</h3>
+    <p>Jelatina amfolit boʻlib, tarkibida ham kislotali (<code>−COOH</code>), ham asosli (<code>−NH₂</code>) guruhlar mavjud:</p>
+    <div class="eq">pH &lt; 4,7: H₃N⁺−R−COOH (musbat)  |  pH = 4,7 (IEN): H₃N⁺−R−COO⁻ (zaryad = 0)  |  pH &gt; 4,7: H₂N−R−COO⁻ (manfiy)</div>
+    <p>Izoelektrik nuqtada (jelatina uchun <b>pH = 4,7</b>) zarracha zaryadsiz boʻlgani uchun faqat gidrat qobiq hisobiga barqaror turadi. Suvsiz etil spirt (degidratlovchi modda) qoʻshilganda gidrat qobiq buziladi va 5-probirkada darhol loyqalanish, 30–60 daqiqada esa pagʻa-pagʻa choʻkma hosil boʻladi. #1 (pH 6,0) va #9 (pH 3,5) probirkalarda esa katta elektr zaryad saqlangani uchun koagullanish roʻy bermaydi.</p>
+    ${refsHTML()}
+    <div class="row" style="margin-top:14px;justify-content:flex-end"><button class="pri" onclick="LabUI.closeModal()">Yopish</button></div>
+  `);
+}
+
+function showJournal() {
+  modal(`
+    <h1>📋 2-jadval va laboratoriya jurnali (5-ish)</h1>
+    <p class="note" style="margin-bottom:8px">Barcha 9 ta probirkada aralashma hajmi 8,00 ml, spirt hajmi: <b>${S.etRecorded !== null ? f1(S.etRecorded, 1) + " ml" : "hali aniqlanmagan"}</b>, kutish vaqti: <b>${Math.floor(S.agingMin)} min</b>.</p>
+    <table class="j">
+      <thead><tr><th>#</th><th>0,1n Ac</th><th>0,1n NaAc</th><th>1,0n Ac</th><th>H₂O</th><th>1% Jel.</th><th>pH</th><th>Loyqa%</th></tr></thead>
+      <tbody>
+        ${TABLE2.map(r => `<tr class="${r.id === 5 ? "hl" : ""}">
+          <td>#${r.id}</td>
+          <td>${r.ac01 || "—"}</td><td>${r.naac}</td><td>${r.ac10 || "—"}</td>
+          <td>${r.h2o || "—"}</td><td>${r.gel}</td><td><b>${f1(r.pH, 1)}</b></td>
+          <td>${Math.round(getTubeTurbidity(r.id))}%</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>
+    <div class="row" style="margin-top:14px;justify-content:flex-end"><button class="pri" onclick="LabUI.closeModal()">Yopish</button></div>
+  `);
+}
+
+function showHint() {
+  let h = "";
+  if (S.stage === 0) {
+    if (!S.numbered) h = "Avval mum qalamni bosib 9 ta probirkani #1–#9 raqamlang.";
+    else if (S.tubes.filter(tubeFilled).length < 2) h = "2-jadval boʻyicha kamida 2 ta probirkaga reaktivlarni quyib chiqing (masalan #5 va #1).";
+    else h = "Qolgan probirkalarni «Qolganlarini toʻldirish» tugmasi bilan toʻldirishingiz mumkin.";
+  } else if (S.stage === 1) {
+    if (S.etRecorded === null) h = "#5 probirkaga (pH 4,7) taxminan 4,5–4,8 ml suvsiz etil spirt tomizing — sal loyqalangach hajmni qayd eting!";
+    else h = `Endi qolgan 8 ta probirkaga ham aynan ${f1(S.etRecorded, 1)} ml dan spirt quyib chiqing.`;
+  } else if (S.stage === 2) {
+    if (S.agingMin < 30) h = "Taymerni yoqing (yoki 30 min / 60 min tugmasini bosing) va qaysi probirkada eng kuchli choʻkma tushishini koʻring.";
+    else h = "Eng kuchli choʻkma #5 probirkada (pH = 4,7 — IEN), toʻliq tiniq qolganlari esa #1 va #9!";
+  } else {
+    h = "Yakuniy 5 ta test savolini yechib hisobotni chop eting.";
+  }
+  toast("💡 " + h, "warn", 5000);
+}
+
+function showIntro() {
+  modal(`
+    <h1>🧪 5-laboratoriya: Koagullanish va izoelektrik nuqta</h1>
+    <p>Ushbu ishda jelatina eritmasining barqarorlik nazariyasini 2-jadval asosida 3 bosqichda oʻrganasiz:</p>
+    <ul>
+      <li><b>1-bosqich:</b> 9 ta probirkada atsetat bufer + 1% jelatina seriyasini (pH 6,0 → 3,5; har biri 8,00 ml) tayyorlash.</li>
+      <li><b>2-bosqich:</b> Avval #5 probirkaga (pH = 4,7 — IEN) sal loyqalanguncha suvsiz etil spirt quyish, soʻng barcha probirkalarga bir xil hajmda qoʻshish.</li>
+      <li><b>3-bosqich:</b> 30–60 daqiqa kutib, loyqalik–pH qoʻngʻiroqsimon grafigidan izoelektrik nuqtani aniqlash.</li>
+    </ul>
+    <div class="row" style="margin-top:16px;justify-content:flex-end"><button class="pri" onclick="LabUI.closeModal()">Boshlash →</button></div>
+  `);
+}
+
+/* ============ INITSIALIZATSIYA ============ */
+LabUI.initShell(LAB_ID);
+document.querySelectorAll("[data-sp]").forEach(btn => {
+  if (+btn.dataset.sp === S.speed) btn.classList.add("on");
+  btn.addEventListener("click", () => {
+    S.speed = +btn.dataset.sp;
+    document.querySelectorAll("[data-sp]").forEach(b => b.classList.toggle("on", +b.dataset.sp === S.speed));
+    SFX.play("click");
+    toast(`Vaqt tezligi: ×${S.speed}`, "", 1800);
+  });
+});
+el("btnTable").addEventListener("click", () => { SFX.play("click"); showJournal(); });
+el("btnHint").addEventListener("click", () => { SFX.play("click"); showHint(); });
+el("btnTheory").addEventListener("click", () => { SFX.play("click"); showTheory(); });
+
+renderAll();
+showIntro();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

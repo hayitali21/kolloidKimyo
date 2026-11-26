@@ -1,0 +1,1120 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="author" content="Qayumov Hayitali">
+<meta name="description" content="3-laboratoriya ishi: Kolloid sistemalarni tozalash usullari — oddiy dializ, elektrodializ va vakuumli ultrafiltratsiya.">
+<title>3-lab · Dializ, elektrodializ va ultrafiltratsiya — Kolloid Kimyo</title>
+<link rel="stylesheet" href="../assets/lab-core.css">
+<style>
+  .sys-tabs { display:grid; grid-template-columns:repeat(3,1fr); gap:5px; margin-bottom:8px; }
+  .sys-tabs button { font-size:11.5px; font-weight:700; padding:7px 4px; background:#fff; border:1.5px solid var(--line); }
+  .sys-tabs button.active { background:var(--top); color:#fff; border-color:var(--top); }
+  .cyc-row { display:flex; align-items:center; justify-content:space-between; padding:5px 0; border-bottom:1px dashed var(--line); font-size:12.2px; gap:6px; }
+  .pill { font-family:var(--mono); font-size:11px; padding:2px 7px; border-radius:6px; background:#edf5f3; color:var(--top); font-weight:700; }
+  .pill.hi { background:#fdecec; color:#962222; }
+  .pill.mid { background:#fff3da; color:#8a5800; }
+  .pill.ok { background:#e3f7ee; color:#116443; }
+</style>
+</head>
+<body>
+<header class="lab-head">
+  <a class="home-link" href="../index.html">← Bosh sahifa</a>
+  <div class="lab-switch-wrap" id="labSwitchWrap"></div>
+  <div class="brand">Kolloid sistemalarni tozalash<small>3-laboratoriya · Oddiy dializ, elektrodializ va ultrafiltratsiya</small></div>
+  <nav class="tabs" id="tabs"></nav>
+  <div class="scorechip" id="chip">0 ball</div>
+</header>
+
+<main class="lab-main">
+  <div id="stageWrap">
+    <svg id="scene" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+  <aside id="panel"></aside>
+</main>
+
+<footer class="lab-foot">
+  <span class="lbl">3-LAB · TOZALASH</span>
+  <span class="sp"></span>
+  <button id="btnTable">📋 Jurnal</button>
+  <button id="btnHint">💡 Maslahat</button>
+  <button id="btnTheory">📘 Nazariya</button>
+  <button id="btnSnd">🔊 Ovoz</button>
+  <button id="btnFull">⛶ Toʻliq ekran</button>
+  <a class="ig-credit" href="https://instagram.com/hayitali1612" target="_blank" rel="noopener noreferrer" title="Instagram: @hayitali1612">hayitali1612</a>
+</footer>
+
+<div id="toasts"></div>
+<div id="modal"><div class="card" id="modalCard"></div></div>
+
+<script src="../assets/lab-core.js"></script>
+<script>
+"use strict";
+
+const LAB_ID = 3;
+const { el, clamp, lerp, f1, shuf, toast, modal, closeModal } = LabUI;
+
+/* ============ SISTEMALAR (QO'LLANMADAGI 3 VARIANT) ============ */
+const SYS_DEF = {
+  fe: {
+    name: "Fe(OH)₃ zoli + 1% NaCl",
+    short: "Fe(OH)₃ + NaCl",
+    col: "rgba(148,38,18,0.86)",
+    ionA: "Na⁺", ionB: "Cl⁻",
+    ionTest: "AgNO₃", ionRes: "AgCl↓ (oq)",
+    colTest: "Rang / HCl", colRes: "Rangsiz (−)"
+  },
+  gel: {
+    name: "Jelatina 1% + NaCl",
+    short: "Jelatina + NaCl",
+    col: "rgba(235,232,196,0.78)",
+    ionA: "Na⁺", ionB: "Cl⁻",
+    ionTest: "AgNO₃", ionRes: "AgCl↓ (oq)",
+    colTest: "Tannin 1%", colRes: "Reaksiya yoʻq (−)"
+  },
+  starch: {
+    name: "Kraxmal zoli + 1 n K₂SO₄",
+    short: "Kraxmal + K₂SO₄",
+    col: "rgba(238,244,248,0.86)",
+    ionA: "K⁺", ionB: "SO₄²⁻",
+    ionTest: "BaCl₂ 2%", ionRes: "BaSO₄↓ (oq)",
+    colTest: "Yod (I₂)", colRes: "Koʻkarmadi (−)"
+  }
+};
+
+/* ============ HOLAT (STATE) ============ */
+const S = {
+  stage: 1,
+  unlocked: 1,
+  hints: 0,
+  pen: { 1: 0, 2: 0, 3: 0 },
+  events: [],
+  q: {},
+  quiz: {},
+  // 1-bosqich: Oddiy dializ
+  s1: {
+    sys: "fe",
+    running: false,
+    timeMin: 0,         // 0..120 min
+    cycle: 1,           // 1, 2, 3 (tashqi suv almashtirish sikli)
+    cycleTime: 0,       // joriy sikldagi vaqt (min)
+    innerSalt: 100,     // % ichkarida qolgan elektrolit
+    outerSalt: 0,       // % tashqi suvdagi elektrolit
+    // har sikl uchun sinov natijalari
+    testedIon: [false, false, false],
+    testedCol: false,
+    replaced: 0,        // suv almashtirishlar soni (0..2 -> jami 3 sikl)
+    curve: [{ x: 0, y: 100 }]
+  },
+  // 2-bosqich: Elektrodializ
+  s2: {
+    powerOn: false,
+    volts: 9,           // 0..12 V (tavsiya 6-12 V)
+    timeMin: 0,         // 0..12 min
+    innerSalt: 100,     // % markaziy kamerada qolgan Cl-
+    testedCl: false,
+    doneTime: null,
+    curve: [{ x: 0, y: 100 }]
+  },
+  // 3-bosqich: Ultrafiltratsiya
+  s3: {
+    sol: "fe",          // "fe" yoki "starch"
+    poured: false,
+    vacOn: false,
+    pressure: 0,        // 0..65 kPa
+    progress: 0,        // 0..100 % filtrlangan
+    filtrateAg: false,  // AgNO3 sinovi -> Cl- o'tgan (+)
+    filtrateCol: false  // kolloid sinovi -> o'tmagan (−)
+  },
+  anim: {
+    t: 0,
+    ions: [],
+    drops: [],
+    bubbles: []
+  }
+};
+
+// Animatsiya ionlari (dializ va elektrodializ uchun)
+for (let i = 0; i < 28; i++) {
+  S.anim.ions.push({
+    x: Math.random(),
+    y: Math.random(),
+    sign: i % 2 === 0 ? 1 : -1,
+    spd: 0.45 + Math.random() * 0.55
+  });
+}
+
+const STG = [
+  null,
+  { s: "Oddiy dializ", t: "Oddiy dializ usulida zolni elektrolitlardan tozalash" },
+  { s: "Elektrodializ", t: "Elektr maydonida tozalashni tezlashtirish (6–12 V)" },
+  { s: "Ultrafiltratsiya", t: "Vakuum ostida membrana orqali ultrafiltratsiya" },
+  { s: "Hisobot", t: "Laboratoriya ishi hisoboti va taqqoslash" }
+];
+
+const TASKS = {
+  1: [
+    ["Dializni ishga tushiring (≥ 30 min) va 1-siklda tashqi suvni elektrolit (AgNO₃ / BaCl₂) hamda kolloidga tekshiring", () => S.s1.testedIon[0] && S.s1.testedCol],
+    ["Tashqi distillangan suvni yangisiga almashtiring, 2-siklni (≥ 30 min) oʻtkazib namuna oling", () => S.s1.testedIon[1]],
+    ["Tashqi suvni 3-marta almashtiring va 3-siklda elektrolit toʻliq kamayganini (tiniq reaksiya) tasdiqlang", () => S.s1.testedIon[2]]
+  ],
+  2: [
+    ["Kuchlanishni 6–12 V oraligʻida oʻrnating va elektrodializ manbaini yoqing", () => S.s2.powerOn || S.s2.timeMin >= 8],
+    ["8–10 daqiqa davomida ionlarning elektrodlarga koʻchishini kuzating (ichki tuz < 5%) va AgNO₃ sinovini oʻtkazing", () => S.s2.testedCl]
+  ],
+  3: [
+    ["Kolloid zolni (Fe(OH)₃ yoki kraxmal) ultramembrana voronkasiga quying va vakuum nasosini yoqing", () => S.s3.progress >= 99],
+    ["Tiniq filtratda AgNO₃ bilan Cl⁻ borligini hamda kolloid zarrachalar oʻtmaganini tekshiring", () => S.s3.filtrateAg && S.s3.filtrateCol]
+  ]
+};
+
+const QS = {
+  1: [
+    {
+      id: "q1_1",
+      q: "Dializ jarayonining fizik-kimyoviy mohiyati nimadan iborat?",
+      o: [
+        "Yarim oʻtkazgich membrana teshiklaridan kichik ionlar va molekulalar diffuziya orqali tashqi suvga oʻtadi, yirik kolloid zarrachalar esa ichkarida qoladi",
+        "Kolloid zarrachalar membranadan oʻtib ketadi, tuz ionlari ichkarida qoladi",
+        "Eritma qaynatilib bugʻlantiriladi",
+        "Tashqi suv muzlatilib, zol choʻkmaga tushiriladi"
+      ],
+      a: 0
+    },
+    {
+      id: "q1_2",
+      q: "Nima uchun oddiy dializda tashqi distillangan suvni vaqti-vaqti bilan yangilab (almashtirib) turish zarur?",
+      o: [
+        "Ichki va tashqi eritma konsentratsiyalari tenglashganda diffuziya toʻxtaydi; suvni almashtirish konsentratsiya gradientini qayta tiklaydi",
+        "Tashqi suv tezda bugʻlanib tugab qoladi",
+        "Kollodiy xaltacha suv almashmasa erib ketadi",
+        "Suv almashtirilganda kolloid zarrachalar kattalashadi"
+      ],
+      a: 0
+    }
+  ],
+  2: [
+    {
+      id: "q2_1",
+      q: "Nima uchun elektrodializ (6–12 V) oddiy dializga qaraganda bir necha barobar tezroq boradi?",
+      o: [
+        "Tashqi elektr maydoni kationlarni (Na⁺) katodga, anionlarni (Cl⁻) anodga qarab yoʻnaltirilgan tezlik bilan tortib oʻtkazadi",
+        "Elektr toki membrana teshiklarini kengaytirib yuboradi",
+        "Suv 100 °C gacha qizib ketadi",
+        "Kolloid zarrachalar elektr maydonida yoʻqoladi"
+      ],
+      a: 0
+    },
+    {
+      id: "q2_2",
+      q: "Uch kamerali elektrodializatorda elektr maydoni yoqilganda Cl⁻ va Na⁺ ionlari qayerga harakatlanadi?",
+      o: [
+        "Manfiy Cl⁻ anionlari musbat anod (+) kamerasiga, musbat Na⁺ kationlari manfiy katod (−) kamerasiga oʻtadi",
+        "Ikkala ion ham faqat anodga yigʻiladi",
+        "Ikkala ion ham markaziy kamerada qoladi",
+        "Na⁺ anodga, Cl⁻ esa katodga harakatlanadi"
+      ],
+      a: 0
+    }
+  ],
+  3: [
+    {
+      id: "q3_1",
+      q: "Ultrafiltratsiya oddiy dializdan qaysi asosiy xususiyati bilan farq qiladi?",
+      o: [
+        "Bosim farqi (vakuum) ostida erituvchi va kichik ionlar ultramembranadan tez oʻtkaziladi, natijada zol ham tozalanadi, ham konsentrlanadi",
+        "Ultrafiltratsiyada membrana ishlatilmaydi",
+        "Ultrafiltratsiya faqat 2–3 kun davom etadi",
+        "Ultrafiltratsiyada kolloid zarrachalar filtratga toʻliq oʻtib ketadi"
+      ],
+      a: 0
+    },
+    {
+      id: "q3_2",
+      q: "Ultrafiltratsiya natijasida Bunzen kolbasiga yigʻilgan tiniq filtratga AgNO₃ tomizilganda oq AgCl↓ loyqasi hosil boʻlishi nimani isbotlaydi?",
+      o: [
+        "Kichik Cl⁻ elektrolit ionlari ultramembranadan oʻtgan, yirik kolloid zarrachalar esa membrana sirtida ushlanib qolgan",
+        "Kolloid zarrachalar filtrdan toʻliq oʻtib ketgan",
+        "Vakuum nasosi ishlamagan",
+        "Ultramembrana teshilib ketgan"
+      ],
+      a: 0
+    }
+  ]
+};
+
+const QZ = [
+  ["Yarim oʻtkazgich membrananing kolloid zarrachalarni ushlab qolish qobiliyati nimaga bogʻliq?", ["Membrana teshiklari oʻlchami (kichik ionlardan katta, kolloid zarrachalardan kichik) ga", "Faqat stakandagi suv hajmiga", "Kolloid eritmaning rangiga", "Xona yorugʻligiga"], 0],
+  ["Kolloid sistemalarni ortiqcha elektrolitlardan tozalash nima uchun muhim?", ["Ortiqcha elektrolitlar zolning agregativ barqarorligini pasaytirib, koagullanishni tezlashtiradi", "Elektrolitlar zolni rangsiz gazga aylantiradi", "Suvning qaynash haroratini 0 °C ga tushiradi", "Kolloid zarrachalarni eritib atomlarga ajratadi"], 0],
+  ["Tibbiyotda «sunʼiy buyrak» (gemodializ) apparatida qonni zaharli kichik molekulalardan tozalashda qaysi usul qoʻllaniladi?", ["Dializ — yarim oʻtkazgich membrana orqali mochevina va ortiqcha tuzlar chiqariladi, qon oqsillari va hujayralari esa saqlanib qoladi", "Qaynatib haydash", "Oddiy qum filtridan oʻtkazish", "Kristallash"], 0],
+  ["Uchala usul orasida bir vaqtning oʻzida zolni ham tozalash, ham konsentrlash (quyuqlashtirish) imkonini beruvchi usul qaysi?", ["Ultrafiltratsiya", "Oddiy dializ", "Dekantatsiya", "Qizdirish"], 0],
+  ["Oddiy dializ (~90 min) va elektrodializ (~8–10 min) tezliklarini taqqoslaganda qaysi xulosa toʻgʻri?", ["Elektrodializ elektr maydoni hisobiga oddiy dializdan qariyb 8–10 barobar tez boradi", "Oddiy dializ elektrodializdan 10 barobar tezroq", "Ikkalasining vaqti har doim bir xil", "Elektrodializda ionlar umuman harakatlanmaydi"], 0]
+];
+
+/* ============ YORDAMCHILAR ============ */
+function idx(st) {
+  const list = TASKS[st] || [];
+  for (let i = 0; i < list.length; i++) if (!list[i][1]()) return i;
+  return list.length;
+}
+function qDone(id) { return S.q[id] && S.q[id].ans !== undefined; }
+function stageDone(st) {
+  return st >= 1 && st <= 3 && idx(st) >= TASKS[st].length && QS[st].every(q => qDone(q.id));
+}
+function pen(pts, msg, type = "warn") {
+  if (S.stage <= 3) S.pen[S.stage] = (S.pen[S.stage] || 0) + pts;
+  S.events.push({ st: S.stage, msg: msg.replace(/<[^>]+>/g, "") });
+  toast(msg, type, 3500);
+  SFX.play(type === "err" ? "err" : "warn");
+}
+
+/* ============ 1-BOSQICH: ODDIY DIALIZ ============ */
+function setSys1(k) {
+  if (S.s1.timeMin > 0) { toast("Dializ boshlangan. Boshqa sistemani koʻrish uchun joriy siklni yakunlang.", "warn"); return; }
+  S.s1.sys = k;
+  SFX.play("click");
+  renderPanel();
+}
+function toggleDialysis1() {
+  S.s1.running = !S.s1.running;
+  SFX.play("click");
+  renderPanel();
+}
+function stepDialysis1(addMin) {
+  const s = S.s1;
+  const steps = Math.max(1, Math.round(addMin / 5));
+  for (let i = 0; i < steps; i++) advanceDialysis1(addMin / steps);
+  SFX.play("tick");
+  renderPanel();
+}
+function advanceDialysis1(dMin) {
+  const s = S.s1;
+  if (s.timeMin >= 120) { s.running = false; return; }
+  s.timeMin = Math.min(120, s.timeMin + dMin);
+  s.cycleTime += dMin;
+  // Eksponensial diffuziya muvozanati (ichki -> tashqi, 1:3 hajm nisbatida)
+  const kRate = 0.068;
+  const eqVal = (s.innerSalt + 3 * s.outerSalt) / 4;
+  const diff = (s.innerSalt - eqVal) * (1 - Math.exp(-kRate * dMin));
+  s.innerSalt = clamp(s.innerSalt - diff, 0, 100);
+  s.outerSalt = clamp(s.outerSalt + diff / 3, 0, 100);
+  const lastX = s.curve[s.curve.length - 1].x;
+  if (s.timeMin - lastX >= 5) {
+    s.curve.push({ x: +s.timeMin.toFixed(1), y: +s.innerSalt.toFixed(1) });
+  }
+}
+function sampleIon1() {
+  const s = S.s1;
+  const cIdx = s.cycle - 1;
+  if (s.cycleTime < 20) {
+    pen(0.5, "Kamida 20–30 daqiqa dializ oʻtishini kuting, soʻng tashqi suvdan namuna oling!", "warn");
+    return;
+  }
+  s.testedIon[cIdx] = true;
+  const sys = SYS_DEF[s.sys];
+  SFX.play("pipette");
+  if (cIdx === 0) {
+    toast(`1-sikl + ${sys.ionTest}: kuchli oq ${sys.ionRes} loyqasi (+++ ${sys.ionB} koʻp chiqdi)! Tashqi suvni almashtiring.`, "warn", 3800);
+  } else if (cIdx === 1) {
+    toast(`2-sikl + ${sys.ionTest}: kuchsiz loyqalanish (+ ${sys.ionB} ancha kamaydi). Suvni yana almashtiring.`, "warn", 3600);
+  } else {
+    SFX.play("ok");
+    toast(`✓ 3-sikl + ${sys.ionTest}: eritma tiniq (− ${sys.ionB} qolmadi)! Oddiy dializ yakunlandi!`, "ok", 3800);
+    s.running = false;
+  }
+  renderPanel();
+}
+function sampleCol1() {
+  const s = S.s1;
+  if (s.cycleTime < 15) { pen(0.5, "Avval dializni boshlab, kamida 15–20 daqiqa kuting.", "warn"); return; }
+  s.testedCol = true;
+  const sys = SYS_DEF[s.sys];
+  SFX.play("ok");
+  toast(`✓ Kolloid sinovi (${sys.colTest}): ${sys.colRes} — yirik kolloid zarrachalar membranadan oʻtmadi!`, "ok", 3600);
+  renderPanel();
+}
+function replaceWater1() {
+  const s = S.s1;
+  const cIdx = s.cycle - 1;
+  if (!s.testedIon[cIdx]) {
+    pen(0.5, `Tashqi suvni almashtirishdan oldin ${s.cycle}-sikl suvini ${SYS_DEF[s.sys].ionTest} bilan sinab koʻring!`, "warn");
+    return;
+  }
+  if (s.cycle >= 3) { toast("3 ta sikl yetarli — 3-siklda namuna olib tekshiring.", "warn"); return; }
+  s.cycle++;
+  s.replaced++;
+  s.cycleTime = 0;
+  s.outerSalt = 0;
+  SFX.play("pour");
+  toast(`🔄 Tashqi distillangan suv yangilandi (${s.cycle}-sikl boshlandi). Yana 30 min dializ oʻtkazing.`, "", 3200);
+  renderPanel();
+}
+
+/* ============ 2-BOSQICH: ELEKTRODIALIZ ============ */
+function setVolts2(v) {
+  S.s2.volts = +v;
+  renderPanel();
+}
+function togglePower2() {
+  if (!S.s2.powerOn && (S.s2.volts < 6 || S.s2.volts > 12)) {
+    pen(0.5, "Metodik koʻrsatma boʻyicha elektrodializ kuchlanishini <b>6–12 V</b> oraligʻida oʻrnating!", "warn");
+    return;
+  }
+  S.s2.powerOn = !S.s2.powerOn;
+  SFX.play(S.s2.powerOn ? "electric" : "click");
+  if (S.s2.powerOn) toast(`⚡ Elektrodializ yoqildi (${S.s2.volts} V): Cl⁻ anodga (+), Na⁺ katodga (−) tez koʻchmoqda!`, "", 3200);
+  renderPanel();
+}
+function stepElectro2(dMin) {
+  if (S.s2.volts < 6) { pen(0.5, "Avval kuchlanishni 6–12 V ga qoʻying va manbani yoqing.", "warn"); return; }
+  S.s2.powerOn = true;
+  const steps = Math.max(1, Math.round(dMin));
+  for (let i = 0; i < steps; i++) advanceElectro2(dMin / steps);
+  SFX.play("electric");
+  renderPanel();
+}
+function advanceElectro2(dMin) {
+  const s = S.s2;
+  if (s.timeMin >= 12) { s.powerOn = false; return; }
+  s.timeMin = Math.min(12, s.timeMin + dMin);
+  // 6-12 V da tezlik oddiy dializdan ~9x yuqori
+  const kE = 0.045 * s.volts;
+  s.innerSalt = clamp(s.innerSalt * Math.exp(-kE * dMin), 0.2, 100);
+  const lastX = s.curve[s.curve.length - 1].x;
+  if (s.timeMin - lastX >= 1) {
+    s.curve.push({ x: +s.timeMin.toFixed(1), y: +s.innerSalt.toFixed(1) });
+  }
+  if (s.innerSalt <= 5 && !s.doneTime) {
+    s.doneTime = +s.timeMin.toFixed(1);
+    SFX.play("bell");
+    toast(`✓ Atigi ${f1(s.doneTime, 1)} daqiqada elektrolit 95%+ chiqarildi! Endi AgNO₃ bilan tekshiring.`, "ok", 3800);
+  }
+}
+function testElectroCl() {
+  const s = S.s2;
+  if (s.timeMin < 5) { pen(0.5, "Kamida 5–10 daqiqa elektrodializ oʻtishini kuting.", "warn"); return; }
+  if (s.innerSalt > 8) { pen(0.5, "Markaziy kamerada hali elektrolit bor — yana bir necha daqiqa davom ettiring.", "warn"); return; }
+  s.testedCl = true;
+  s.powerOn = false;
+  if (!s.doneTime) s.doneTime = +s.timeMin.toFixed(1);
+  SFX.play("ok");
+  toast(`✓ AgNO₃ sinovi: elektrodializ ${f1(s.doneTime, 1)} daqiqada yakunlandi (oddiy dializdan ~10× tez)!`, "ok", 4000);
+  renderPanel();
+}
+
+/* ============ 3-BOSQICH: ULTRAFILTRATSIYA ============ */
+function setSol3(k) {
+  if (S.s3.poured) { toast("Zol allaqachon voronkaga quyilgan.", "warn"); return; }
+  S.s3.sol = k;
+  SFX.play("click");
+  renderPanel();
+}
+function pourSol3() {
+  if (S.s3.poured) return;
+  S.s3.poured = true;
+  SFX.play("pour");
+  toast("Zol ultramembrana voronkasiga quyildi. Endi vakuum nasosini yoqing!", "", 2400);
+  renderPanel();
+}
+function toggleVac3() {
+  if (!S.s3.poured) { pen(0.5, "Avval zolni ultrafiltr voronkasiga quying.", "warn"); return; }
+  if (S.s3.progress >= 99) { toast("Ultrafiltratsiya yakunlangan. Filtratni sinab koʻring.", "warn"); return; }
+  S.s3.vacOn = !S.s3.vacOn;
+  SFX.play(S.s3.vacOn ? "vacuum" : "click");
+  if (S.s3.vacOn) toast("💨 Suv oqimli vakuum nasosi yoqildi — tiniq filtrat pastga tomchilamoqda!", "", 2800);
+  renderPanel();
+}
+function finishVac3() {
+  if (!S.s3.poured) { pen(0.5, "Avval zolni voronkaga quying.", "warn"); return; }
+  S.s3.vacOn = false;
+  S.s3.pressure = 65;
+  S.s3.progress = 100;
+  SFX.play("ok");
+  toast("✓ Ultrafiltratsiya yakunlandi (≈ 5 min): filtrat tiniq, konsentrlangan kolloid membranada qoldi!", "ok", 3800);
+  renderPanel();
+}
+function testFiltAg3() {
+  if (S.s3.progress < 99) { pen(0.5, "Avval vakuum ostida ultrafiltratsiyani yakunlang.", "warn"); return; }
+  S.s3.filtrateAg = true;
+  SFX.play("drip");
+  toast("✓ Filtrat + AgNO₃ → oq AgCl↓ loyqa: kichik Cl⁻ ionlari ultramembranadan oʻtgan!", "ok", 3600);
+  renderPanel();
+}
+function testFiltCol3() {
+  if (S.s3.progress < 99) { pen(0.5, "Avval vakuum ostida ultrafiltratsiyani yakunlang.", "warn"); return; }
+  S.s3.filtrateCol = true;
+  SFX.play("ok");
+  const txt = S.s3.sol === "fe"
+    ? "Filtrat mutlaqo rangsiz (Fe(OH)₃ zarrachalari oʻtmagan)"
+    : "Filtrat + I₂ → koʻkarmadi (kraxmal makromolekulalari oʻtmagan)";
+  toast(`✓ Kolloid tekshiruvi: ${txt}!`, "ok", 3600);
+  renderPanel();
+}
+
+/* ============ SVG SAHNA ============ */
+function benchSVG(title) {
+  return `
+  <defs>
+    <linearGradient id="w3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#c3d5d2"/><stop offset="100%" stop-color="#a5beba"/></linearGradient>
+    <linearGradient id="t3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5e797c"/><stop offset="100%" stop-color="#384e51"/></linearGradient>
+    <linearGradient id="g3" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#fff" stop-opacity="0.52"/><stop offset="28%" stop-color="#e3f3f6" stop-opacity="0.16"/>
+      <stop offset="78%" stop-color="#cde2e7" stop-opacity="0.14"/><stop offset="100%" stop-color="#fff" stop-opacity="0.46"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="1000" height="472" fill="url(#w3)"/>
+  <g opacity="0.16" stroke="#29474b" stroke-width="1">
+    <line x1="0" y1="120" x2="1000" y2="120"/><line x1="0" y1="240" x2="1000" y2="240"/><line x1="0" y1="360" x2="1000" y2="360"/>
+    <line x1="250" y1="0" x2="250" y2="472"/><line x1="500" y1="0" x2="500" y2="472"/><line x1="750" y1="0" x2="750" y2="472"/>
+  </g>
+  <rect x="0" y="470" width="1000" height="18" fill="#465e61"/>
+  <rect x="0" y="486" width="1000" height="114" fill="url(#t3)"/>
+  <rect x="20" y="16" width="960" height="36" rx="10" fill="rgba(15,46,51,0.84)"/>
+  <text x="36" y="39" fill="#edf5f4" font-size="14" font-weight="700">${title}</text>`;
+}
+
+function sceneHTML() {
+  if (S.stage === 1) {
+    const s = S.s1;
+    const sys = SYS_DEF[s.sys];
+    const tubes = [0, 1, 2].map(k => {
+      const tx = [705, 790, 875][k];
+      const done = s.testedIon[k];
+      let liqCol = "rgba(186,230,242,0.34)", lbl = k + 1 === s.cycle ? "Joriy sikl" : "Kutilmoqda";
+      if (done) {
+        if (k === 0) { liqCol = "rgba(248,250,252,0.95)"; lbl = "+++ Kuchli"; }
+        else if (k === 1) { liqCol = "rgba(232,243,248,0.68)"; lbl = "+ Kuchsiz"; }
+        else { liqCol = "rgba(192,232,245,0.32)"; lbl = "✓ Tiniq"; }
+      }
+      return `
+      <g class="clk ${k + 1 === s.cycle && !done && s.cycleTime >= 20 ? "glow" : ""}" data-t="ionTest" transform="translate(${tx},432)">
+        <rect x="-16" y="-120" width="32" height="120" rx="15" fill="url(#g3)" stroke="#24484f" stroke-width="2"/>
+        ${done ? `<rect x="-14" y="-74" width="28" height="72" rx="13" fill="${liqCol}"/>` : ""}
+        <text x="0" y="20" text-anchor="middle" font-size="11" font-weight="800" fill="#132629">${k + 1}-sikl</text>
+        <text x="0" y="36" text-anchor="middle" font-size="10.5" font-weight="700" fill="${done && k === 2 ? "#1f9d6b" : done ? "#b8740e" : "#587276"}">${lbl}</text>
+      </g>`;
+    }).join("");
+
+    return benchSVG(`1-tajriba: Oddiy dializ (${sys.name}) — yarim oʻtkazgich kollodiy xaltacha`) + `
+      <!-- 500 ml Dializator stakani -->
+      <g transform="translate(275,478)">
+        <ellipse cx="0" cy="4" rx="126" ry="13" fill="rgba(12,30,34,0.28)"/>
+        <!-- Tashqi distillangan suv (ichki sathdan biroz past!) -->
+        <rect x="-118" y="-210" width="236" height="206" rx="10" fill="rgba(176,226,244,0.46)" stroke="#7cb6c9" stroke-width="1.5"/>
+        <!-- Shisha tayoqcha -->
+        <rect x="-146" y="-298" width="292" height="10" rx="5" fill="#d9ecee" stroke="#24484f" stroke-width="2"/>
+        <!-- Bog'ich ipi -->
+        <line x1="0" y1="-288" x2="0" y2="-252" stroke="#9e6d36" stroke-width="3"/>
+        <!-- Kollodiy xaltacha (ichki sath tashqidan balandroq) -->
+        <path d="M-12,-252 C-58,-228 -64,-125 -54,-62 C-46,-26 46,-26 54,-62 C64,-125 58,-228 12,-252 Z" fill="${sys.col}" stroke="#d9c698" stroke-width="3" stroke-dasharray="5 3"/>
+        <!-- Animatsion ionlar qatlami -->
+        <g id="dialIons"></g>
+        <!-- Stakan devori -->
+        <rect x="-122" y="-286" width="244" height="286" rx="12" fill="url(#g3)" stroke="#24484f" stroke-width="2.8"/>
+        <text x="0" y="34" text-anchor="middle" font-size="13" font-weight="800" fill="#edf5f4">Kollodiy xaltacha · ${sys.short}</text>
+        <text x="0" y="51" text-anchor="middle" font-size="11.5" fill="#cbe0dd">Vaqt: ${f1(s.timeMin, 0)} min · ${s.cycle}-sikl · Ichki elektrolit: ${f1(s.innerSalt, 0)}%</text>
+      </g>
+
+      <!-- Membrana mikroskopik kesimi -->
+      <g transform="translate(465,78)">
+        <rect x="0" y="0" width="490" height="162" rx="12" fill="rgba(255,255,255,0.93)" stroke="#b8ccca" stroke-width="1.6"/>
+        <text x="16" y="24" font-size="12.5" font-weight="800" fill="#0f2e33">Yarim oʻtkazgich membrana kesimi (mikroskopik koʻrinish)</text>
+        <rect x="20" y="38" width="195" height="106" rx="8" fill="rgba(165,65,40,0.14)"/>
+        <rect x="242" y="38" width="228" height="106" rx="8" fill="rgba(160,220,242,0.22)"/>
+        <!-- Membrana teshiklari -->
+        <rect x="218" y="38" width="20" height="22" rx="3" fill="#c7a96b" stroke="#6d5625"/>
+        <rect x="218" y="72" width="20" height="24" rx="3" fill="#c7a96b" stroke="#6d5625"/>
+        <rect x="218" y="108" width="20" height="36" rx="3" fill="#c7a96b" stroke="#6d5625"/>
+        <!-- Yirik kolloid zarrachalar (o'tolmaydi) -->
+        <circle cx="88" cy="78" r="18" fill="${sys.col}" stroke="#4a1d10" stroke-width="1.5"/>
+        <circle cx="152" cy="110" r="16" fill="${sys.col}" stroke="#4a1d10" stroke-width="1.5"/>
+        <text x="115" y="136" text-anchor="middle" font-size="10.5" font-weight="700" fill="#5b2214">Kolloid (10–100 nm) — oʻtmaydi</text>
+        <!-- Kichik ionlar (teshikdan o'tmoqda) -->
+        <circle cx="228" cy="66" r="4.5" fill="#2563eb"/><circle cx="288" cy="72" r="4.5" fill="#1f9d6b"/>
+        <circle cx="228" cy="102" r="4.5" fill="#1f9d6b"/><circle cx="348" cy="100" r="4.5" fill="#2563eb"/>
+        <path d="M180,66 L275,66" stroke="#2563eb" stroke-width="1.6" stroke-dasharray="4 3"/>
+        <path d="M180,102 L332,102" stroke="#1f9d6b" stroke-width="1.6" stroke-dasharray="4 3"/>
+        <text x="356" y="136" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0f5a41">${sys.ionA}, ${sys.ionB} (< 1 nm) — oʻtadi</text>
+      </g>
+
+      <!-- Shtativ va 3 ta sinov probirkasi -->
+      <g transform="translate(790,478)">
+        <rect x="-132" y="-18" width="264" height="18" rx="4" fill="#6b4b32" stroke="#3c2818" stroke-width="2"/>
+        <rect x="-124" y="-92" width="248" height="10" rx="3" fill="#7c593c"/>
+        <rect x="-118" y="-86" width="8" height="70" fill="#5d4029"/><rect x="110" y="-86" width="8" height="70" fill="#5d4029"/>
+      </g>
+      ${tubes}
+      <text x="790" y="295" text-anchor="middle" font-size="12" font-weight="800" fill="#0f2e33">${sys.ionTest} bilan sifat sinovi</text>`;
+  }
+
+  if (S.stage === 2) {
+    const s = S.s2;
+    const curMa = s.powerOn ? Math.round(s.volts * (0.4 + s.innerSalt / 18)) : 0;
+    return benchSVG("2-tajriba: Uch kamerali elektrodializator (6–12 V) — elektr maydonida tezkor tozalash") + `
+      <!-- DC tok manbai -->
+      <g class="clk" data-t="pwr2" transform="translate(500,115)">
+        <rect x="-175" y="-38" width="350" height="76" rx="12" fill="#23373b" stroke="${s.powerOn ? "#e89b3c" : "#0f1e21"}" stroke-width="2.5"/>
+        <circle cx="-132" cy="0" r="14" fill="${s.powerOn ? "#1f9d6b" : "#586f73"}" stroke="#fff" stroke-width="2"/>
+        <text x="-108" y="-8" font-size="11.5" font-weight="700" fill="#cbe0dd">DOIMIY TOK (DC)</text>
+        <text x="-108" y="13" font-size="13" font-weight="800" fill="#fff">${s.powerOn ? "YOQILGAN" : "OʻCHIRILGAN"}</text>
+        <rect x="8" y="-24" width="76" height="48" rx="7" fill="#0c1d20" stroke="#4f6c70"/>
+        <text x="46" y="7" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="19" font-weight="700" fill="#ffd27a">${s.volts} V</text>
+        <rect x="94" y="-24" width="68" height="48" rx="7" fill="#0c1d20" stroke="#4f6c70"/>
+        <text x="128" y="7" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="15" font-weight="700" fill="#87e8be">${curMa} mA</text>
+      </g>
+      <!-- Simlar -->
+      <path d="M325,115 L235,115 L235,235" fill="none" stroke="#d64545" stroke-width="4" stroke-linecap="round"/>
+      <path d="M675,115 L765,115 L765,235" fill="none" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/>
+
+      <!-- 3 kamerali elektrodializ idishi -->
+      <g transform="translate(500,468)">
+        <rect x="-320" y="-225" width="640" height="225" rx="12" fill="url(#g3)" stroke="#24484f" stroke-width="3"/>
+        <!-- Chap kamera: Anod (+) -->
+        <rect x="-316" y="-185" width="186" height="181" fill="rgba(182,226,244,0.44)"/>
+        <!-- Markaziy kamera: Fe(OH)3 zoli -->
+        <rect x="-126" y="-190" width="252" height="186" fill="rgba(148,38,18,0.84)"/>
+        <!-- O'ng kamera: Katod (-) -->
+        <rect x="130" y="-185" width="186" height="181" fill="rgba(182,226,244,0.44)"/>
+        <!-- 2 ta yarim o'tkazgich membrana -->
+        <rect x="-132" y="-220" width="10" height="218" fill="#d4b472" stroke="#755c27" stroke-width="1.5" stroke-dasharray="6 3"/>
+        <rect x="122" y="-220" width="10" height="218" fill="#d4b472" stroke="#755c27" stroke-width="1.5" stroke-dasharray="6 3"/>
+        <!-- Anod (+) va Katod (-) elektrodlari -->
+        <rect x="-274" y="-235" width="18" height="196" rx="3" fill="#465256" stroke="#182226" stroke-width="2"/>
+        <circle cx="-265" cy="-248" r="14" fill="#d64545"/><text x="-265" y="-243" text-anchor="middle" font-size="16" font-weight="800" fill="#fff">+</text>
+        <rect x="256" y="-235" width="18" height="196" rx="3" fill="#465256" stroke="#182226" stroke-width="2"/>
+        <circle cx="265" cy="-248" r="14" fill="#2563eb"/><text x="265" y="-243" text-anchor="middle" font-size="18" font-weight="800" fill="#fff">−</text>
+        <!-- Elektr maydon ko'rsatkichlari -->
+        ${s.powerOn ? `
+          <text x="-195" y="-154" text-anchor="middle" font-size="12" font-weight="800" fill="#9c1f1f">← Cl⁻ anodga</text>
+          <text x="195" y="-154" text-anchor="middle" font-size="12" font-weight="800" fill="#1847a8">Na⁺ katodga →</text>
+        ` : ""}
+        <!-- Animatsion ionlar qatlami -->
+        <g id="electroIons"></g>
+        <text x="-220" y="32" text-anchor="middle" font-size="12.5" font-weight="800" fill="#edf5f4">Anod (+) kamerasi</text>
+        <text x="0" y="32" text-anchor="middle" font-size="12.5" font-weight="800" fill="#ffd27a">Fe(OH)₃ zoli (ichki Cl⁻: ${f1(s.innerSalt, 1)}%)</text>
+        <text x="220" y="32" text-anchor="middle" font-size="12.5" font-weight="800" fill="#edf5f4">Katod (−) kamerasi</text>
+        <text x="0" y="51" text-anchor="middle" font-size="11.5" fill="#cbe0dd">Vaqt: ${f1(s.timeMin, 1)} min · ${s.innerSalt <= 5 ? "✓ Tozalanish yakunlandi!" : s.powerOn ? "Ionlar koʻchmoqda..." : "Manbani yoqing"}</text>
+      </g>`;
+  }
+
+  if (S.stage === 3) {
+    const s = S.s3;
+    const solCol = s.sol === "fe" ? "rgba(148,38,18,0.88)" : "rgba(236,242,248,0.9)";
+    const topH = s.poured ? lerp(66, 12, s.progress / 100) : 0;
+    const botH = lerp(0, 88, s.progress / 100);
+    return benchSVG("3-tajriba: Vakuumli ultrafiltratsiya — ultramembrana va Bunzen kolbasi") + `
+      <!-- Suv oqimli vakuum nasos va manometr -->
+      <g class="clk ${s.poured && !s.vacOn && s.progress < 99 ? "glow" : ""}" data-t="vac3" transform="translate(765,372)">
+        <rect x="-85" y="-102" width="170" height="190" rx="14" fill="#2c4347" stroke="#142326" stroke-width="2.5"/>
+        <circle cx="0" cy="-35" r="42" fill="#f6f9f8" stroke="#182a2e" stroke-width="3"/>
+        <!-- Manometr strelkasi -->
+        <line x1="0" y1="-35" x2="${(Math.cos((-140 + s.pressure * 2.8) * Math.PI / 180) * 32).toFixed(1)}" y2="${(-35 + Math.sin((-140 + s.pressure * 2.8) * Math.PI / 180) * 32).toFixed(1)}" stroke="#d64545" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="0" cy="-35" r="5" fill="#132629"/>
+        <text x="0" y="25" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="13" font-weight="700" fill="#87e8be">ΔP = ${Math.round(s.pressure)} kPa</text>
+        <rect x="-62" y="42" width="124" height="32" rx="7" fill="${s.vacOn ? "#1f9d6b" : "#e89b3c"}"/>
+        <text x="0" y="63" text-anchor="middle" font-size="12" font-weight="800" fill="${s.vacOn ? "#fff" : "#1b1204"}">${s.vacOn ? "VAKUUM YONIQ" : "VAKUUMNI YOQISH"}</text>
+        <text x="0" y="114" text-anchor="middle" font-size="12.5" font-weight="800" fill="#edf5f4">Vakuum nasosi</text>
+      </g>
+      <!-- Vakuum shlangi -->
+      <path d="M462,338 C565,338 585,370 680,370" fill="none" stroke="#304145" stroke-width="11" stroke-linecap="round"/>
+      <path d="M462,338 C565,338 585,370 680,370" fill="none" stroke="#53686d" stroke-width="4" stroke-dasharray="10 6"/>
+
+      <!-- Bunzen vakuum kolbasi + Byuxner ultramembrana voronkasi -->
+      <g transform="translate(380,478)">
+        <ellipse cx="0" cy="4" rx="92" ry="12" fill="rgba(12,30,34,0.3)"/>
+        <!-- Tiniq filtrat (pastki kolbada) -->
+        ${botH > 2 ? `<path d="M-${lerp(82, 42, botH / 120).toFixed(1)},-${botH.toFixed(1)} L-84,-6 Q-84,0 -74,0 L74,0 Q84,0 84,-6 L${lerp(82, 42, botH / 120).toFixed(1)},-${botH.toFixed(1)} Z" fill="rgba(186,232,248,0.52)" stroke="#82bfd4" stroke-width="1.4"/>` : ""}
+        <!-- Bunzen kolbasi shishasi -->
+        <path d="M-28,-192 L-28,-132 L-88,-8 Q-90,0 -76,0 L76,0 Q90,0 88,-8 L28,-132 L28,-192 Z" fill="url(#g3)" stroke="#24484f" stroke-width="2.8"/>
+        <!-- Yon trubka (vakuum uchun) -->
+        <rect x="28" y="-146" width="54" height="14" rx="3" fill="#d6ebee" stroke="#24484f" stroke-width="2"/>
+        <!-- Rezina probka -->
+        <path d="M-32,-206 L-26,-178 L26,-178 L32,-206 Z" fill="#3a4547" stroke="#182022" stroke-width="2"/>
+        <!-- Byuxner / Ultrafiltr voronkasi -->
+        <path d="M-74,-318 L-74,-242 L-16,-212 L-16,-152 L16,-152 L16,-212 L74,-242 L74,-318 Z" fill="#f3f7f7" stroke="#24484f" stroke-width="2.6"/>
+        <!-- Ultramembrana qavati -->
+        <rect x="-71" y="-250" width="142" height="9" rx="2" fill="#e8c87a" stroke="#856928" stroke-width="1.4"/>
+        <!-- Ustki zol / konsentrlangan kolloid qatlami -->
+        ${topH > 0 ? `<rect x="-71" y="${(-250 - topH).toFixed(1)}" width="142" height="${topH.toFixed(1)}" fill="${solCol}"/>` : ""}
+        ${s.progress > 35 ? `<rect x="-71" y="-260" width="142" height="10" fill="${s.sol === "fe" ? "#631206" : "#d0dce4"}" opacity="0.92"/>` : ""}
+        <!-- Tomayotgan tiniq filtrat tomchisi -->
+        <g id="ufDrops"></g>
+        <text x="0" y="32" text-anchor="middle" font-size="13" font-weight="800" fill="#edf5f4">Bunzen kolbasi · Filtrat: ${Math.round(s.progress)}%</text>
+        <text x="0" y="49" text-anchor="middle" font-size="11.5" fill="#cbe0dd">${s.progress >= 99 ? "✓ Tiniq filtrat (Cl⁻ bor, kolloid yoʻq)" : s.poured ? "Ultramembrana ustida zol tayyor" : "Voronkaga zol quying"}</text>
+      </g>
+
+      <!-- Izoh kartochkasi -->
+      <g transform="translate(52,102)">
+        <rect x="0" y="0" width="235" height="135" rx="11" fill="rgba(15,46,51,0.9)" stroke="#e89b3c" stroke-width="1.5"/>
+        <text x="14" y="24" font-size="12" font-weight="800" fill="#e89b3c">ULTRAFILTRATSIYA</text>
+        <text x="14" y="48" font-size="11.5" fill="#edf5f4">• Membrana usti: konsentrlangan zol</text>
+        <text x="14" y="70" font-size="11.5" fill="#edf5f4">• Filtrat: tiniq H₂O + Cl⁻ ionlari</text>
+        <text x="14" y="94" font-size="11.5" fill="#9bf2c8">AgNO₃ sinovi: ${s.filtrateAg ? "✓ AgCl↓ (Cl⁻ oʻtdi)" : "Kutilmoqda"}</text>
+        <text x="14" y="116" font-size="11.5" fill="#9bf2c8">Kolloid sinovi: ${s.filtrateCol ? "✓ Oʻtmagan (−)" : "Kutilmoqda"}</text>
+      </g>`;
+  }
+
+  // Stage 4: Yakuniy ko'rgazma
+  return benchSVG("3-laboratoriya yakunlandi — Oddiy dializ, elektrodializ va ultrafiltratsiya taqqoslandi") + `
+    <g transform="translate(185,375)">
+      <rect x="-110" y="-120" width="220" height="190" rx="14" fill="rgba(255,255,255,0.92)" stroke="#1b484f" stroke-width="2"/>
+      <text x="0" y="-82" text-anchor="middle" font-size="14" font-weight="800" fill="#0f2e33">1. Oddiy dializ</text>
+      <text x="0" y="-42" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="28" font-weight="800" fill="#d99416">~90 min</text>
+      <text x="0" y="-8" text-anchor="middle" font-size="12" fill="#587276">3 marta suv almashtirish</text>
+      <text x="0" y="20" text-anchor="middle" font-size="11.5" fill="#132629">Diffuziya hisobiga tozalash</text>
+    </g>
+    <g transform="translate(500,375)">
+      <rect x="-110" y="-120" width="220" height="190" rx="14" fill="rgba(255,255,255,0.92)" stroke="#1f9d6b" stroke-width="2"/>
+      <text x="0" y="-82" text-anchor="middle" font-size="14" font-weight="800" fill="#0f2e33">2. Elektrodializ</text>
+      <text x="0" y="-42" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="28" font-weight="800" fill="#1f9d6b">${S.s2.doneTime ? f1(S.s2.doneTime, 1) : "9"} min</text>
+      <text x="0" y="-8" text-anchor="middle" font-size="12" fill="#587276">6–12 V elektr maydoni</text>
+      <text x="0" y="20" text-anchor="middle" font-size="11.5" fill="#132629">~10× tezroq ion koʻchishi</text>
+    </g>
+    <g transform="translate(815,375)">
+      <rect x="-110" y="-120" width="220" height="190" rx="14" fill="rgba(255,255,255,0.92)" stroke="#2563eb" stroke-width="2"/>
+      <text x="0" y="-82" text-anchor="middle" font-size="14" font-weight="800" fill="#0f2e33">3. Ultrafiltratsiya</text>
+      <text x="0" y="-42" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="28" font-weight="800" fill="#2563eb">~5 min</text>
+      <text x="0" y="-8" text-anchor="middle" font-size="12" fill="#587276">Vakuum (ΔP = 65 kPa)</text>
+      <text x="0" y="20" text-anchor="middle" font-size="11.5" fill="#132629">Tozalash + konsentrlash</text>
+    </g>
+    <text x="500" y="138" text-anchor="middle" font-size="22" font-weight="800" fill="#0f2e33">Kolloid sistemalarni tozalashning 3 asosiy usuli</text>`;
+}
+
+function renderScene() {
+  const svg = el("scene");
+  svg.innerHTML = sceneHTML();
+  svg.querySelectorAll("[data-t]").forEach(node => {
+    node.addEventListener("click", e => {
+      e.stopPropagation();
+      const t = node.dataset.t;
+      SFX.init();
+      if (t === "ionTest") sampleIon1();
+      else if (t === "pwr2") togglePower2();
+      else if (t === "vac3") toggleVac3();
+    });
+  });
+}
+
+/* ============ GRAFIKLAR ============ */
+function dialysisChart() {
+  return LabUI.svgChart({
+    title: "Oddiy dializda ichki elektrolit kamayishi",
+    xl: "Vaqt, min", yl: "Elektrolit, %",
+    x0: 0, xm: 120, y0: 0, ym: 100, sx: 30, sy: 25,
+    series: [{ pts: S.s1.curve, color: "#1b484f", dot: "#e89b3c" }]
+  });
+}
+function compareTimeChart() {
+  const t1 = Math.max(60, Math.round(S.s1.timeMin || 90));
+  const t2 = S.s2.doneTime || 9;
+  const t3 = 5;
+  return LabUI.svgChart({
+    title: "Tozalash usullarining vaqtini taqqoslash (daqiqa)",
+    yl: "Vaqt, min", y0: 0, ym: Math.max(100, t1 + 10), sy: 25,
+    bars: [
+      { l: "Oddiy dializ", y: t1, c: "#d99416", val: t1 + " min" },
+      { l: "Elektrodializ", y: t2, c: "#1f9d6b", val: f1(t2, 1) + " min" },
+      { l: "Ultrafiltratsiya", y: t3, c: "#2563eb", val: t3 + " min" }
+    ]
+  });
+}
+
+/* ============ SAVOLLAR VA PANEL ============ */
+function qBlock(Q, seed) {
+  const q = S.q[Q.id] || {};
+  return `<div class="q"><p>${Q.q}</p>${shuf(Q.o.length, seed).map(oi => {
+    let c = "";
+    if (q.ans !== undefined && oi === Q.a) c = "right";
+    else if (q.wrong && q.wrong.includes(oi)) c = "wrong";
+    return `<button class="${c}" onclick="ansQ('${Q.id}',${oi})" ${q.ans !== undefined || (q.wrong && q.wrong.includes(oi)) ? "disabled" : ""}>${Q.o[oi]}</button>`;
+  }).join("")}</div>`;
+}
+function ansQ(id, i) {
+  let Q;
+  for (const k in QS) { Q = QS[k].find(x => x.id === id); if (Q) break; }
+  const q = S.q[id] || (S.q[id] = { tries: 0, wrong: [], pts: 0 });
+  if (q.ans !== undefined) return;
+  q.tries++;
+  if (i === Q.a) {
+    q.ans = i; q.pts = q.tries === 1 ? 2 : 1;
+    SFX.play("ok"); toast("✓ Toʻgʻri javob!", "ok", 1600);
+  } else {
+    q.wrong.push(i);
+    if (q.tries >= 2) { q.ans = Q.a; SFX.play("warn"); toast("Toʻgʻri javob koʻrsatildi.", "warn", 2400); }
+    else { SFX.play("err"); toast("✗ Notoʻgʻri. Yana bir urinish.", "err", 1800); }
+  }
+  renderPanel();
+}
+function tasksHTML(st) {
+  const cur = idx(st);
+  return `<ul class="tasks">${TASKS[st].map((t, k) => `<li class="${k < cur ? "done" : k === cur ? "cur" : ""}"><span class="b">${k < cur ? "✓" : k + 1}</span><span>${t[0]}</span></li>`).join("")}</ul>`;
+}
+
+function renderPanel() {
+  const P = el("panel");
+  const st = S.stage;
+  if (st === 4) {
+    P.innerHTML = reportHTML();
+    renderScene();
+    renderTabs();
+    return;
+  }
+  const cur = idx(st), totT = TASKS[st].length;
+  let h = `<h2>${st}. ${STG[st].t}</h2>`;
+
+  if (st === 1) {
+    const s = S.s1;
+    const sys = SYS_DEF[s.sys];
+    h += `<div class="sub">Kollodiy xaltachadagi zol distillangan suvli stakanga tushiriladi. Har 20–30 daqiqada tashqi suvdan namuna olib, elektrolit va kolloid tekshiriladi hamda suv yangilanadi (3 sikl).</div>` + tasksHTML(1);
+    h += `<div class="box"><h4>Kolloid sistema (qoʻllanma variantlari)</h4>
+      <div class="sys-tabs">
+        ${Object.keys(SYS_DEF).map(k => `<button class="${s.sys === k ? "active" : ""}" onclick="setSys1('${k}')">${SYS_DEF[k].short}</button>`).join("")}
+      </div>
+      <div class="big">${f1(s.timeMin, 0)} min<small>${s.cycle}-sikl (${f1(s.cycleTime, 0)} min) · Ichki elektrolit: ${f1(s.innerSalt, 1)}%</small></div>
+      <div class="row">
+        <button class="${s.running ? "on" : "pri"}" onclick="toggleDialysis1()">${s.running ? "⏸ Pauza" : "▶ Dializni boshlash"}</button>
+        <button class="ghost" onclick="stepDialysis1(30)">⏩ +30 min</button>
+        <button class="dark" onclick="replaceWater1()" ${s.cycle >= 3 ? "disabled" : ""}>🔄 Suvni almashtirish</button>
+      </div></div>`;
+    h += `<div class="box"><h4>Tashqi suvdan namuna olib sifat tahlili</h4>
+      <div class="row" style="margin-bottom:8px">
+        <button class="pri" onclick="sampleIon1()">🧪 ${sys.ionTest} (${sys.ionB} sinovi)</button>
+        <button onclick="sampleCol1()" class="${s.testedCol ? "on" : ""}">🔬 ${sys.colTest} (kolloid)</button>
+      </div>
+      ${[0, 1, 2].map(k => `<div class="cyc-row">
+        <span>${k + 1}-sikl (${sys.ionTest})</span>
+        <span class="pill ${s.testedIon[k] ? (k === 0 ? "hi" : k === 1 ? "mid" : "ok") : ""}">${s.testedIon[k] ? (k === 0 ? "+++ Kuchli oq" : k === 1 ? "+ Kuchsiz" : "− Tiniq (toza)") : "Tekshirilmagan"}</span>
+      </div>`).join("")}
+      <div class="cyc-row"><span>Kolloid tekshiruvi (${sys.colTest})</span><span class="pill ${s.testedCol ? "ok" : ""}">${s.testedCol ? sys.colRes : "Tekshirilmagan"}</span></div>
+      ${s.curve.length > 1 ? `<div style="margin-top:8px">${dialysisChart()}</div>` : ""}
+    </div>`;
+    if (cur >= totT) h += QS[1].map((q, k) => `<div class="box"><h4>Nazorat savoli ${k + 1}</h4>${qBlock(q, 19 + k * 7)}</div>`).join("");
+  }
+
+  if (st === 2) {
+    const s = S.s2;
+    h += `<div class="sub">Uch kamerali dializatorda elektrodlarga 6–12 V doimiy kuchlanish beriladi. Kationlar katodga (−), anionlar anodga (+) tez koʻchib, tozalash vaqtini keskin qisqartiradi.</div>` + tasksHTML(2);
+    h += `<div class="box"><h4>Elektr manbai (tavsiya: 6–12 V)</h4>
+      <div class="kv"><span>Kuchlanish (U)</span><b>${s.volts} V</b></div>
+      <input type="range" min="0" max="12" step="1" value="${s.volts}" oninput="setVolts2(this.value)">
+      <div class="big" style="margin-top:8px">${f1(s.timeMin, 1)} min<small>Markaziy kamerada Cl⁻: ${f1(s.innerSalt, 1)}%</small></div>
+      <div class="row">
+        <button class="${s.powerOn ? "on" : "pri"}" onclick="togglePower2()">${s.powerOn ? "⚡ Manbani oʻchirish" : "⚡ Manbani yoqish"}</button>
+        <button class="ghost" onclick="stepElectro2(4)">⏩ +4 min</button>
+        <button class="dark" onclick="testElectroCl()">🧪 AgNO₃ sinovi</button>
+      </div>
+      <div class="note" style="margin-top:6px">Oddiy dializ: ~90 min · Elektrodializ (6–12 V): ~8–10 min (~10× tezroq).</div>
+    </div>`;
+    if (cur >= totT) h += QS[2].map((q, k) => `<div class="box"><h4>Nazorat savoli ${k + 1}</h4>${qBlock(q, 37 + k * 7)}</div>`).join("");
+  }
+
+  if (st === 3) {
+    const s = S.s3;
+    h += `<div class="sub">Kolloid zol mayda teshikli ultramembrana orqali vakuum yordamida soʻrib oʻtkaziladi: erituvchi va Cl⁻ ionlari pastga oʻtadi, kolloid zarrachalar membranada konsentrlanadi.</div>` + tasksHTML(3);
+    h += `<div class="box"><h4>Ultrafiltratsiya boshqaruvi</h4>
+      <div class="grid2" style="margin-bottom:8px">
+        <button class="${s.sol === "fe" ? "on" : ""}" onclick="setSol3('fe')">Fe(OH)₃ + NaCl</button>
+        <button class="${s.sol === "starch" ? "on" : ""}" onclick="setSol3('starch')">Kraxmal + NaCl</button>
+      </div>
+      <div class="row">
+        <button class="${s.poured ? "on" : "pri"}" onclick="pourSol3()" ${s.poured ? "disabled" : ""}>1. 🫗 Zol quyish</button>
+        <button class="${s.vacOn ? "on" : "dark"}" onclick="toggleVac3()" ${!s.poured || s.progress >= 99 ? "disabled" : ""}>2. 💨 Vakuum (${Math.round(s.progress)}%)</button>
+        <button class="ghost" onclick="finishVac3()" ${!s.poured || s.progress >= 99 ? "disabled" : ""}>⏩ Yakunlash</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="${s.filtrateAg ? "on" : "pri"}" onclick="testFiltAg3()" ${s.progress < 99 ? "disabled" : ""}>🧪 Filtrat + AgNO₃</button>
+        <button class="${s.filtrateCol ? "on" : "pri"}" onclick="testFiltCol3()" ${s.progress < 99 ? "disabled" : ""}>🔬 Kolloid tekshiruvi</button>
+      </div>
+    </div>`;
+    h += `<div class="box"><h4>Usullarni taqqoslash jadvali va grafigi</h4>
+      ${compareTableHTML()}
+      <div style="margin-top:8px">${compareTimeChart()}</div>
+    </div>`;
+    if (cur >= totT) h += QS[3].map((q, k) => `<div class="box"><h4>Nazorat savoli ${k + 1}</h4>${qBlock(q, 53 + k * 7)}</div>`).join("");
+  }
+
+  if (stageDone(st)) {
+    h += `<button class="pri next" onclick="nextStage()">${st === 3 ? "📊 Hisobotni koʻrish →" : `${st + 1}-bosqichga oʻtish →`}</button>`;
+  }
+  P.innerHTML = h;
+  renderScene();
+  renderTabs();
+}
+
+function compareTableHTML() {
+  return `<table class="j">
+    <tr><th>Tajriba turi</th><th>Suv almash.</th><th>AgNO₃ natijasi</th><th>Vaqt</th></tr>
+    <tr><td>Oddiy dializ</td><td>${S.s1.replaced + 1} sikl</td><td>${S.s1.testedIon[2] ? "+++ → + → −" : "Jarayonda"}</td><td>~${Math.max(60, Math.round(S.s1.timeMin || 90))} min</td></tr>
+    <tr><td>Elektrodializ</td><td>Oqimli (6–12 V)</td><td>${S.s2.testedCl ? "Tez kamaydi (−)" : "—"}</td><td>${S.s2.doneTime ? f1(S.s2.doneTime, 1) + " min" : "~9 min"}</td></tr>
+    <tr><td>Ultrafiltratsiya</td><td>Vakuum (65 kPa)</td><td>${S.s3.filtrateAg ? "Filtratda Cl⁻ (+)" : "—"}</td><td>~5 min</td></tr>
+  </table>`;
+}
+
+/* ============ BAHOLASH VA HISOBOT ============ */
+function total() {
+  let proc = 0;
+  for (let k = 1; k <= 3; k++) {
+    const tDone = idx(k) / TASKS[k].length;
+    proc += Math.max(0, 15 * tDone - (S.pen[k] || 0));
+  }
+  const allQ = [1, 2, 3].flatMap(k => QS[k].map(q => q.id));
+  const qp = allQ.reduce((s, id) => s + ((S.q[id] && S.q[id].pts) || 0), 0);
+  const qsScore = 30 * qp / (allQ.length * 2);
+  const qzScore = QZ.filter((q, i) => S.quiz[i] === q[2]).length * 5;
+  const hp = Math.min(5, S.hints * 0.5);
+  return {
+    proc: Math.round(proc),
+    qs: Math.round(qsScore),
+    qz: qzScore,
+    hp,
+    tot: clamp(Math.round(proc + qsScore + qzScore - hp), 0, 100)
+  };
+}
+
+function reportHTML() {
+  const g = total();
+  const mark = g.tot >= 86 ? "aʼlo (5)" : g.tot >= 71 ? "yaxshi (4)" : g.tot >= 56 ? "qoniqarli (3)" : "qoniqarsiz (2)";
+  return `<div class="rep">
+    <h2>3-laboratoriya ishi hisoboti</h2>
+    <div class="sub">Kolloid sistemalarni tozalash usullari · ${new Date().toLocaleDateString("uz-UZ")}</div>
+    <div class="score"><div class="n">${g.tot}</div><div>/100 ball<br><b>${mark}</b></div></div>
+    <div class="box"><h4>Ball tarkibi</h4>
+      <div class="kv"><span>Amaliy tajriba texnikasi (3 bosqich)</span><b>${g.proc}/45</b></div>
+      <div class="kv"><span>Bosqich nazorat savollari (6 ta)</span><b>${g.qs}/30</b></div>
+      <div class="kv"><span>Yakuniy nazorat testi (5 ta)</span><b>${g.qz}/25</b></div>
+      ${g.hp ? `<div class="kv"><span>Maslahat jarimasi (${S.hints})</span><b>−${g.hp}</b></div>` : ""}
+    </div>
+    <div class="box"><h4>Natijalarni qayd etish jadvali</h4>
+      ${compareTableHTML()}
+      <div style="margin-top:8px">${compareTimeChart()}</div>
+      ${S.s1.curve.length > 1 ? `<div style="margin-top:8px">${dialysisChart()}</div>` : ""}
+    </div>
+    <div class="box"><h4>Yakuniy nazorat testi (5 savol)</h4>
+      ${QZ.map((q, qi) => `<div class="q"><p>${qi + 1}. ${q[0]}</p>${q[1].map((o, oi) => {
+        const a = S.quiz[qi];
+        let c = "";
+        if (a !== undefined) { if (oi === q[2]) c = "right"; else if (oi === a) c = "wrong"; }
+        return `<button class="${c}" onclick="quizA(${qi},${oi})" ${a !== undefined ? "disabled" : ""}>${o}</button>`;
+      }).join("")}</div>`).join("")}
+    </div>
+    <div class="box"><h4>Xulosa</h4>
+      <div class="note">Kolloid sistemalarni past molekulyar elektrolit aralashmalaridan tozalashning uchta asosiy usuli — oddiy dializ, elektrodializ va ultrafiltratsiya amalda oʻrganildi. Oddiy dializ oddiy va yumshoq, biroq sekin (~90 min) boradi; elektrodializ (6–12 V) elektr maydoni taʼsirida ionlar migratsiyasini tezlashtirib vaqtni ~10 barobar qisqartiradi (~9 min); vakuumli ultrafiltratsiya esa zolni ham tozalash, ham konsentrlash imkonini beradi (~5 min).</div>
+    </div>
+    <div class="row noprint">
+      <button class="dark" onclick="window.print()">🖨 Chop etish / PDF</button>
+      <button class="ghost" onclick="if(confirm('Ishni qaytadan boshlaysizmi?'))location.reload()">↺ Qaytadan boshlash</button>
+    </div>
+  </div>`;
+}
+
+function quizA(qi, oi) {
+  if (S.quiz[qi] !== undefined) return;
+  S.quiz[qi] = oi;
+  SFX.play(oi === QZ[qi][2] ? "ok" : "err");
+  renderPanel();
+}
+
+/* ============ NAVIGATSIYA ============ */
+function goStage(n) {
+  if (n > S.unlocked) return;
+  S.stage = n;
+  S.s1.running = false;
+  S.s2.powerOn = false;
+  S.s3.vacOn = false;
+  SFX.play("paper");
+  renderPanel();
+  el("panel").scrollTop = 0;
+}
+function nextStage() {
+  const n = S.stage + 1;
+  if (n > S.unlocked) S.unlocked = n;
+  goStage(n);
+}
+function renderTabs() {
+  el("tabs").innerHTML = STG.slice(1).map((x, i) => {
+    const n = i + 1;
+    const d = n <= 3 ? stageDone(n) : Object.keys(S.quiz).length === QZ.length;
+    return `<button class="${n === S.stage ? "cur" : ""} ${d ? "done" : ""}" ${n > S.unlocked ? "disabled" : ""} onclick="goStage(${n})" title="${x.t}">${d ? "✓ " : ""}${n} · ${x.s}</button>`;
+  }).join("");
+  const sc = total().tot;
+  el("chip").textContent = sc + " ball";
+  LabProgress.save(LAB_ID, sc, stageDone(1) && stageDone(2) && stageDone(3));
+}
+
+/* ============ MODALLAR ============ */
+function showIntro() {
+  modal(`<h1>🧫 3-laboratoriya: Kolloid sistemalarni tozalash</h1>
+    <p style="color:var(--muted)">Gidrofob va gidrofil zollarni past molekulyar elektrolitlardan tozalash usullari</p>
+    <h3>Ishdan maqsad</h3>
+    <ul>
+      <li>Oddiy dializ (kollodiy membrana), elektrodializ (6–12 V) va vakuumli ultrafiltratsiya usullari bilan amaliy tanishish.</li>
+      <li>Sifat reaksiyalari (AgNO₃, BaCl₂, tannin, I₂) yordamida elektrolitlarning chiqib ketishini va kolloid zarrachalar saqlanishini kuzatish.</li>
+    </ul>
+    <h3>3 ta amaliy bosqich</h3>
+    <ul>
+      <li><b>1-bosqich:</b> Oddiy dializ (3 marta tashqi suv almashtirish + sifat sinovlari).</li>
+      <li><b>2-bosqich:</b> 3 kamerali elektrodializ (Na⁺ katodga, Cl⁻ anodga koʻchishi).</li>
+      <li><b>3-bosqich:</b> Vakuumli ultrafiltratsiya va uchala usul vaqtini taqqoslash.</li>
+    </ul>
+    <div class="row" style="margin-top:16px">
+      <button class="pri" style="padding:11px 18px" onclick="closeModal();SFX.play('fanfare')">Laboratoriyani boshlash →</button>
+    </div>`);
+}
+
+function showTheory() {
+  modal(`<h1>📘 Nazariy maʼlumotlar (3-laboratoriya)</h1>
+    <h3>1. Oddiy dializ</h3>
+    <p>Kolloid eritmalar tayyorlanganda ularda ortiqcha elektrolitlar (HCl, NaCl, K₂SO₄) boʻladi. Yarim oʻtkazgich membrana (kollodiy, pergament, sellofan) teshiklari kichik ionlar (&lt; 1 nm) uchun ochiq, yirik kolloid zarrachalar (1–100 nm) uchun esa yopiqdir. Diffuziya tufayli ionlar tashqi distillangan suvga oʻtadi. Tashqi suvni 2–3 marta almashtirish orqali tozalash toʻliq yakunlanadi.</p>
+    <h3>2. Elektrodializ</h3>
+    <p>Uch kamerali dializatorda ikki chetki kameraga elektrodlar (anod + va katod −) oʻrnatilib 6–12 V doimiy kuchlanish beriladi. Elektr maydoni taʼsirida anionlar anodga, kationlar katodga tez koʻchadi va tozalash vaqti 8–10 barobar qisqaradi.</p>
+    <h3>3. Ultrafiltratsiya</h3>
+    <p>Zol bosim farqi (vakuum) ostida ultramembrana orqali oʻtkaziladi. Erituvchi va elektrolit ionlari filtratga oʻtadi, kolloid zarrachalar esa membrana sirtida konsentrlanib qoladi. Shuningdek, tibbiyotda «sunʼiy buyrak» (gemodializ) apparati ham dializ prinsipida ishlaydi.</p>
+    ${LabUI.refsHTML()}
+    <div class="row" style="margin-top:14px"><button class="pri" onclick="closeModal()">Yopish</button></div>`);
+}
+
+function showJournal() {
+  modal(`<h1>📋 Laboratoriya jurnali</h1>
+    ${compareTableHTML()}
+    ${S.events.length ? `<h3>Ogohlantirishlar</h3><ul>${S.events.map(e => `<li>${e.st}-bosqich: ${e.msg}</li>`).join("")}</ul>` : "<p class='note' style='margin-top:10px'>Xatolik qayd etilmagan.</p>"}
+    <div class="row" style="margin-top:14px"><button class="pri" onclick="closeModal()">Yopish</button></div>`);
+}
+
+function smartHint() {
+  S.hints++;
+  SFX.play("beep");
+  let msg = "";
+  if (S.stage === 1) {
+    if (S.s1.cycleTime < 20) msg = "«▶ Dializni boshlash» yoki «⏩ +30 min» tugmasini bosib dializni davom ettiring.";
+    else if (!S.s1.testedIon[S.s1.cycle - 1]) msg = `${S.s1.cycle}-sikl tashqi suvini tekshirish uchun «${SYS_DEF[S.s1.sys].ionTest}» tugmasini bosing.`;
+    else if (!S.s1.testedCol) msg = `Kolloid membranadan oʻtmaganini tasdiqlash uchun «${SYS_DEF[S.s1.sys].colTest}» tugmasini bosing.`;
+    else if (S.s1.cycle < 3) msg = "«🔄 Suvni almashtirish» tugmasini bosib keyingi siklni boshlang.";
+    else msg = "2 ta nazorat savoliga javob bering va elektrodializga oʻting.";
+  } else if (S.stage === 2) {
+    if (S.s2.volts < 6) msg = "Slayder yordamida kuchlanishni 6–12 V oraligʻiga qoʻying.";
+    else if (S.s2.innerSalt > 8) msg = "«⚡ Manbani yoqish» yoki «⏩ +4 min» tugmasi bilan elektrodializni 8–10 daqiqagacha oʻtkazing.";
+    else if (!S.s2.testedCl) msg = "Endi «🧪 AgNO₃ sinovi» tugmasini bosib tozalash tugaganini tasdiqlang.";
+    else msg = "Savollarga javob bering va 3-bosqichga (ultrafiltratsiya) oʻting.";
+  } else if (S.stage === 3) {
+    if (!S.s3.poured) msg = "Avval «1. Zol quyish» tugmasini bosing.";
+    else if (S.s3.progress < 99) msg = "«2. Vakuum» tugmasini bosib vakuum nasosini yoqing (yoki «⏩ Yakunlash»).";
+    else if (!S.s3.filtrateAg || !S.s3.filtrateCol) msg = "Filtratni «Filtrat + AgNO₃» va «Kolloid tekshiruvi» tugmalari bilan sinang.";
+    else msg = "Savollarga javob bering va yakuniy hisobotga oʻting.";
+  } else {
+    msg = "Hisobotdagi 5 ta yakuniy nazorat savolini bajaring va chop eting.";
+  }
+  toast("💡 " + msg, "warn", 4200);
+  renderTabs();
+}
+
+/* ============ ANIMATSIYA (rAF) ============ */
+let lastTs = 0, uiAccum = 0;
+function tick(ts) {
+  const dt = Math.min(0.05, (ts - lastTs) / 1000 || 0.016);
+  lastTs = ts;
+  S.anim.t += dt;
+  uiAccum += dt;
+
+  // 1-bosqich: oddiy dializ simulyatsiyasi va ion diffuziyasi
+  if (S.stage === 1) {
+    if (S.s1.running) {
+      advanceDialysis1(dt * 12); // 1 soniyada 12 min
+      if (S.s1.cycleTime >= 30 && !S.s1.testedIon[S.s1.cycle - 1]) {
+        S.s1.running = false;
+        SFX.play("bell");
+        toast(`⏰ ${S.s1.cycle}-siklda 30 daqiqa oʻtdi! Tashqi suvdan namuna olib tekshiring.`, "ok", 3200);
+        renderPanel();
+      } else if (uiAccum > 0.35) {
+        uiAccum = 0;
+        renderPanel();
+      }
+    }
+    const dg = el("dialIons");
+    if (dg) {
+      let html = "";
+      const outRatio = clamp(S.s1.outerSalt / 35, 0.05, 1);
+      S.anim.ions.forEach((p, k) => {
+        const isOut = k < Math.round(S.anim.ions.length * outRatio * 0.65);
+        const ang = S.anim.t * p.spd * (S.s1.running ? 2.2 : 0.6) + k;
+        const x = isOut ? (k % 2 ? 78 : -78) + Math.sin(ang) * 24 : Math.cos(ang) * 34;
+        const y = -135 + Math.sin(ang * 0.8 + k) * 58;
+        html += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.4" fill="${p.sign > 0 ? "#2563eb" : "#1f9d6b"}" opacity="0.82"/>`;
+      });
+      dg.innerHTML = html;
+    }
+  }
+
+  // 2-bosqich: elektrodializ migratsiyasi
+  if (S.stage === 2) {
+    if (S.s2.powerOn) {
+      advanceElectro2(dt * 1.8);
+      if (S.s2.innerSalt <= 3.5) {
+        S.s2.powerOn = false;
+        renderPanel();
+      } else if (uiAccum > 0.3) {
+        uiAccum = 0;
+        renderPanel();
+      }
+    }
+    const eg = el("electroIons");
+    if (eg) {
+      let html = "";
+      // Yirik jigarrang Fe(OH)3 mitsellalari (markazda qoladi!)
+      for (let m = 0; m < 7; m++) {
+        const mx = -85 + m * 28 + Math.sin(S.anim.t * 1.4 + m) * 6;
+        const my = -105 + Math.cos(S.anim.t * 1.6 + m * 2) * 38;
+        html += `<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="9" fill="#5e1406" stroke="#f0a875" stroke-width="1.3" opacity="0.88"/>`;
+      }
+      // Harakatlanayotgan Cl- (chapga anodga) va Na+ (o'ngga katodga)
+      const drift = S.s2.powerOn ? S.s2.volts * 0.055 : 0;
+      S.anim.ions.forEach((p, k) => {
+        if (drift > 0) p.x = (p.x + p.sign * drift * p.spd * dt + 1) % 1;
+        const cx = p.sign < 0
+          ? lerp(-245, 70, p.x)
+          : lerp(-70, 245, p.x);
+        const cy = -165 + p.y * 140;
+        html += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="4.2" fill="${p.sign > 0 ? "#3b82f6" : "#22c55e"}" stroke="#fff" stroke-width="0.7"/>`;
+      });
+      eg.innerHTML = html;
+    }
+  }
+
+  // 3-bosqich: vakuumli ultrafiltratsiya
+  if (S.stage === 3) {
+    if (S.s3.vacOn && S.s3.progress < 100) {
+      S.s3.pressure = Math.min(65, S.s3.pressure + dt * 48);
+      S.s3.progress = Math.min(100, S.s3.progress + dt * 18);
+      if (S.s3.progress >= 100) {
+        S.s3.vacOn = false;
+        SFX.play("ok");
+        toast("✓ Ultrafiltratsiya yakunlandi! Filtratni AgNO₃ va kolloid sinovlari bilan tekshiring.", "ok", 3800);
+        renderPanel();
+      } else if (uiAccum > 0.25) {
+        uiAccum = 0;
+        renderPanel();
+      }
+    }
+    const ufd = el("ufDrops");
+    if (ufd && S.s3.vacOn && S.s3.progress < 100) {
+      const dy = -145 + ((S.anim.t * 170) % 110);
+      ufd.innerHTML = `<ellipse cx="0" cy="${dy.toFixed(1)}" rx="3.4" ry="5.5" fill="rgba(186,232,248,0.88)" stroke="#4c9bb5" stroke-width="0.8"/>`;
+    } else if (ufd && ufd.innerHTML) {
+      ufd.innerHTML = "";
+    }
+  }
+
+  requestAnimationFrame(tick);
+}
+
+/* ============ ISHGA TUSHIRISH ============ */
+LabUI.initShell(LAB_ID);
+el("btnTable").addEventListener("click", showJournal);
+el("btnHint").addEventListener("click", smartHint);
+el("btnTheory").addEventListener("click", showTheory);
+renderPanel();
+showIntro();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

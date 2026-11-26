@@ -1,0 +1,1178 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="author" content="Qayumov Hayitali">
+<meta name="description" content="1-laboratoriya ishi: Kolloid eritmalarning kondensatsion usulda olinishi — oltingugurt va kanifol gidrozollari, Fe(OH)₃ gidrolizi, AgI musbat va manfiy zollari.">
+<title>1-lab · Kondensatsion usulda zol olish — Kolloid Kimyo</title>
+<link rel="stylesheet" href="../assets/lab-core.css">
+<style>
+  .flask-pill { display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-family:var(--mono); padding:3px 8px; border-radius:7px; background:#edf5f3; color:var(--top); border:1px solid var(--line); }
+  .flask-pill.ok { background:#e3f7ee; color:#116443; border-color:#98dfc0; }
+  .flask-pill.bad { background:#fdecec; color:#8f2121; border-color:#f2b6b6; }
+  .mic-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:6px; }
+  .mic-card { background:#f8fbfa; border:1px solid var(--line); border-radius:9px; padding:8px 9px; font-size:12px; }
+  .mic-card b { display:block; color:var(--top); margin-bottom:2px; font-size:11.5px; }
+  .ser-tabs { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:8px; }
+  .ser-tabs button { font-weight:700; font-size:12.5px; padding:8px; border:1.5px solid var(--line); background:#fff; }
+  .ser-tabs button.active { background:var(--top); color:#fff; border-color:var(--top); }
+</style>
+</head>
+<body>
+<header class="lab-head">
+  <a class="home-link" href="../index.html">← Bosh sahifa</a>
+  <div class="lab-switch-wrap" id="labSwitchWrap"></div>
+  <div class="brand">Kondensatsion usulda zol olish<small>1-laboratoriya · S, kanifol, Fe(OH)₃ va AgI gidrozollari</small></div>
+  <nav class="tabs" id="tabs"></nav>
+  <div class="scorechip" id="chip">0 ball</div>
+</header>
+
+<main class="lab-main">
+  <div id="stageWrap">
+    <svg id="scene" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+  <aside id="panel"></aside>
+</main>
+
+<footer class="lab-foot">
+  <span class="lbl">1-LAB · KONDENSATSIYA</span>
+  <span class="sp"></span>
+  <button id="btnTable">📋 Jurnal</button>
+  <button id="btnHint">💡 Maslahat</button>
+  <button id="btnTheory">📘 Nazariya</button>
+  <button id="btnSnd">🔊 Ovoz</button>
+  <button id="btnFull">⛶ Toʻliq ekran</button>
+  <a class="ig-credit" href="https://instagram.com/hayitali1612" target="_blank" rel="noopener noreferrer" title="Instagram: @hayitali1612">hayitali1612</a>
+</footer>
+
+<div id="toasts"></div>
+<div id="modal"><div class="card" id="modalCard"></div></div>
+
+<script src="../assets/lab-core.js"></script>
+<script>
+"use strict";
+
+const LAB_ID = 1;
+const { el, clamp, lerp, f1, shuf, toast, modal, closeModal } = LabUI;
+
+/* ============ HOLAT (STATE) ============ */
+const S = {
+  stage: 1,
+  unlocked: 1,
+  hints: 0,
+  pen: { 1: 0, 2: 0, 3: 0 },
+  events: [],
+  q: {},
+  quiz: {},
+  // 1-bosqich: S va kanifol gidrozollari (erituvchini almashtirish)
+  s1: {
+    sDrops: 0,       // S (EtOH) ml (maqsad 4-8 ml)
+    kDrops: 0,       // Kanifol 2% (EtOH) ml (maqsad 5-10 ml)
+    sShaken: false,
+    kShaken: false,
+    sTurb: 0,        // 0..1 loyqalik (sutdek oppoq)
+    kTurb: 0,
+    laser: false,
+    laserChecked: false,
+    shakeT1: 0,
+    shakeT2: 0
+  },
+  // 2-bosqich: Fe(OH)3 gidrolizi
+  s2: {
+    heaterOn: false,
+    temp: 22.0,
+    boiled: false,
+    feMl: 0,         // 2% FeCl3 ml (maqsad 5-10 ml)
+    solColor: 0,     // 0..1 tiniq qizil-qo'ng'ir
+    heaterOffDone: false,
+    laser: false,
+    micBuilt: false,
+    micPick: { core: null, pot: null, cnt: null }
+  },
+  // 3-bosqich: AgI zoli (A va B seriyalar)
+  s3: {
+    series: "A",     // "A" (KI ortiqcha) yoki "B" (AgNO3 ortiqcha)
+    selVol: 16,      // dozator hajmi: 10, 16, 18, 20 ml
+    A: [
+      { id: "A1", base: "20 ml 0,05 n KI", target: 16, added: 0, shaken: false, state: "clear", shakeT: 0 },
+      { id: "A2", base: "20 ml 0,05 n KI", target: 10, added: 0, shaken: false, state: "clear", shakeT: 0 },
+      { id: "A3", base: "20 ml 0,05 n KI", target: 20, added: 0, shaken: false, state: "clear", shakeT: 0 }
+    ],
+    B: [
+      { id: "B1", base: "20 ml 0,05 n AgNO₃", target: 16, added: 0, shaken: false, state: "clear", shakeT: 0 },
+      { id: "B2", base: "20 ml 0,05 n AgNO₃", target: 18, added: 0, shaken: false, state: "clear", shakeT: 0 },
+      { id: "B3", base: "20 ml 0,05 n AgNO₃", target: 20, added: 0, shaken: false, state: "clear", shakeT: 0 }
+    ]
+  },
+  // Animatsiya zarralari va tomchilari
+  anim: {
+    t: 0,
+    drops: [],       // {x, y, vy, targetY, color, r}
+    bubbles: [],     // {x, y, r, vy}
+    tyndallPts: []   // {x, y, vx, vy, r}
+  }
+};
+
+// Tindal zarralarini boshlang'ich to'ldirish
+for (let i = 0; i < 48; i++) {
+  S.anim.tyndallPts.push({
+    x: Math.random(),
+    y: Math.random(),
+    vx: (Math.random() - 0.5) * 0.14,
+    vy: (Math.random() - 0.5) * 0.14,
+    r: 1.3 + Math.random() * 1.9
+  });
+}
+
+/* ============ BOSQICHLAR VA TOPSHIRIQLAR ============ */
+const STG = [
+  null,
+  { s: "S va kanifol", t: "Oltingugurt va kanifol gidrozollari (erituvchini almashtirish)" },
+  { s: "Fe(OH)₃ gidroliz", t: "Temir (III) gidroksid zolini gidroliz usulida olish" },
+  { s: "AgI zoli (A/B)", t: "Kumush yodid (AgI) manfiy va musbat zollarini olish" },
+  { s: "Hisobot", t: "Laboratoriya ishi hisoboti" }
+];
+
+const TASKS = {
+  1: [
+    ["1-kolbaga (100 ml H₂O) oltingugurtning spirtdagi toʻyingan eritmasidan tomchilab qoʻshing (≥ 4 ml) va chayqating", () => S.s1.sDrops >= 4 && S.s1.sShaken],
+    ["2-kolbaga (100 ml H₂O) kanifolning 2% li spirtli eritmasidan 5–10 ml tomchilab qoʻshing va qattiq chayqating", () => S.s1.kDrops >= 5 && S.s1.kShaken],
+    ["Tindal lazerini yoqib, ikkala sutdek oppoq gidrozolda yorugʻlik sochilishini tekshiring", () => S.s1.laserChecked]
+  ],
+  2: [
+    ["Isitgichni yoqib, kolbadagi 100 ml distillangan suvni 100 °C gacha qaynating", () => S.s2.boiled],
+    ["Qaynab turgan suvga 2% li FeCl₃ eritmasidan 5–10 ml tomchilab qoʻshing", () => S.s2.feMl >= 5],
+    ["Isitgichni oʻchiring va Fe(OH)₃ zolining mitsella tarkibini yigʻing", () => S.s2.heaterOffDone && S.s2.micBuilt]
+  ],
+  3: [
+    ["A seriya: 20 ml 0,05 n KI kolbalariga mos ravishda 16, 10 va 20 ml 0,05 n AgNO₃ qoʻshib chayqating", () => S.s3.A.every(f => f.shaken)],
+    ["B seriya: 20 ml 0,05 n AgNO₃ kolbalariga mos ravishda 16, 18 va 20 ml 0,05 n KI qoʻshib chayqating", () => S.s3.B.every(f => f.shaken)]
+  ]
+};
+
+const QS = {
+  1: [
+    {
+      id: "q1_1",
+      q: "Oltingugurt va kanifolning spirtdagi eritmalari suvga tomizilganda nima uchun kolloid zol hosil boʻladi?",
+      o: [
+        "Suvda eruvchanlik keskin kamayib, oʻta toʻyingan sistemada kondensatsiyalanish (mayda agregatlar hosil boʻlishi) sodir boʻladi",
+        "Etil spirti suv bilan kimyoviy reaksiyaga kirishib choʻkma beradi",
+        "Oltingugurt suvda molekulyar holatda toʻliq eriydi",
+        "Harorat keskin koʻtarilib, modda bugʻlanib ketadi"
+      ],
+      a: 0
+    },
+    {
+      id: "q1_2",
+      q: "Lazer nuri sutdek oppoq kanifol gidrozolidan oʻtganda yorugʻ konussimon iz koʻrinishi qaysi optik hodisa?",
+      o: [
+        "Tindal effekti (kolloid zarrachalarda yorugʻlikning sochilishi)",
+        "Elektroforez hodisasi",
+        "Sedimentatsion muvozanat",
+        "Osmotik bosim pasayishi"
+      ],
+      a: 0
+    }
+  ],
+  2: [
+    {
+      id: "q2_1",
+      q: "Fe(OH)₃ zolini gidroliz usulida olishda nima uchun FeCl₃ qaynab turgan suvga tomiziladi?",
+      o: [
+        "Yuqori harorat FeCl₃ gidrolizini keskin tezlashtiradi va mayda Fe(OH)₃ yadrolari hosil boʻlishini taʼminlaydi",
+        "Sovuq suvda FeCl₃ umuman erimaydi",
+        "Qaynoq suvda HCl gazi zolni rangsizlantiradi",
+        "Suv qaynasa, eritma sovuqroq boʻlib qoladi"
+      ],
+      a: 0
+    },
+    {
+      id: "q2_2",
+      q: "Gidroliz natijasida olingan qizil-qoʻngʻir Fe(OH)₃ zoli mitsellasining granulasi qanday zaryadga ega?",
+      o: [
+        "Musbat (+) — chunki yadro sirtiga FeO⁺ (yoki Fe³⁺) ionlari adsorbsiyalanadi",
+        "Manfiy (−) — chunki yadro sirtiga OH⁻ ionlari adsorbsiyalanadi",
+        "Elektroneytral — zaryadga ega emas",
+        "Haroratga qarab har soniyada almashinib turadi"
+      ],
+      a: 0
+    }
+  ],
+  3: [
+    {
+      id: "q3_1",
+      q: "A seriyada (KI ortiqcha: 20 ml KI + 16 ml AgNO₃) hosil boʻlgan AgI zoli zarrachalarining zaryadi va potensial aniqlovchi ioni qaysi?",
+      o: [
+        "Manfiy (−); potensial aniqlovchi ion — I⁻",
+        "Musbat (+); potensial aniqlovchi ion — Ag⁺",
+        "Musbat (+); potensial aniqlovchi ion — K⁺",
+        "Manfiy (−); potensial aniqlovchi ion — NO₃⁻"
+      ],
+      a: 0
+    },
+    {
+      id: "q3_2",
+      q: "Nima uchun har ikki seriyaning 3-kolbasida (20 ml KI + 20 ml AgNO₃, ekvimolyar nisbat) barqaror zol emas, balki AgI↓ choʻkmasi tushadi?",
+      o: [
+        "Ortiqcha elektrolit-stabilizator qolmagani uchun zarrachalar zaryadlanmaydi va koagullanib choʻkadi",
+        "Eritma hajmi juda katta boʻlib ketgani uchun",
+        "AgNO₃ va KI ekvimolyar nisbatda reaksiyaga kirishmaydi",
+        "KNO₃ tuzi AgI ni eritib yuboradi"
+      ],
+      a: 0
+    }
+  ]
+};
+
+const QZ = [
+  ["Kondensatsion usulning mohiyati nimadan iborat?", ["Ion va molekulalarni yiriklashtirib kolloid oʻlchamdagi (1–100 nm) zarrachalar hosil qilish", "Yirik jismlarni tegirmonda maydalash", "Kolloid eritmani membranadan oʻtkazib tozalash", "Zolni sovitib gelga aylantirish"], 0],
+  ["Oltingugurt va kanifol gidrozollari kondensatsiyaning qaysi turiga kiradi?", ["Fizik kondensatsiya (erituvchini almashtirish)", "Kimyoviy qaytarilish reaksiyasi", "Elektrolitik peptizatsiya", "Mexanik disperslash"], 0],
+  ["FeCl₃ gidrolizi jarayonida yadro sirtida stabilizator vazifasini qaysi birikma bajaradi?", ["FeOCl (FeO⁺ va Cl⁻ ionlariga dissotsilanadi)", "Faqat distillangan suv", "NaCl tuzi", "KNO₃ eritmasi"], 0],
+  ["Panet–Fayans qoidasiga koʻra AgI yadrosi sirtiga birinchi navbatda qaysi ionlar adsorbsiyalanadi?", ["Yadro kristall panjarasi tarkibiga kiruvchi ortiqcha ionlar (Ag⁺ yoki I⁻)", "Faqat K⁺ va NO₃⁻ ionlari", "Eritmadagi eng yengil gaz molekulalari", "Faqat gidroksid ionlari"], 0],
+  ["AgNO₃ ortiqcha boʻlganda (B seriya) AgI mitsellasi formulasi qanday yoziladi?", ["{[AgI]ₘ · nAg⁺ · (n−x)NO₃⁻}ˣ⁺ · xNO₃⁻", "{[AgI]ₘ · nI⁻ · (n−x)K⁺}ˣ⁻ · xK⁺", "{[AgI]ₘ · nK⁺ · (n−x)I⁻}ˣ⁺ · xI⁻", "{[AgI]ₘ · nNO₃⁻ · (n−x)Ag⁺}ˣ⁻ · xAg⁺"], 0]
+];
+
+/* ============ YORDAMCHILAR ============ */
+function idx(st) {
+  const list = TASKS[st] || [];
+  for (let i = 0; i < list.length; i++) if (!list[i][1]()) return i;
+  return list.length;
+}
+function qDone(id) { return S.q[id] && S.q[id].ans !== undefined; }
+function stageDone(st) {
+  return st >= 1 && st <= 3 && idx(st) >= TASKS[st].length && QS[st].every(q => qDone(q.id));
+}
+function pen(pts, msg, type = "warn") {
+  if (S.stage <= 3) S.pen[S.stage] = (S.pen[S.stage] || 0) + pts;
+  S.events.push({ st: S.stage, msg: msg.replace(/<[^>]+>/g, "") });
+  toast(msg, type, 3600);
+  SFX.play(type === "err" ? "err" : "warn");
+}
+function spawnDrop(x, y0, y1, color, r = 4.2) {
+  S.anim.drops.push({ x, y: y0, vy: 90, targetY: y1, color, r });
+}
+
+/* ============ 1-BOSQICH AMALLARI ============ */
+function addS() {
+  if (S.stage !== 1) return;
+  if (S.s1.sDrops >= 8) { toast("Oltingugurt eritmasi yetarlicha qoʻshildi. Kolbani chayqating.", "warn"); return; }
+  S.s1.sDrops += 2;
+  S.s1.sTurb = clamp(S.s1.sDrops / 6, 0, 1);
+  spawnDrop(270, 222, 392, "#f6efaa", 4.5);
+  SFX.play("drip");
+  toast(`1-kolbaga +2 ml S (EtOH) qoʻshildi (jami ${S.s1.sDrops} ml).`, "", 1800);
+  renderPanel();
+}
+function addK() {
+  if (S.stage !== 1) return;
+  if (S.s1.kDrops >= 10) { toast("Kanifol eritmasi yetarlicha qoʻshildi (10 ml). Kolbani chayqating.", "warn"); return; }
+  S.s1.kDrops += 2.5;
+  S.s1.kTurb = clamp(S.s1.kDrops / 7.5, 0, 1);
+  spawnDrop(545, 222, 392, "#f3d9a4", 4.5);
+  SFX.play("drip");
+  toast(`2-kolbaga +2,5 ml kanifol (2% EtOH) qoʻshildi (jami ${f1(S.s1.kDrops, 1)} ml).`, "", 1800);
+  renderPanel();
+}
+function shakeS1(which) {
+  if (S.stage !== 1) return;
+  if (which === 1) {
+    if (S.s1.sDrops < 4) { pen(0.5, "Avval 1-kolbaga kamida 4 ml oltingugurt eritmasidan tomizing.", "warn"); return; }
+    S.s1.sShaken = true;
+    S.s1.sTurb = 0.88;
+    S.s1.shakeT1 = 1.1;
+    SFX.play("shake");
+    toast("✓ 1-kolba chayqatildi — sutdek oppoq shaffof oltingugurt gidrozoli hosil boʻldi!", "ok");
+  } else {
+    if (S.s1.kDrops < 5) { pen(0.5, "Avval 2-kolbaga 5–10 ml kanifol (2% EtOH) eritmasidan tomizing.", "warn"); return; }
+    S.s1.kShaken = true;
+    S.s1.kTurb = 0.96;
+    S.s1.shakeT2 = 1.1;
+    SFX.play("shake");
+    toast("✓ 2-kolba chayqatildi — sutdek oppoq barqaror kanifol gidrozoli olindi!", "ok");
+  }
+  renderPanel();
+}
+function toggleLaser1() {
+  S.s1.laser = !S.s1.laser;
+  SFX.play("click");
+  if (S.s1.laser && S.s1.sShaken && S.s1.kShaken) {
+    S.s1.laserChecked = true;
+    SFX.play("ok");
+    toast("🔦 Tindal konusi aniq koʻrindi! Kolloid zarrachalar (1–100 nm) lazer nurini sochmoqda.", "ok", 3800);
+  } else if (S.s1.laser) {
+    toast("Lazer yoqildi. Tiniq suvda nur sochilmaydi — avval zollarni tayyorlab chayqating.", "", 2600);
+  }
+  renderPanel();
+}
+
+/* ============ 2-BOSQICH AMALLARI ============ */
+function toggleHeater2() {
+  if (S.stage !== 2) return;
+  S.s2.heaterOn = !S.s2.heaterOn;
+  SFX.play(S.s2.heaterOn ? "heat" : "click");
+  if (!S.s2.heaterOn && S.s2.feMl >= 5) {
+    S.s2.heaterOffDone = true;
+    SFX.play("ok");
+    toast("✓ Isitgich oʻchirildi. Tiniq qizil-qoʻngʻir Fe(OH)₃ zoli tayyor!", "ok");
+  } else if (S.s2.heaterOn) {
+    toast("Isitgich yoqildi — 100 ml distillangan suv qizimoqda...", "", 2200);
+  }
+  renderPanel();
+}
+function heatQuick2() {
+  if (S.stage !== 2) return;
+  S.s2.heaterOn = true;
+  S.s2.temp = 100;
+  S.s2.boiled = true;
+  SFX.play("boil");
+  toast("✓ Suv 100 °C da qaynayapti! Endi 2% li FeCl₃ eritmasidan 5–10 ml tomizing.", "ok");
+  renderPanel();
+}
+function addFeCl3() {
+  if (S.stage !== 2) return;
+  if (S.s2.temp < 95) {
+    pen(1, "Xato: suv hali qaynamagan (" + f1(S.s2.temp, 0) + " °C)! Avval suvni 100 °C gacha qaynating.", "err");
+    return;
+  }
+  if (S.s2.feMl >= 10) {
+    toast("10 ml 2% FeCl₃ qoʻshildi (yetarli). Endi isitgichni oʻchiring.", "warn");
+    return;
+  }
+  S.s2.feMl += 2;
+  S.s2.solColor = clamp(S.s2.feMl / 8, 0, 1);
+  spawnDrop(440, 190, 345, "#c46818", 4.6);
+  SFX.play("drip");
+  if (S.s2.feMl >= 6 && S.s2.feMl < 8) {
+    SFX.play("ok");
+    toast(`✓ ${S.s2.feMl} ml 2% FeCl₃ qoʻshildi — eritma tiniq qizil-qoʻngʻir rangga kirdi!`, "ok");
+  } else {
+    toast(`+${2} ml 2% FeCl₃ tomizildi (jami ${S.s2.feMl} ml).`, "", 1800);
+  }
+  renderPanel();
+}
+function pickMic2(part, val) {
+  S.s2.micPick[part] = val;
+  SFX.play("click");
+  const p = S.s2.micPick;
+  if (p.core && p.pot && p.cnt) {
+    if (p.core === "Fe(OH)3" && p.pot === "FeO+" && p.cnt === "Cl-") {
+      S.s2.micBuilt = true;
+      SFX.play("ok");
+      toast("✓ Mitsella toʻgʻri yigʻildi: {m[Fe(OH)₃] · nFeO⁺ · (n−x)Cl⁻}ˣ⁺ · xCl⁻", "ok", 3800);
+    } else {
+      pen(0.5, "Mitsella tarkibida xatolik bor. Qayta tekshiring: yadro — Fe(OH)₃, potensial aniqlovchi ion — FeO⁺, qarama-qarshi ion — Cl⁻.", "warn");
+      S.s2.micPick = { core: null, pot: null, cnt: null };
+    }
+  }
+  renderPanel();
+}
+function toggleLaser2() {
+  S.s2.laser = !S.s2.laser;
+  SFX.play("click");
+  renderPanel();
+}
+
+/* ============ 3-BOSQICH AMALLARI ============ */
+function setSeries3(ser) {
+  S.s3.series = ser;
+  SFX.play("click");
+  renderPanel();
+}
+function setVol3(v) {
+  S.s3.selVol = v;
+  SFX.play("click");
+  renderPanel();
+}
+function dispense3(idxF) {
+  if (S.stage !== 3) return;
+  const ser = S.s3.series;
+  const fl = S.s3[ser][idxF];
+  if (fl.shaken) {
+    toast(`${fl.id} kolbasi allaqachon tayyor (${fl.target} ml qoʻshilgan).`, "", 2000);
+    return;
+  }
+  if (S.s3.selVol !== fl.target) {
+    pen(0.5, `${fl.id} kolbasiga metodik koʻrsatma boʻyicha aynan <b>${fl.target} ml</b> qoʻshish kerak (siz ${S.s3.selVol} ml tanladingiz).`, "warn");
+    return;
+  }
+  fl.added = fl.target;
+  fl.shaken = true;
+  fl.shakeT = 1.1;
+  fl.state = fl.target === 20 ? "precip" : (ser === "A" ? "neg" : "pos");
+  const fx = [245, 485, 725][idxF];
+  spawnDrop(fx, 195, 360, "#dce8ee", 5);
+  SFX.play("pour");
+  setTimeout(() => SFX.play("shake"), 260);
+  if (fl.state === "precip") {
+    toast(`⚠️ ${fl.id} (20 ml + 20 ml ekvimolyar): stabilizator ortiqcha emas → sariq <b>AgI↓ choʻkmasi</b> tushdi!`, "warn", 3800);
+  } else if (fl.state === "neg") {
+    toast(`✓ ${fl.id}: KI ortiqcha → barqaror <b>manfiy (−) AgI zoli</b> hosil boʻldi!`, "ok", 3200);
+  } else {
+    toast(`✓ ${fl.id}: AgNO₃ ortiqcha → barqaror <b>musbat (+) AgI zoli</b> hosil boʻldi!`, "ok", 3200);
+  }
+  renderPanel();
+}
+
+/* ============ SVG SAHNA CHIZISH ============ */
+function benchBaseSVG(titleText) {
+  return `
+  <defs>
+    <linearGradient id="wallG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#c3d5d2"/><stop offset="100%" stop-color="#a5beba"/>
+    </linearGradient>
+    <linearGradient id="tableG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#607b7e"/><stop offset="100%" stop-color="#3c5356"/>
+    </linearGradient>
+    <linearGradient id="glassG" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="25%" stop-color="#e5f4f7" stop-opacity="0.18"/>
+      <stop offset="80%" stop-color="#cbe3e8" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.48"/>
+    </linearGradient>
+    <linearGradient id="laserBeam" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ff2e4c" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#ff6b81" stop-opacity="0.55"/>
+    </linearGradient>
+    <radialGradient id="heatGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ff6a1a" stop-opacity="0.95"/>
+      <stop offset="65%" stop-color="#ff2a00" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#ff2a00" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glowF" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect x="0" y="0" width="1000" height="472" fill="url(#wallG)"/>
+  <g opacity="0.18" stroke="#2d4c50" stroke-width="1">
+    <line x1="0" y1="120" x2="1000" y2="120"/><line x1="0" y1="240" x2="1000" y2="240"/><line x1="0" y1="360" x2="1000" y2="360"/>
+    <line x1="200" y1="0" x2="200" y2="472"/><line x1="400" y1="0" x2="400" y2="472"/><line x1="600" y1="0" x2="600" y2="472"/><line x1="800" y1="0" x2="800" y2="472"/>
+  </g>
+  <rect x="0" y="470" width="1000" height="18" fill="#465e61"/>
+  <rect x="0" y="486" width="1000" height="114" fill="url(#tableG)"/>
+  <rect x="20" y="16" width="960" height="36" rx="10" fill="rgba(15,46,51,0.82)"/>
+  <text x="36" y="39" fill="#edf5f4" font-size="14" font-weight="700">${titleText}</text>`;
+}
+
+function flatFlaskPath(cx, cy) {
+  // Tagi yassi kolba (markazi cx, tagi cy)
+  return `M${cx - 22},${cy - 175} L${cx - 22},${cy - 115} C${cx - 72},${cy - 92} ${cx - 78},${cy - 30} ${cx - 60},${cy} L${cx + 60},${cy} C${cx + 78},${cy - 30} ${cx + 72},${cy - 92} ${cx + 22},${cy - 115} L${cx + 22},${cy - 175} Z`;
+}
+function flatLiqPath(cx, cy) {
+  return `M${cx - 65},${cy - 68} C${cx - 74},${cy - 42} ${cx - 73},${cy - 18} ${cx - 58},${cy - 3} L${cx + 58},${cy - 3} C${cx + 73},${cy - 18} ${cx + 74},${cy - 42} ${cx + 65},${cy - 68} Z`;
+}
+function conicalFlaskPath(cx, cy) {
+  return `M${cx - 20},${cy - 165} L${cx - 20},${cy - 110} L${cx - 74},${cy - 6} Q${cx - 76},${cy} ${cx - 66},${cy} L${cx + 66},${cy} Q${cx + 76},${cy} ${cx + 74},${cy - 6} L${cx + 20},${cy - 110} L${cx + 20},${cy - 165} Z`;
+}
+function conicalLiqPath(cx, cy, h = 62) {
+  const topW = lerp(68, 22, h / 106);
+  return `M${cx - topW},${cy - h} L${cx - 70},${cy - 5} Q${cx - 71},${cy - 2} ${cx - 64},${cy - 2} L${cx + 64},${cy - 2} Q${cx + 71},${cy - 2} ${cx + 70},${cy - 5} L${cx + topW},${cy - h} Z`;
+}
+
+function dropperBottleSVG(x, y, id, label1, label2, liqColor) {
+  return `
+  <g class="clk" data-t="${id}" transform="translate(${x},${y})">
+    <rect x="-36" y="-82" width="72" height="82" rx="10" fill="#2c3e44" opacity="0.22" transform="translate(4,5)"/>
+    <rect x="-36" y="-82" width="72" height="82" rx="10" fill="#5e3a1f" stroke="#2c190a" stroke-width="2"/>
+    <rect x="-32" y="-50" width="64" height="46" rx="6" fill="${liqColor}" opacity="0.72"/>
+    <rect x="-15" y="-106" width="30" height="26" rx="4" fill="#462a14" stroke="#2c190a" stroke-width="2"/>
+    <path d="M-11,-106 L-11,-128 Q0,-142 11,-128 L11,-106 Z" fill="#c94b38" stroke="#6d2217" stroke-width="1.5"/>
+    <rect x="-30" y="-66" width="60" height="38" rx="4" fill="#fffdf6" stroke="#c8beab"/>
+    <text x="0" y="-50" text-anchor="middle" font-size="11.5" font-weight="800" fill="#132629">${label1}</text>
+    <text x="0" y="-36" text-anchor="middle" font-size="9.5" fill="#587276">${label2}</text>
+  </g>`;
+}
+
+function sceneHTML() {
+  if (S.stage === 1) {
+    const s = S.s1;
+    const sAlpha = lerp(0.18, 0.88, s.sTurb);
+    const kAlpha = lerp(0.18, 0.93, s.kTurb);
+    const sFill = s.sTurb > 0.05 ? `rgba(247,246,232,${sAlpha.toFixed(2)})` : "rgba(186,230,242,0.28)";
+    const kFill = s.kTurb > 0.05 ? `rgba(252,248,238,${kAlpha.toFixed(2)})` : "rgba(186,230,242,0.28)";
+    return benchBaseSVG("1-tajriba: Erituvchini almashtirish — Oltingugurt va kanifol gidrozollari") + `
+      <!-- Tindal lazer ko'rsatkichi -->
+      <g class="clk ${!s.laserChecked && s.sShaken && s.kShaken ? "glow" : ""}" data-t="laser1" transform="translate(56,422)">
+        <rect x="0" y="-18" width="88" height="34" rx="7" fill="#23373b" stroke="#0f1e21" stroke-width="2"/>
+        <rect x="86" y="-8" width="10" height="14" rx="2" fill="#9fb7b9"/>
+        <circle cx="44" cy="-1" r="7" fill="${s.laser ? "#ff3b57" : "#4b666b"}" stroke="#fff" stroke-width="1.5"/>
+        <text x="44" y="32" text-anchor="middle" font-size="11.5" font-weight="700" fill="#fff">🔦 Tindal lazeri</text>
+      </g>
+
+      <!-- Lazer nuri -->
+      <g id="laserGroup1" opacity="${s.laser ? 1 : 0}">
+        <line x1="152" y1="421" x2="680" y2="421" stroke="#ff3b57" stroke-width="2.2" opacity="0.32" stroke-dasharray="6 4"/>
+        ${s.sTurb > 0.2 ? `
+          <polygon points="205,416 335,411 335,431 205,426" fill="url(#laserBeam)" opacity="${(0.35 + s.sTurb * 0.55).toFixed(2)}" filter="url(#glowF)"/>
+        ` : `<line x1="205" y1="421" x2="335" y2="421" stroke="#ff3b57" stroke-width="1.5" opacity="0.22"/>`}
+        ${s.kTurb > 0.2 ? `
+          <polygon points="480,415 610,409 610,433 480,427" fill="url(#laserBeam)" opacity="${(0.35 + s.kTurb * 0.58).toFixed(2)}" filter="url(#glowF)"/>
+        ` : `<line x1="480" y1="421" x2="610" y2="421" stroke="#ff3b57" stroke-width="1.5" opacity="0.22"/>`}
+        <g id="tyndallDots1"></g>
+      </g>
+
+      <!-- 1-kolba: Oltingugurt gidrozoli -->
+      <g id="flask1Wrap" class="clk" data-t="flask1" transform="translate(270,478)">
+        <ellipse cx="0" cy="4" rx="64" ry="10" fill="rgba(12,30,34,0.28)"/>
+        <path d="${flatLiqPath(0, 0)}" fill="${sFill}" stroke="${s.sTurb > 0.2 ? "#e2dec4" : "#8bc3d4"}" stroke-width="1.5"/>
+        <ellipse cx="0" cy="-68" rx="64" ry="8" fill="${s.sTurb > 0.2 ? "#f8f6e8" : "#d0eef5"}" opacity="0.72"/>
+        <path d="${flatFlaskPath(0, 0)}" fill="url(#glassG)" stroke="#24484f" stroke-width="2.5"/>
+        <rect x="-26" y="-182" width="52" height="9" rx="4" fill="#d9ecee" stroke="#24484f" stroke-width="2"/>
+        <text x="0" y="34" text-anchor="middle" font-size="13" font-weight="800" fill="#edf5f4">1-kolba · S gidrozoli</text>
+        <text x="0" y="51" text-anchor="middle" font-size="11.5" fill="#cbe0dd">100 ml H₂O + ${s.sDrops} ml S(EtOH)</text>
+      </g>
+
+      <!-- 2-kolba: Kanifol gidrozoli -->
+      <g id="flask2Wrap" class="clk" data-t="flask2" transform="translate(545,478)">
+        <ellipse cx="0" cy="4" rx="64" ry="10" fill="rgba(12,30,34,0.28)"/>
+        <path d="${flatLiqPath(0, 0)}" fill="${kFill}" stroke="${s.kTurb > 0.2 ? "#e8dcc2" : "#8bc3d4"}" stroke-width="1.5"/>
+        <ellipse cx="0" cy="-68" rx="64" ry="8" fill="${s.kTurb > 0.2 ? "#fdfaf1" : "#d0eef5"}" opacity="0.75"/>
+        <path d="${flatFlaskPath(0, 0)}" fill="url(#glassG)" stroke="#24484f" stroke-width="2.5"/>
+        <rect x="-26" y="-182" width="52" height="9" rx="4" fill="#d9ecee" stroke="#24484f" stroke-width="2"/>
+        <text x="0" y="34" text-anchor="middle" font-size="13" font-weight="800" fill="#edf5f4">2-kolba · Kanifol zoli</text>
+        <text x="0" y="51" text-anchor="middle" font-size="11.5" fill="#cbe0dd">100 ml H₂O + ${f1(s.kDrops, 1)} ml kanifol</text>
+      </g>
+
+      <!-- Reaktiv shishalari (o'ng tomonda javonda) -->
+      <rect x="705" y="218" width="268" height="14" rx="4" fill="#465e61"/>
+      <rect x="718" y="232" width="12" height="238" fill="#3a5053"/>
+      <rect x="944" y="232" width="12" height="238" fill="#3a5053"/>
+      ${dropperBottleSVG(780, 218, "botS", "S (EtOH)", "toʻyingan", "#f2e57b")}
+      ${dropperBottleSVG(900, 218, "botK", "Kanifol", "2% EtOH", "#e9c074")}
+
+      <!-- Izoh kartochkasi -->
+      <g transform="translate(730,310)">
+        <rect x="0" y="0" width="222" height="132" rx="10" fill="rgba(255,255,255,0.92)" stroke="#b8ccca"/>
+        <text x="14" y="24" font-size="12" font-weight="800" fill="#0f2e33">Kuzatish holati</text>
+        <text x="14" y="46" font-size="11.5" fill="#132629">1-kolba: ${s.sShaken ? "✓ Sutdek oppoq zol" : s.sDrops ? "Loyqalanmoqda (chayqating)" : "Tiniq H₂O"}</text>
+        <text x="14" y="68" font-size="11.5" fill="#132629">2-kolba: ${s.kShaken ? "✓ Barqaror oppoq zol" : s.kDrops ? "Loyqalanmoqda (chayqating)" : "Tiniq H₂O"}</text>
+        <text x="14" y="92" font-size="11.5" fill="${s.laserChecked ? "#1f9d6b" : "#587276"}" font-weight="700">Tindal effekti: ${s.laserChecked ? "✓ Tasdiqlangan" : s.laser ? "Lazer yoniq" : "Tekshirilmagan"}</text>
+        <text x="14" y="114" font-size="10.5" fill="#587276">Shishalarni bosing → tomiziladi</text>
+      </g>
+      <g id="fxLayer"></g>`;
+  }
+
+  if (S.stage === 2) {
+    const s = S.s2;
+    const r = Math.round(lerp(186, 146, s.solColor));
+    const g = Math.round(lerp(230, 36, s.solColor));
+    const b = Math.round(lerp(242, 18, s.solColor));
+    const a = lerp(0.32, 0.88, s.solColor);
+    const liqCol = `rgba(${r},${g},${b},${a.toFixed(2)})`;
+    const mercH = clamp((s.temp - 15) / 95 * 145, 6, 152);
+    return benchBaseSVG("2-tajriba: Gidroliz yoʻli bilan temir (III) gidroksid Fe(OH)₃ zolini olish") + `
+      <!-- Elektr isitgich / Uch oyoqli o'choq -->
+      <g class="clk" data-t="heater2" transform="translate(440,478)">
+        <rect x="-105" y="-58" width="210" height="58" rx="10" fill="#2c4347" stroke="#152629" stroke-width="2.5"/>
+        <rect x="-86" y="-66" width="172" height="10" rx="4" fill="${s.heaterOn ? "#c84626" : "#586d70"}" stroke="#1c2d30" stroke-width="1.5"/>
+        ${s.heaterOn ? `<ellipse cx="0" cy="-63" rx="78" ry="11" fill="url(#heatGlow)"/>` : ""}
+        <circle cx="-64" cy="-28" r="12" fill="${s.heaterOn ? "#ff5233" : "#4b6266"}" stroke="#e6efed" stroke-width="2"/>
+        <text x="-38" y="-24" font-size="12" font-weight="700" fill="#edf5f4">${s.heaterOn ? "ISITGICH YONIQ" : "ISITGICH OʻCHIQ"}</text>
+        <rect x="46" y="-42" width="48" height="28" rx="5" fill="#0d1f22" stroke="#537276"/>
+        <text id="tempTxt2" x="70" y="-23" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="13" font-weight="700" fill="${s.temp >= 98 ? "#ff8a65" : "#87e8be"}">${Math.round(s.temp)}°C</text>
+      </g>
+
+      <!-- Kolba (100 ml H2O -> Fe(OH)3 zoli) -->
+      <g transform="translate(440,412)">
+        <path d="${conicalLiqPath(0, 0, 68)}" fill="${liqCol}" stroke="${s.solColor > 0.2 ? "#7a1a0d" : "#7cb9c9"}" stroke-width="1.5"/>
+        <g id="boilBubbles2"></g>
+        <path d="${conicalFlaskPath(0, 0)}" fill="url(#glassG)" stroke="#24484f" stroke-width="2.5"/>
+        <rect x="-24" y="-172" width="48" height="8" rx="4" fill="#d9ecee" stroke="#24484f" stroke-width="2"/>
+        <!-- Bug' chiziqlari -->
+        <g id="steam2" opacity="${s.temp > 78 ? clamp((s.temp - 78) / 22, 0, 0.85).toFixed(2) : 0}" stroke="#ffffff" stroke-width="3" fill="none" stroke-linecap="round">
+          <path d="M-8,-182 Q-16,-205 -6,-226"/><path d="M4,-185 Q14,-210 2,-234"/><path d="M14,-180 Q22,-198 12,-218"/>
+        </g>
+      </g>
+
+      <!-- Shtativ va Termometr -->
+      <g transform="translate(245,478)">
+        <rect x="-42" y="-10" width="96" height="12" rx="3" fill="#2c3e42"/>
+        <rect x="-12" y="-360" width="9" height="352" fill="#637b7f"/>
+        <rect x="-12" y="-282" width="186" height="8" rx="3" fill="#4f666a"/>
+        <!-- Termometr tanasi (kolba ichiga tushirilgan) -->
+        <g transform="translate(174,-295)">
+          <rect x="-6" y="-25" width="12" height="205" rx="6" fill="#f3f9fa" stroke="#3c5a60" stroke-width="1.5"/>
+          <circle cx="0" cy="182" r="9" fill="#d93829"/>
+          <rect id="mercBar2" x="-3" y="${178 - mercH}" width="6" height="${mercH}" rx="2" fill="#d93829"/>
+          <text x="-14" y="10" text-anchor="end" font-size="10" font-weight="700" fill="#132629">100°</text>
+          <text x="-14" y="165" text-anchor="end" font-size="10" font-weight="700" fill="#132629">20°</text>
+        </g>
+      </g>
+
+      <!-- FeCl3 2% tomizgich shishasi -->
+      ${dropperBottleSVG(700, 320, "botFe", "FeCl₃", "2% eritma", "#c96f18")}
+      <text x="700" y="344" text-anchor="middle" font-size="12" font-weight="700" fill="#132629">Tomizish uchun bosing (+2 ml)</text>
+
+      <!-- Reaksiya & Mitsella taxtasi -->
+      <g transform="translate(650,76)">
+        <rect x="0" y="0" width="320" height="128" rx="11" fill="rgba(15,46,51,0.9)" stroke="#e89b3c" stroke-width="1.5"/>
+        <text x="14" y="24" font-size="12" font-weight="700" fill="#e89b3c">GIDROLIZ REAKSIYASI</text>
+        <text x="14" y="48" font-family="JetBrains Mono,monospace" font-size="12" fill="#edf5f4">FeCl₃ + 3H₂O ⇌ Fe(OH)₃ + 3HCl</text>
+        <text x="14" y="70" font-family="JetBrains Mono,monospace" font-size="12" fill="#edf5f4">Fe(OH)₃ + HCl → FeOCl + 2H₂O</text>
+        <text x="14" y="96" font-size="11" fill="#9bf2c8">Qoʻshilgan FeCl₃: ${s.feMl} ml (maqsad: 5–10 ml)</text>
+        <text x="14" y="114" font-size="11" fill="#cbe0dd">Zol holati: ${s.feMl >= 5 ? "Tiniq qizil-qoʻngʻir Fe(OH)₃ zoli ✓" : s.boiled ? "Qaynoq suv tayyor" : "Suvni qaynating"}</text>
+      </g>
+
+      <!-- Tindal nuri tugmasi -->
+      <g class="clk" data-t="laser2" transform="translate(665,425)">
+        <rect x="0" y="-18" width="142" height="36" rx="8" fill="#23373b" stroke="${s.laser ? "#ff5268" : "#0f1e21"}" stroke-width="2"/>
+        <text x="71" y="5" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">🔦 Tindal: ${s.laser ? "YONIQ" : "OʻCHIQ"}</text>
+      </g>
+      ${s.laser && s.feMl >= 2 ? `<polygon points="385,375 495,368 495,392 385,385" fill="url(#laserBeam)" opacity="0.72" filter="url(#glowF)"/>` : ""}
+      <g id="fxLayer"></g>`;
+  }
+
+  if (S.stage === 3) {
+    const ser = S.s3.series;
+    const flasks = S.s3[ser];
+    const reagentName = ser === "A" ? "0,05 n AgNO₃" : "0,05 n KI";
+    const baseName = ser === "A" ? "20 ml 0,05 n KI" : "20 ml 0,05 n AgNO₃";
+    const xs = [245, 485, 725];
+    const flaskSVGs = flasks.map((fl, i) => {
+      const cx = xs[i];
+      let liqFill = "rgba(202,235,244,0.34)";
+      let precip = "";
+      let badgeCol = "#587276", badgeTxt = "Kutilmoqda";
+      if (fl.state === "neg") {
+        liqFill = "rgba(232,238,180,0.78)";
+        badgeCol = "#2563eb";
+        badgeTxt = "Manfiy (−) zol";
+      } else if (fl.state === "pos") {
+        liqFill = "rgba(244,234,174,0.8)";
+        badgeCol = "#d9534f";
+        badgeTxt = "Musbat (+) zol";
+      } else if (fl.state === "precip") {
+        liqFill = "rgba(220,236,240,0.45)";
+        precip = `<path d="M-64,-5 Q0,-22 64,-5 L66,-2 L-66,-2 Z" fill="#e5d45c" stroke="#b9a326" stroke-width="1"/>
+          <circle cx="-28" cy="-12" r="3" fill="#d9c441"/><circle cx="12" cy="-14" r="3.5" fill="#d9c441"/><circle cx="34" cy="-9" r="2.8" fill="#d9c441"/>`;
+        badgeCol = "#b8740e";
+        badgeTxt = "AgI↓ choʻkma!";
+      }
+      return `
+      <g id="agFlask${i}" class="clk ${!fl.shaken && S.s3.selVol === fl.target ? "glow" : ""}" data-t="agF${i}" transform="translate(${cx},478)">
+        <ellipse cx="0" cy="4" rx="70" ry="10" fill="rgba(12,30,34,0.28)"/>
+        <path d="${conicalLiqPath(0, 0, fl.shaken ? 72 : 46)}" fill="${liqFill}" stroke="#87b2be" stroke-width="1.5"/>
+        ${precip}
+        <path d="${conicalFlaskPath(0, 0)}" fill="url(#glassG)" stroke="#24484f" stroke-width="2.5"/>
+        <rect x="-24" y="-172" width="48" height="8" rx="4" fill="#d9ecee" stroke="#24484f" stroke-width="2"/>
+        <rect x="-66" y="-232" width="132" height="44" rx="8" fill="rgba(255,255,255,0.92)" stroke="${badgeCol}" stroke-width="1.8"/>
+        <text x="0" y="-213" text-anchor="middle" font-size="12" font-weight="800" fill="#0f2e33">${fl.id} · maqsad: +${fl.target} ml</text>
+        <text x="0" y="-196" text-anchor="middle" font-size="11" font-weight="700" fill="${badgeCol}">${badgeTxt}</text>
+        <text x="0" y="32" text-anchor="middle" font-size="12" font-weight="700" fill="#edf5f4">${baseName}</text>
+        <text x="0" y="49" text-anchor="middle" font-size="11.5" fill="#cbe0dd">${fl.shaken ? `+ ${fl.added} ml ${reagentName}` : "Bosib reaktiv quying"}</text>
+      </g>`;
+    }).join("");
+
+    return benchBaseSVG(`3-tajriba: Kumush yodid (AgI) zoli — ${ser} seriya (${ser === "A" ? "KI ortiqcha → manfiy zol" : "AgNO₃ ortiqcha → musbat zol"})`) + `
+      <!-- Dozator / Byuretka paneli tepada -->
+      <g transform="translate(260,72)">
+        <rect x="0" y="0" width="480" height="58" rx="11" fill="rgba(15,46,51,0.88)" stroke="#e89b3c" stroke-width="1.5"/>
+        <text x="16" y="23" font-size="12" font-weight="700" fill="#e89b3c">DOZATOR · ${reagentName}</text>
+        <text x="16" y="44" font-size="12" fill="#edf5f4">Tanlangan hajm: <tspan font-weight="800" fill="#9bf2c8">${S.s3.selVol} ml</tspan>  (kolbani bosib quying va chayqating)</text>
+      </g>
+      ${flaskSVGs}
+      <g id="fxLayer"></g>`;
+  }
+
+  // Stage 4 (Hisobot): umumiy yakuniy ko'rgazma sahnasi
+  return benchBaseSVG("1-laboratoriya yakunlandi — Kondensatsion usulda olingan zollar kolleksiyasi") + `
+    <g transform="translate(175,478)">
+      <path d="${flatLiqPath(0, 0)}" fill="rgba(247,246,232,0.88)"/><path d="${flatFlaskPath(0, 0)}" fill="url(#glassG)" stroke="#24484f" stroke-width="2.5"/>
+      <text x="0" y="34" text-anchor="middle" font-size="12.5" font-weight="700" fill="#edf5f4">S gidrozoli</text>
+    </g>
+    <g transform="translate(390,478)">
+      <path d="${flatLiqPath(0, 0)}" fill="rgba(252,248,238,0.92)"/><path d="${flatFlaskPath(0, 0)}" fill="url(#glassG)" stroke="#24484f" stroke-width="2.5"/>
+      <text x="0" y="34" text-anchor="middle" font-size="12.5" font-weight="700" fill="#edf5f4">Kanifol zoli</text>
+    </g>
+    <g transform="translate(605,478)">
+      <path d="${conicalLiqPath(0, 0, 68)}" fill="rgba(146,36,18,0.88)"/><path d="${conicalFlaskPath(0, 0)}" fill="url(#glassG)" stroke="#24484f" stroke-width="2.5"/>
+      <text x="0" y="34" text-anchor="middle" font-size="12.5" font-weight="700" fill="#edf5f4">Fe(OH)₃ zoli (+)</text>
+    </g>
+    <g transform="translate(820,478)">
+      <path d="${conicalLiqPath(0, 0, 68)}" fill="rgba(236,236,176,0.82)"/><path d="${conicalFlaskPath(0, 0)}" fill="url(#glassG)" stroke="#24484f" stroke-width="2.5"/>
+      <text x="0" y="34" text-anchor="middle" font-size="12.5" font-weight="700" fill="#edf5f4">AgI zoli (− / +)</text>
+    </g>
+    <polygon points="90,418 910,404 910,432 90,424" fill="url(#laserBeam)" opacity="0.45" filter="url(#glowF)"/>
+    <text x="500" y="135" text-anchor="middle" font-size="22" font-weight="800" fill="#0f2e33">Kondensatsion usulda olingan 4 turdagi gidrozol</text>
+    <text x="500" y="164" text-anchor="middle" font-size="14" fill="#2d4c50">Tindal effekti, gidroliz va elektr qoʻsh qavat barqarorligi oʻrganildi</text>`;
+}
+
+function renderScene() {
+  const svg = el("scene");
+  svg.innerHTML = sceneHTML();
+  svg.querySelectorAll("[data-t]").forEach(node => {
+    node.addEventListener("click", e => {
+      e.stopPropagation();
+      sceneClick(node.dataset.t);
+    });
+  });
+}
+
+function sceneClick(t) {
+  SFX.init();
+  if (t === "botS") addS();
+  else if (t === "botK") addK();
+  else if (t === "flask1") shakeS1(1);
+  else if (t === "flask2") shakeS1(2);
+  else if (t === "laser1") toggleLaser1();
+  else if (t === "heater2") toggleHeater2();
+  else if (t === "botFe") addFeCl3();
+  else if (t === "laser2") toggleLaser2();
+  else if (t.startsWith("agF")) dispense3(+t.slice(3));
+}
+
+/* ============ SAVOLLAR VA PANEL ============ */
+function qBlock(Q, seed) {
+  const q = S.q[Q.id] || {};
+  return `<div class="q"><p>${Q.q}</p>${shuf(Q.o.length, seed).map(oi => {
+    let c = "";
+    if (q.ans !== undefined && oi === Q.a) c = "right";
+    else if (q.wrong && q.wrong.includes(oi)) c = "wrong";
+    return `<button class="${c}" onclick="ansQ('${Q.id}',${oi})" ${q.ans !== undefined || (q.wrong && q.wrong.includes(oi)) ? "disabled" : ""}>${Q.o[oi]}</button>`;
+  }).join("")}</div>`;
+}
+function ansQ(id, i) {
+  let Q;
+  for (const k in QS) { Q = QS[k].find(x => x.id === id); if (Q) break; }
+  const q = S.q[id] || (S.q[id] = { tries: 0, wrong: [], pts: 0 });
+  if (q.ans !== undefined) return;
+  q.tries++;
+  if (i === Q.a) {
+    q.ans = i;
+    q.pts = q.tries === 1 ? 2 : 1;
+    SFX.play("ok");
+    toast("✓ Toʻgʻri javob!", "ok", 1600);
+  } else {
+    q.wrong.push(i);
+    if (q.tries >= 2) {
+      q.ans = Q.a;
+      SFX.play("warn");
+      toast("Toʻgʻri javob koʻrsatildi. 📘 Nazariyani koʻzdan kechiring.", "warn", 2600);
+    } else {
+      SFX.play("err");
+      toast("✗ Notoʻgʻri. Yana bir bor urinib koʻring.", "err", 1800);
+    }
+  }
+  renderPanel();
+}
+function tasksHTML(st) {
+  const cur = idx(st);
+  return `<ul class="tasks">${TASKS[st].map((t, k) => `<li class="${k < cur ? "done" : k === cur ? "cur" : ""}"><span class="b">${k < cur ? "✓" : k + 1}</span><span>${t[0]}</span></li>`).join("")}</ul>`;
+}
+
+function renderPanel() {
+  const P = el("panel");
+  const st = S.stage;
+  if (st === 4) {
+    P.innerHTML = reportHTML();
+    renderScene();
+    renderTabs();
+    return;
+  }
+  const cur = idx(st), totT = TASKS[st].length;
+  let h = `<h2>${st}. ${STG[st].t}</h2>`;
+
+  if (st === 1) {
+    const s = S.s1;
+    h += `<div class="sub">Erituvchini almashtirish usuli: oltingugurt va kanifol spirtda yaxshi, suvda esa yomon eriydi. Spirtli eritma suvga tomizilganda oʻta toʻyinganlik yuzaga kelib, kolloid gidrozol hosil boʻladi.</div>` + tasksHTML(1);
+    h += `<div class="box"><h4>1-kolba · Oltingugurt gidrozoli</h4>
+      <div class="kv"><span>100 ml H₂O + S (EtOH, toʻyingan)</span><b>${s.sDrops} ml</b></div>
+      <div class="row" style="margin-top:6px">
+        <button class="pri" onclick="addS()">💧 +2 ml S (EtOH)</button>
+        <button onclick="shakeS1(1)" ${s.sDrops < 4 ? "disabled" : ""}>🤲 Chayqatish</button>
+      </div></div>`;
+    h += `<div class="box"><h4>2-kolba · Kanifol gidrozoli</h4>
+      <div class="kv"><span>100 ml H₂O + Kanifol (2% EtOH)</span><b>${f1(s.kDrops, 1)} ml</b></div>
+      <div class="row" style="margin-top:6px">
+        <button class="pri" onclick="addK()">💧 +2,5 ml kanifol</button>
+        <button onclick="shakeS1(2)" ${s.kDrops < 5 ? "disabled" : ""}>🤲 Qattiq chayqatish</button>
+      </div></div>`;
+    h += `<div class="box"><h4>Optik tekshiruv (Tindal effekti)</h4>
+      <button class="${s.laser ? "on" : "dark"}" style="width:100%" onclick="toggleLaser1()">${s.laser ? "🔦 Tindal lazerini oʻchirish" : "🔦 Tindal lazerini yoqish"}</button>
+      <div class="note" style="margin-top:6px">Haqiqiy eritmalarda lazer nuri koʻrinmaydi; kolloid zollarda yorugʻ sochilish konusi (Tindal konusi) hosil boʻladi.</div></div>`;
+    if (cur >= totT) h += QS[1].map((q, k) => `<div class="box"><h4>Nazorat savoli ${k + 1}</h4>${qBlock(q, 13 + k * 7)}</div>`).join("");
+  }
+
+  if (st === 2) {
+    const s = S.s2;
+    h += `<div class="sub">100 ml distillangan suv qaynash haroratigacha (100 °C) isitiladi, soʻngra qaynab turgan suvga 5–10 ml 2% li FeCl₃ tomchilab qoʻshiladi.</div>` + tasksHTML(2);
+    h += `<div class="box"><h4>Isitgich va termometr</h4>
+      <div class="big ${s.temp >= 98 ? "" : ""}">${f1(s.temp, 1)} °C<small>${s.boiled ? "Suv qaynayapti — FeCl₃ tomizish mumkin" : s.heaterOn ? "Qizimoqda..." : "Isitgich oʻchiq"}</small></div>
+      <div class="row">
+        <button class="${s.heaterOn ? "on" : "pri"}" onclick="toggleHeater2()">${s.heaterOn ? "🔥 Isitgichni oʻchirish" : "🔥 Isitgichni yoqish"}</button>
+        <button class="ghost" onclick="heatQuick2()" ${s.boiled ? "disabled" : ""}>⏩ 100 °C ga yetkazish</button>
+      </div></div>`;
+    h += `<div class="box"><h4>2% li FeCl₃ tomizish</h4>
+      <div class="kv"><span>Qoʻshilgan FeCl₃ hajmi</span><b>${s.feMl} ml / 5–10 ml</b></div>
+      <div class="row" style="margin-top:6px">
+        <button class="pri" onclick="addFeCl3()">🧪 +2 ml 2% FeCl₃</button>
+        <button class="ghost" onclick="toggleLaser2()">🔦 Tindal (${s.laser ? "ON" : "OFF"})</button>
+      </div>
+      <div class="eq">FeCl₃ + 3H₂O ⇌ Fe(OH)₃ + 3HCl</div>
+      <div class="eq">Fe(OH)₃ + HCl → FeOCl + 2H₂O</div></div>`;
+    h += `<div class="box"><h4>Mitsella konstruktori</h4>
+      ${s.micBuilt ? `<div class="eq" style="background:#e5f7ef;color:#0e4c32;font-weight:700">{m[Fe(OH)₃] · nFeO⁺ · (n−x)Cl⁻}ˣ⁺ · xCl⁻</div>
+        <div class="note">Metodik qoʻllanmadagi muqobil yozuv: <span style="font-family:var(--mono)">{m[Fe(OH)₃]·2nFe³⁺·xCl⁻}·3(n−x)Cl⁻</span></div>` : `
+        <div class="note" style="margin-bottom:6px">Fe(OH)₃ mitsellasining 3 asosiy qismini tanlang:</div>
+        <div class="kv"><span>1. Agregat (yadro):</span><span class="chips">${["Fe(OH)3", "HCl", "H2O"].map(v => `<button class="${s.micPick.core === v ? "on" : ""}" onclick="pickMic2('core','${v}')">${v.replace("3", "₃").replace("2", "₂")}</button>`).join("")}</span></div>
+        <div class="kv" style="margin-top:4px"><span>2. Potensial aniqlovchi ion:</span><span class="chips">${["FeO+", "Cl-", "OH-"].map(v => `<button class="${s.micPick.pot === v ? "on" : ""}" onclick="pickMic2('pot','${v}')">${v.replace("+", "⁺").replace("-", "⁻")}</button>`).join("")}</span></div>
+        <div class="kv" style="margin-top:4px"><span>3. Qarama-qarshi ion:</span><span class="chips">${["Cl-", "Fe3+", "Na+"].map(v => `<button class="${s.micPick.cnt === v ? "on" : ""}" onclick="pickMic2('cnt','${v}')">${v.replace("-", "⁻").replace("3+", "³⁺").replace("+", "⁺")}</button>`).join("")}</span></div>`}
+    </div>`;
+    if (cur >= totT) h += QS[2].map((q, k) => `<div class="box"><h4>Nazorat savoli ${k + 1}</h4>${qBlock(q, 29 + k * 7)}</div>`).join("");
+  }
+
+  if (st === 3) {
+    const ser = S.s3.series;
+    const flasks = S.s3[ser];
+    const rName = ser === "A" ? "0,05 n AgNO₃" : "0,05 n KI";
+    h += `<div class="sub">Ikki seriyada har biri 3 tadan konussimon kolba tayyorlanadi. Qaysi reaktiv ortiqcha olinganiga qarab <b>manfiy</b> yoki <b>musbat</b> AgI zoli, ekvimolyar nisbatda esa <b>AgI↓ choʻkma</b> hosil boʻladi.</div>` + tasksHTML(3);
+    h += `<div class="ser-tabs">
+      <button class="${ser === "A" ? "active" : ""}" onclick="setSeries3('A')">A seriya (20 ml KI) ${S.s3.A.every(f => f.shaken) ? "✓" : ""}</button>
+      <button class="${ser === "B" ? "active" : ""}" onclick="setSeries3('B')">B seriya (20 ml AgNO₃) ${S.s3.B.every(f => f.shaken) ? "✓" : ""}</button>
+    </div>`;
+    h += `<div class="box"><h4>Dozator hajmini tanlang (${rName})</h4>
+      <div class="grid4">${[10, 16, 18, 20].map(v => `<button class="${S.s3.selVol === v ? "on" : ""}" onclick="setVol3(${v})">${v} ml</button>`).join("")}</div>
+      <div style="margin-top:10px">${flasks.map((fl, i) => `
+        <div class="kv" style="border-bottom:1px dashed var(--line);padding:6px 0;align-items:center">
+          <span><b>${fl.id}</b>: ${fl.base} + <b>${fl.target} ml</b></span>
+          ${fl.shaken
+            ? `<span class="flask-pill ${fl.state === "precip" ? "bad" : "ok"}">${fl.state === "precip" ? "AgI↓ choʻkma" : fl.state === "neg" ? "Manfiy (−) zol" : "Musbat (+) zol"}</span>`
+            : `<button class="pri" style="padding:5px 10px;font-size:12px" onclick="dispense3(${i})">Quyish (${S.s3.selVol} ml)</button>`}
+        </div>`).join("")}
+      </div>
+      <div class="eq" style="margin-top:8px">AgNO₃ + KI → AgI↓ + KNO₃</div>
+    </div>`;
+    h += `<div class="box"><h4>Mitsellalarni taqqoslash</h4>
+      <div class="mic-grid">
+        <div class="mic-card"><b>A seriya (KI ortiqcha, −)</b><span style="font-family:var(--mono);font-size:11px">{[AgI]ₘ·nI⁻·(n−x)K⁺}ˣ⁻·xK⁺</span></div>
+        <div class="mic-card"><b>B seriya (AgNO₃ ortiqcha, +)</b><span style="font-family:var(--mono);font-size:11px">{[AgI]ₘ·nAg⁺·(n−x)NO₃⁻}ˣ⁺·xNO₃⁻</span></div>
+      </div></div>`;
+    if (cur >= totT) h += QS[3].map((q, k) => `<div class="box"><h4>Nazorat savoli ${k + 1}</h4>${qBlock(q, 43 + k * 7)}</div>`).join("");
+  }
+
+  if (stageDone(st)) {
+    h += `<button class="pri next" onclick="nextStage()">${st === 3 ? "📊 Hisobotni koʻrish →" : `${st + 1}-bosqichga oʻtish →`}</button>`;
+  }
+  P.innerHTML = h;
+  renderScene();
+  renderTabs();
+}
+
+/* ============ BAHOLASH VA HISOBOT ============ */
+function total() {
+  let proc = 0;
+  for (let k = 1; k <= 3; k++) {
+    const tDone = idx(k) / TASKS[k].length;
+    proc += Math.max(0, 15 * tDone - (S.pen[k] || 0));
+  }
+  const allQ = [1, 2, 3].flatMap(k => QS[k].map(q => q.id));
+  const qp = allQ.reduce((s, id) => s + ((S.q[id] && S.q[id].pts) || 0), 0);
+  const qsScore = 30 * qp / (allQ.length * 2);
+  const qzScore = QZ.filter((q, i) => S.quiz[i] === q[2]).length * 5;
+  const hp = Math.min(5, S.hints * 0.5);
+  return {
+    proc: Math.round(proc),
+    qs: Math.round(qsScore),
+    qz: qzScore,
+    hp,
+    tot: clamp(Math.round(proc + qsScore + qzScore - hp), 0, 100)
+  };
+}
+
+function stabilityChart() {
+  return LabUI.svgChart({
+    title: "Olingan sistemalarning kolloid barqarorligi (shartli %)",
+    yl: "Barqarorlik",
+    y0: 0, ym: 100, sy: 25,
+    bars: [
+      { l: "S zoli", y: S.s1.sShaken ? 78 : 0, c: "#c9a82b", val: S.s1.sShaken ? "78%" : "—" },
+      { l: "Kanifol", y: S.s1.kShaken ? 92 : 0, c: "#d9822b", val: S.s1.kShaken ? "92%" : "—" },
+      { l: "Fe(OH)₃", y: S.s2.feMl >= 5 ? 95 : 0, c: "#9c2818", val: S.s2.feMl >= 5 ? "95%" : "—" },
+      { l: "AgI (−)", y: S.s3.A[0].shaken ? 90 : 0, c: "#2563eb", val: S.s3.A[0].shaken ? "90%" : "—" },
+      { l: "AgI (+)", y: S.s3.B[0].shaken ? 86 : 0, c: "#1f9d6b", val: S.s3.B[0].shaken ? "86%" : "—" },
+      { l: "20+20", y: S.s3.A[2].shaken ? 6 : 0, c: "#d64545", val: S.s3.A[2].shaken ? "Choʻkma" : "—" }
+    ]
+  });
+}
+
+function reportHTML() {
+  const g = total();
+  const mark = g.tot >= 86 ? "aʼlo (5)" : g.tot >= 71 ? "yaxshi (4)" : g.tot >= 56 ? "qoniqarli (3)" : "qoniqarsiz (2)";
+  return `<div class="rep">
+    <h2>1-laboratoriya ishi hisoboti</h2>
+    <div class="sub">Kolloid eritmalarning kondensatsion usulda olinishi · ${new Date().toLocaleDateString("uz-UZ")}</div>
+    <div class="score"><div class="n">${g.tot}</div><div>/100 ball<br><b>${mark}</b></div></div>
+    <div class="box"><h4>Ball tarkibi</h4>
+      <div class="kv"><span>Amaliy tajriba texnikasi (3 bosqich)</span><b>${g.proc}/45</b></div>
+      <div class="kv"><span>Bosqich nazorat savollari (6 ta)</span><b>${g.qs}/30</b></div>
+      <div class="kv"><span>Yakuniy nazorat testi (5 ta)</span><b>${g.qz}/25</b></div>
+      ${g.hp ? `<div class="kv"><span>Maslahat jarimasi (${S.hints} marta)</span><b>−${g.hp}</b></div>` : ""}
+    </div>
+    <div class="box"><h4>Olingan zollar jadvali</h4>
+      <table class="j">
+        <tr><th>Zol / tajriba</th><th>Usul</th><th>Zaryad</th><th>Holat</th></tr>
+        <tr><td>Oltingugurt (S)</td><td>Erituvchi alm.</td><td>(−)</td><td>${S.s1.sShaken ? "Sutdek oppoq" : "—"}</td></tr>
+        <tr><td>Kanifol (2%)</td><td>Erituvchi alm.</td><td>(−)</td><td>${S.s1.kShaken ? "Barqaror oppoq" : "—"}</td></tr>
+        <tr><td>Fe(OH)₃</td><td>Gidroliz (100 °C)</td><td>(+)</td><td>${S.s2.feMl >= 5 ? "Qizil-qoʻngʻir" : "—"}</td></tr>
+        <tr><td>AgI (A1, A2)</td><td>Almashinish (KI↑)</td><td>(−)</td><td>${S.s3.A[0].shaken ? "Manfiy zol" : "—"}</td></tr>
+        <tr><td>AgI (B1, B2)</td><td>Almashinish (Ag⁺↑)</td><td>(+)</td><td>${S.s3.B[0].shaken ? "Musbat zol" : "—"}</td></tr>
+        <tr><td>AgI (A3, B3)</td><td>Ekvimolyar 20+20</td><td>0</td><td>${S.s3.A[2].shaken ? "AgI↓ choʻkma" : "—"}</td></tr>
+      </table>
+      <div style="margin-top:8px">${stabilityChart()}</div>
+    </div>
+    <div class="box"><h4>Yakuniy nazorat testi (5 savol)</h4>
+      ${QZ.map((q, qi) => `<div class="q"><p>${qi + 1}. ${q[0]}</p>${q[1].map((o, oi) => {
+        const a = S.quiz[qi];
+        let c = "";
+        if (a !== undefined) { if (oi === q[2]) c = "right"; else if (oi === a) c = "wrong"; }
+        return `<button class="${c}" onclick="quizA(${qi},${oi})" ${a !== undefined ? "disabled" : ""}>${o}</button>`;
+      }).join("")}</div>`).join("")}
+    </div>
+    <div class="box"><h4>Xulosa</h4>
+      <div class="note">Kondensatsion usulda kolloid zollar molekula va ionlarni birlashtirish orqali olinadi: oltingugurt va kanifol zollari erituvchini almashtirish (fizik kondensatsiya), Fe(OH)₃ zoli 100 °C da tuz gidrolizi, AgI zollari esa almashinish reaksiyasi yordamida tayyorlandi. Panet–Fayans qoidasiga muvofiq ortiqcha KI manfiy (−), ortiqcha AgNO₃ musbat (+) zol hosil qiladi, ekvimolyar nisbatda esa stabilizator yetishmasligi tufayli choʻkma tushadi.</div>
+    </div>
+    <div class="row noprint">
+      <button class="dark" onclick="window.print()">🖨 Chop etish / PDF</button>
+      <button class="ghost" onclick="if(confirm('Ishni qaytadan boshlaysizmi?'))location.reload()">↺ Qaytadan boshlash</button>
+    </div>
+  </div>`;
+}
+
+function quizA(qi, oi) {
+  if (S.quiz[qi] !== undefined) return;
+  S.quiz[qi] = oi;
+  SFX.play(oi === QZ[qi][2] ? "ok" : "err");
+  renderPanel();
+}
+
+/* ============ NAVIGATSIYA VA PROGRESS ============ */
+function goStage(n) {
+  if (n > S.unlocked) return;
+  S.stage = n;
+  SFX.play("paper");
+  renderPanel();
+  el("panel").scrollTop = 0;
+}
+function nextStage() {
+  const n = S.stage + 1;
+  if (n > S.unlocked) S.unlocked = n;
+  goStage(n);
+}
+function renderTabs() {
+  el("tabs").innerHTML = STG.slice(1).map((x, i) => {
+    const n = i + 1;
+    const d = n <= 3 ? stageDone(n) : Object.keys(S.quiz).length === QZ.length;
+    return `<button class="${n === S.stage ? "cur" : ""} ${d ? "done" : ""}" ${n > S.unlocked ? "disabled" : ""} onclick="goStage(${n})" title="${x.t}">${d ? "✓ " : ""}${n} · ${x.s}</button>`;
+  }).join("");
+  const sc = total().tot;
+  el("chip").textContent = sc + " ball";
+  const isDone = stageDone(1) && stageDone(2) && stageDone(3);
+  LabProgress.save(LAB_ID, sc, isDone);
+}
+
+/* ============ MODALLAR VA MASLAHAT ============ */
+function showIntro() {
+  modal(`<h1>🧪 1-laboratoriya: Kondensatsion usulda zol olish</h1>
+    <p style="color:var(--muted)">Kolloid eritmalarning fizik va kimyoviy kondensatsiya usullari bilan olinishi</p>
+    <h3>Ishdan maqsad</h3>
+    <ul>
+      <li>Kondensatsion usullar (erituvchini almashtirish, gidroliz, almashinish reaksiyasi) yordamida kolloid eritmalar hosil qilish.</li>
+      <li>Kolloid eritmalar hosil boʻlish sxemalari, reaksiya tenglamalari va mitsella formulalarini tuzish.</li>
+    </ul>
+    <h3>3 ta amaliy bosqich</h3>
+    <ul>
+      <li><b>1-tajriba:</b> Oltingugurt va kanifol gidrozollari (erituvchini almashtirish + Tindal lazeri).</li>
+      <li><b>2-tajriba:</b> 100 °C da FeCl₃ gidrolizi orqali tiniq qizil-qoʻngʻir Fe(OH)₃ zolini olish.</li>
+      <li><b>3-tajriba:</b> Kumush yodid (AgI) zoli — A seriya (manfiy zol) va B seriya (musbat zol) hamda ekvimolyar choʻkish.</li>
+    </ul>
+    <div class="row" style="margin-top:16px">
+      <button class="pri" style="padding:11px 18px" onclick="closeModal();SFX.play('fanfare')">Laboratoriyani boshlash →</button>
+    </div>`);
+}
+
+function showTheory() {
+  modal(`<h1>📘 Nazariy maʼlumotlar (1-laboratoriya)</h1>
+    <h3>1. Erituvchini almashtirish (fizik kondensatsiya)</h3>
+    <p>Oltingugurt va kanifol etil spirtida eriydi, suvda esa deyarli erimaydi. Spirtli eritma koʻp miqdordagi distillangan suvga chayqatib turib tomizilganda erituvchi almashinadi, oʻta toʻyinganlik hosil boʻladi va sutdek oppoq gidrozol vujudga keladi.</p>
+    <h3>2. Temir (III) gidroksid zoli (gidroliz)</h3>
+    <div class="eq">FeCl₃ + 3H₂O ⇌ Fe(OH)₃↓ + 3HCl</div>
+    <div class="eq">Fe(OH)₃ + HCl → FeOCl + 2H₂O</div>
+    <p>Agregat sirtida hosil boʻlgan FeOCl dissotsilanib FeO⁺ ionlari yadroga adsorbsiyalanadi:</p>
+    <div class="eq">{m[Fe(OH)₃] · nFeO⁺ · (n−x)Cl⁻}ˣ⁺ · xCl⁻</div>
+    <p class="note">Qoʻllanmadagi muqobil yozuv: {m[Fe(OH)₃] · 2nFe³⁺ · xCl⁻} · 3(n−x)Cl⁻</p>
+    <h3>3. Kumush yodid (AgI) zoli va Panet–Fayans qoidasi</h3>
+    <div class="eq">AgNO₃ + KI → AgI↓ + KNO₃</div>
+    <p><b>KI ortiqcha (A seriya — manfiy zol):</b></p>
+    <div class="eq">{[AgI]ₘ · nI⁻ · (n−x)K⁺}ˣ⁻ · xK⁺</div>
+    <p><b>AgNO₃ ortiqcha (B seriya — musbat zol):</b></p>
+    <div class="eq">{[AgI]ₘ · nAg⁺ · (n−x)NO₃⁻}ˣ⁺ · xNO₃⁻</div>
+    <p>Ekvimolyar nisbatda (20 ml + 20 ml) ortiqcha stabilizator qolmaydi va AgI choʻkmaga tushadi.</p>
+    ${LabUI.refsHTML()}
+    <div class="row" style="margin-top:14px"><button class="pri" onclick="closeModal()">Yopish</button></div>`);
+}
+
+function showJournal() {
+  modal(`<h1>📋 Laboratoriya jurnali</h1>
+    <table class="j">
+      <tr><th>Bosqich</th><th>Holat</th><th>Jarima</th></tr>
+      <tr><td>1 · S va kanifol zoli</td><td>S: ${S.s1.sDrops} ml, Kanifol: ${f1(S.s1.kDrops, 1)} ml, Tindal: ${S.s1.laserChecked ? "✓" : "—"}</td><td>${S.pen[1]}</td></tr>
+      <tr><td>2 · Fe(OH)₃ gidroliz</td><td>T=${f1(S.s2.temp, 0)} °C, FeCl₃: ${S.s2.feMl} ml, Mitsella: ${S.s2.micBuilt ? "✓" : "—"}</td><td>${S.pen[2]}</td></tr>
+      <tr><td>3 · AgI zoli (A & B)</td><td>A: ${S.s3.A.filter(f => f.shaken).length}/3, B: ${S.s3.B.filter(f => f.shaken).length}/3</td><td>${S.pen[3]}</td></tr>
+    </table>
+    ${S.events.length ? `<h3>Qayd etilgan ogohlantirishlar</h3><ul>${S.events.map(e => `<li>${e.st}-bosqich: ${e.msg}</li>`).join("")}</ul>` : "<p class='note' style='margin-top:10px'>Hozircha xatolik qayd etilmagan.</p>"}
+    <div class="row" style="margin-top:14px"><button class="pri" onclick="closeModal()">Yopish</button></div>`);
+}
+
+function smartHint() {
+  S.hints++;
+  SFX.play("beep");
+  let msg = "";
+  if (S.stage === 1) {
+    if (S.s1.sDrops < 4) msg = "1-kolbaga kamida 4 ml oltingugurt (S) spirtli eritmasini tomizing.";
+    else if (!S.s1.sShaken) msg = "1-kolbani bosib yoki «Chayqatish» tugmasini bosib aralashtiring.";
+    else if (S.s1.kDrops < 5) msg = "2-kolbaga 5–10 ml kanifolning 2% li eritmasini tomizing.";
+    else if (!S.s1.kShaken) msg = "2-kolbani qattiq chayqating — sutdek oppoq barqaror zol olinadi.";
+    else if (!S.s1.laserChecked) msg = "Tindal lazerini yoqing va zollarda yorugʻ konussimon izni kuzating.";
+    else msg = "Pastdagi 2 ta savolga javob bering va 2-bosqichga oʻting.";
+  } else if (S.stage === 2) {
+    if (!S.s2.boiled) msg = "Isitgichni yoqib, kolbadagi 100 ml suvni 100 °C gacha qaynating (yoki «100 °C ga yetkazish» tugmasini bosing).";
+    else if (S.s2.feMl < 5) msg = "Qaynab turgan suvga 2% li FeCl₃ eritmasidan kamida 5–10 ml tomizing.";
+    else if (!S.s2.heaterOffDone) msg = "Zol tayyor! Endi isitgichni oʻchiring.";
+    else if (!S.s2.micBuilt) msg = "Mitsella konstruktorida: Yadro = Fe(OH)₃, Potensial aniqlovchi = FeO⁺, Qarama-qarshi = Cl⁻ tanlang.";
+    else msg = "Bosqich savollariga javob bering va 3-bosqichga oʻting.";
+  } else if (S.stage === 3) {
+    const ser = S.s3.series;
+    const rem = S.s3[ser].find(f => !f.shaken);
+    if (rem) msg = `${ser} seriyada ${rem.id} kolbasi uchun dozatorda ${rem.target} ml ni tanlab kolbaga quying.`;
+    else if (!S.s3.B.every(f => f.shaken)) msg = "Yuqoridagi «B seriya (20 ml AgNO₃)» tugmasiga oʻtib, 16, 18 va 20 ml KI quying.";
+    else if (!S.s3.A.every(f => f.shaken)) msg = "«A seriya» ga qaytib barcha kolbalarni yakunlang.";
+    else msg = "Savollarga javob bering va yakuniy hisobotga oʻting.";
+  } else {
+    msg = "Hisobotdagi 5 ta yakuniy nazorat savolini bajaring va natijani chop eting.";
+  }
+  toast("💡 " + msg, "warn", 4200);
+  renderTabs();
+}
+
+/* ============ ANIMATSIYA SIKLI (rAF) ============ */
+let lastTs = 0;
+function tick(ts) {
+  const dt = Math.min(0.05, (ts - lastTs) / 1000 || 0.016);
+  lastTs = ts;
+  S.anim.t += dt;
+
+  // 1-bosqich chayqatish va Tindal zarralari
+  if (S.stage === 1) {
+    if (S.s1.shakeT1 > 0) {
+      S.s1.shakeT1 = Math.max(0, S.s1.shakeT1 - dt);
+      const ang = Math.sin(S.s1.shakeT1 * 34) * 9 * (S.s1.shakeT1 / 1.1);
+      const f1g = el("flask1Wrap");
+      if (f1g) f1g.setAttribute("transform", `translate(270,478) rotate(${ang.toFixed(1)},0,-70)`);
+    }
+    if (S.s1.shakeT2 > 0) {
+      S.s1.shakeT2 = Math.max(0, S.s1.shakeT2 - dt);
+      const ang = Math.sin(S.s1.shakeT2 * 34) * 9 * (S.s1.shakeT2 / 1.1);
+      const f2g = el("flask2Wrap");
+      if (f2g) f2g.setAttribute("transform", `translate(545,478) rotate(${ang.toFixed(1)},0,-70)`);
+    }
+    const td = el("tyndallDots1");
+    if (td && S.s1.laser) {
+      let dots = "";
+      S.anim.tyndallPts.forEach((p, idxP) => {
+        p.x = (p.x + p.vx * dt + 1) % 1;
+        p.y = (p.y + p.vy * dt + 1) % 1;
+        if (idxP < 24 && S.s1.sTurb > 0.2) {
+          const cx = 212 + p.x * 116, cy = 414 + p.y * 14;
+          dots += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${p.r.toFixed(1)}" fill="#fff5f7" opacity="${(0.45 + 0.45 * Math.sin(S.anim.t * 6 + idxP)).toFixed(2)}"/>`;
+        } else if (idxP >= 24 && S.s1.kTurb > 0.2) {
+          const cx = 488 + p.x * 116, cy = 412 + p.y * 17;
+          dots += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${p.r.toFixed(1)}" fill="#fff5f7" opacity="${(0.45 + 0.45 * Math.sin(S.anim.t * 6 + idxP)).toFixed(2)}"/>`;
+        }
+      });
+      td.innerHTML = dots;
+    }
+  }
+
+  // 2-bosqich qizish va qaynash pufakchalari
+  if (S.stage === 2) {
+    let tempChanged = false;
+    if (S.s2.heaterOn && S.s2.temp < 100) {
+      S.s2.temp = Math.min(100, S.s2.temp + dt * 13);
+      tempChanged = true;
+      if (S.s2.temp >= 99.6 && !S.s2.boiled) {
+        S.s2.temp = 100;
+        S.s2.boiled = true;
+        SFX.play("boil");
+        toast("✓ Suv 100 °C da qaynayapti! Endi 2% li FeCl₃ eritmasidan 5–10 ml tomizing.", "ok");
+        renderPanel();
+      }
+    } else if (!S.s2.heaterOn && S.s2.temp > 25) {
+      S.s2.temp = Math.max(25, S.s2.temp - dt * 3.5);
+      tempChanged = true;
+    }
+    if (tempChanged) {
+      const tt = el("tempTxt2");
+      if (tt) tt.textContent = Math.round(S.s2.temp) + "°C";
+      const mb = el("mercBar2");
+      if (mb) {
+        const mh = clamp((S.s2.temp - 15) / 95 * 145, 6, 152);
+        mb.setAttribute("y", (178 - mh).toFixed(1));
+        mb.setAttribute("height", mh.toFixed(1));
+      }
+    }
+    const bg = el("boilBubbles2");
+    if (bg) {
+      if (S.s2.temp >= 88) {
+        if (Math.random() < (S.s2.temp >= 98 ? 0.45 : 0.14)) {
+          S.anim.bubbles.push({ x: (Math.random() - 0.5) * 90, y: -4, r: 2 + Math.random() * 3.2, vy: 36 + Math.random() * 38 });
+        }
+      }
+      S.anim.bubbles = S.anim.bubbles.filter(b => {
+        b.y -= b.vy * dt;
+        return b.y > -64;
+      });
+      bg.innerHTML = S.anim.bubbles.map(b => `<circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="${b.r.toFixed(1)}" fill="rgba(255,255,255,0.55)" stroke="rgba(255,255,255,0.8)" stroke-width="0.7"/>`).join("");
+    }
+  }
+
+  // 3-bosqich kolbalar chayqalishi
+  if (S.stage === 3) {
+    const xs = [245, 485, 725];
+    S.s3[S.s3.series].forEach((fl, i) => {
+      if (fl.shakeT > 0) {
+        fl.shakeT = Math.max(0, fl.shakeT - dt);
+        const ang = Math.sin(fl.shakeT * 32) * 8 * (fl.shakeT / 1.1);
+        const g = el("agFlask" + i);
+        if (g) g.setAttribute("transform", `translate(${xs[i]},478) rotate(${ang.toFixed(1)},0,-70)`);
+      }
+    });
+  }
+
+  // Tushayotgan tomchilar (barcha bosqichlar)
+  const fx = el("fxLayer");
+  if (fx && S.anim.drops.length) {
+    S.anim.drops = S.anim.drops.filter(d => {
+      d.vy += 420 * dt;
+      d.y += d.vy * dt;
+      return d.y < d.targetY;
+    });
+    fx.innerHTML = S.anim.drops.map(d => `<ellipse cx="${d.x}" cy="${d.y.toFixed(1)}" rx="${d.r * 0.78}" ry="${d.r * 1.25}" fill="${d.color}" stroke="#5c4218" stroke-width="0.8"/>`).join("");
+  } else if (fx && fx.innerHTML) {
+    fx.innerHTML = "";
+  }
+
+  requestAnimationFrame(tick);
+}
+
+/* ============ ISHGA TUSHIRISH ============ */
+LabUI.initShell(LAB_ID);
+el("btnTable").addEventListener("click", showJournal);
+el("btnHint").addEventListener("click", smartHint);
+el("btnTheory").addEventListener("click", showTheory);
+renderPanel();
+showIntro();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

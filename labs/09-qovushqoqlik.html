@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="author" content="Qayumov Hayitali">
+<meta name="description" content="9-laboratoriya ishi: Kolloid sistemalarda strukturalar. Ostvald viskozimetrida qovushqoqlikni aniqlash.">
+<title>Qovushqoqlik Laboratoriyasi</title>
+<style>
+:root{
+  --top:#171a3a; --top2:#262a5a; --accent:#22c3d6; --accent2:#12a5b8;
+  --paper:#f7f8fd; --ink:#1a1d3d; --muted:#6a6f96; --line:#dfe2f2;
+  --ok:#21a67a; --warn:#e7a51c; --err:#e04f5f; --pink:#ff6fa5;
+  --mono:ui-monospace,"JetBrains Mono","Cascadia Mono",Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:Inter,system-ui,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--top);display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr auto;height:100vh;height:100dvh;overflow:hidden;-webkit-font-smoothing:antialiased}
+button{font:inherit;cursor:pointer;border:none;border-radius:999px;padding:8px 14px;background:#eceefa;color:var(--ink);transition:background .15s,transform .05s;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+button:hover{background:#dfe2f6}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.38;cursor:not-allowed}
+button.pri{background:var(--accent);color:#06202a;font-weight:700}
+button.pri:hover{background:var(--accent2)}
+button.dark{background:var(--top);color:#fff}
+button.ghost{background:transparent;border:1px solid var(--line)}
+button.on{background:var(--ok)!important;color:#fff!important}
+button.bad{background:#fde7ea!important;color:var(--err)!important}
+header{display:flex;align-items:center;gap:14px;padding:0 18px;height:58px;background:var(--top);color:#e9ebff;box-shadow:0 2px 0 #22c3d655}
+header .logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#22c3d6,#7a5cff);display:grid;place-items:center;font-size:18px}
+header .brand{font-weight:800;font-size:15.5px;white-space:nowrap}
+header .brand small{display:block;font-weight:500;font-size:11px;opacity:.55}
+.tabs{display:flex;gap:6px;margin-left:auto;overflow-x:auto}
+.tabs button{background:transparent;border:1px solid #3a3f78;color:#b9bde6;font-size:12.5px;padding:6px 12px;flex:none}
+.tabs button.cur{background:var(--accent);border-color:var(--accent);color:#06202a;font-weight:700}
+.tabs button.done{border-color:#21a67a;color:#7fe6c2}
+.scorechip{font-family:var(--mono);font-size:13px;background:#0f1230;padding:6px 12px;border-radius:999px;white-space:nowrap;color:var(--accent)}
+main{display:grid;grid-template-columns:410px minmax(0,1fr);min-height:0;min-width:0}
+#stageWrap{position:relative;min-height:0;background:#c9cde6;overflow:hidden}
+#scene{width:100%;height:100%;display:block}
+#scene .clk{cursor:pointer}
+#scene .clk:hover{filter:brightness(1.07) drop-shadow(0 0 6px rgba(34,195,214,.9))}
+#scene .glow{filter:drop-shadow(0 0 8px #22c3d6) drop-shadow(0 0 3px #22c3d6)}
+aside{background:var(--paper);overflow-y:auto;padding:18px 18px 26px;border-right:1px solid #c7cbe6;order:-1}
+aside h2{font-size:18px;margin-bottom:4px}
+aside .sub{font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.45}
+.tl{list-style:none;margin:0 0 12px;padding:0 0 0 4px;font-size:13.5px;border-left:2px solid var(--line)}
+.tl li{position:relative;padding:6px 0 6px 18px;color:var(--muted);line-height:1.35}
+.tl li::before{content:"";position:absolute;left:-7px;top:9px;width:12px;height:12px;border-radius:50%;background:#fff;border:2px solid #b9bde0}
+.tl li.done{color:#9ca1c4}
+.tl li.done::before{background:var(--ok);border-color:var(--ok)}
+.tl li.cur{color:var(--ink);font-weight:600}
+.tl li.cur::before{border-color:var(--accent);box-shadow:0 0 0 4px rgba(34,195,214,.22)}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px}
+.card h4{font-size:11.5px;text-transform:uppercase;letter-spacing:.9px;color:var(--muted);margin-bottom:8px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.row button{padding:7px 11px;font-size:12.5px}
+.hint{background:#e9fbfd;border-left:4px solid var(--accent);padding:9px 11px;font-size:13px;color:#0d4a52;border-radius:6px;margin-bottom:12px;line-height:1.45}
+.note{font-size:12px;color:var(--muted);line-height:1.45}
+.q{margin-bottom:10px;font-size:13px}
+.q p{font-weight:600;margin-bottom:6px;line-height:1.4}
+.q button{display:block;width:100%;text-align:left;margin-bottom:4px;background:#fff;border:1px solid var(--line);font-size:13px;line-height:1.4;border-radius:10px}
+.q button.right{background:#e3f7f0;border-color:var(--ok)}
+.q button.wrong{background:#fde7ea;border-color:var(--err)}
+.next{width:100%;margin-top:6px;padding:12px}
+.kv{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;gap:8px}
+.kv b{font-family:var(--mono)}
+.lcd{font-family:var(--mono);font-size:28px;font-weight:700;text-align:center;padding:8px;border-radius:10px;background:#0f1230;color:#5ff0ff;margin-bottom:8px;letter-spacing:1px}
+.lcd small{display:block;font-size:11px;color:#8f95d8;font-weight:500;letter-spacing:0}
+table.j{width:100%;border-collapse:collapse;font-size:12px;font-family:var(--mono)}
+table.j th,table.j td{text-align:right;padding:4px 5px;border-bottom:1px solid var(--line)}
+table.j th:first-child,table.j td:first-child{text-align:left}
+table.j th{color:var(--muted);font-family:Inter,system-ui,sans-serif;font-weight:600}
+.tube{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:center;font-size:12.5px;padding:6px 0;border-bottom:1px dashed var(--line)}
+.tube .nm{font-weight:700}
+.tube.bad .nm{color:var(--err)}
+.mini button{padding:4px 8px;font-size:12px}
+footer{display:flex;gap:8px;align-items:center;padding:8px 14px;background:#0f1230;color:#e9ebff;overflow-x:auto}
+footer button{background:var(--top2);color:#e9ebff;font-size:13px;white-space:nowrap;padding:7px 12px}
+footer .sp{flex:1}
+footer .lbl{font-size:11px;letter-spacing:1px;opacity:.6;white-space:nowrap}
+#toasts{position:fixed;left:50%;transform:translateX(-50%);top:68px;display:flex;flex-direction:column;gap:8px;z-index:50;pointer-events:none;width:min(460px,calc(100vw - 32px));align-items:center}
+.toast{background:#fff;color:var(--ink);padding:10px 16px;border-radius:999px;font-size:13.5px;box-shadow:0 10px 30px rgba(10,12,40,.28);border:2px solid #b9bde0;animation:tin .25s ease-out;line-height:1.4;text-align:center}
+.toast.ok{border-color:var(--ok)}.toast.warn{border-color:var(--warn)}.toast.err{border-color:var(--err)}
+@keyframes tin{from{opacity:0;transform:translateY(-10px) scale(.97)}}
+#modal{position:fixed;inset:0;background:rgba(12,14,40,.72);display:none;place-items:center;z-index:40;padding:16px}
+#modal.on{display:grid}
+#modal .mc{background:var(--paper);border-radius:18px;max-width:780px;width:100%;max-height:92vh;overflow-y:auto;padding:26px 28px;box-shadow:0 20px 60px rgba(0,0,0,.45)}
+#modal h1{font-size:23px;margin-bottom:6px}
+#modal h3{font-size:16px;margin:16px 0 6px}
+#modal p,#modal li{font-size:14px;line-height:1.55}
+#modal ul{padding-left:20px}
+.eq{font-family:var(--mono);background:#eef0fb;padding:7px 10px;border-radius:8px;font-size:13px;margin:5px 0;overflow-x:auto;white-space:nowrap}
+.rep h2{font-size:20px;margin:4px 0 10px}
+.score{display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#171a3a,#2b2f6e);color:#fff;border-radius:14px;padding:14px 16px;margin-bottom:12px}
+.score .n{font-size:40px;font-weight:800;font-family:var(--mono);color:var(--accent)}
+@media (max-width:900px){
+  body{overflow:auto;height:auto;grid-template-rows:auto auto auto}
+  header{flex-wrap:wrap;height:auto;padding:10px 16px;gap:8px}
+  .tabs{margin-left:0;width:100%}
+  main{grid-template-columns:minmax(0,1fr)}
+  aside{order:1;border-right:none;border-top:1px solid #c7cbe6}
+  #stageWrap{height:66vw;min-height:280px}
+}
+@media print{
+  header,footer,#stageWrap,#toasts,.noprint{display:none!important}
+  body{display:block;height:auto;overflow:visible;background:#fff}
+  main{display:block} aside{border:none;overflow:visible}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">🧫</div>
+  <div class="brand">Qovushqoqlik · Ostvald viskozimetri<small>9-laboratoriya · kolloid sistemalarda strukturalar</small></div>
+  <nav class="tabs" id="tabs"></nav>
+  <div class="scorechip" id="chip">0 ball</div>
+</header>
+<main>
+  <aside id="panel"></aside>
+  <div id="stageWrap"><svg id="scene" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg></div>
+</main>
+<footer>
+  <span class="lbl">OQIM TEZLIGI</span>
+  <button data-sp="1">×1</button><button data-sp="2">×2</button><button data-sp="5">×5</button><button data-sp="20">×20</button><button data-sp="50">×50</button>
+  <span class="sp"></span>
+  <button id="btnJ">📋 Jurnal</button>
+  <button id="btnHint">💡 Maslahat</button>
+  <button id="btnTheory">📘 Nazariya</button>
+  <button id="btnSnd">🔊</button>
+  <button id="btnFull">⛶</button>
+  <a class="kk-ig" href="https://instagram.com/hayitali1612" target="_blank" rel="noopener noreferrer" title="Instagram">hayitali1612</a>
+</footer>
+<div id="toasts"></div>
+<div id="modal"><div class="mc" id="mc"></div></div>
+
+<script src="../assets/lab-bridge.js"></script>
+<script>
+"use strict";
+/* ============ OVOZ (WebAudio sintez) ============ */
+const SFX={ctx:null,on:true,m:null,
+  init(){if(!this.ctx){const A=window.AudioContext||window.webkitAudioContext;if(!A)return;this.ctx=new A();this.m=this.ctx.createGain();this.m.gain.value=.75;this.m.connect(this.ctx.destination)}if(this.ctx.state==="suspended")this.ctx.resume()},
+  env(g,t,a,d,v){g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(v,t+a);g.gain.exponentialRampToValueAtTime(.0001,t+a+d)},
+  tone(f,d,o={}){const c=this.ctx;if(!c)return;const t=c.currentTime+(o.delay||0),os=c.createOscillator(),g=c.createGain();os.type=o.type||"sine";os.frequency.setValueAtTime(f,t);if(o.to)os.frequency.exponentialRampToValueAtTime(o.to,t+d);this.env(g,t,o.a||.005,d,o.v||.12);os.connect(g);g.connect(this.m);os.start(t);os.stop(t+d+.08)},
+  noise(d,o={}){const c=this.ctx;if(!c)return;const t=c.currentTime+(o.delay||0),n=Math.max(1,Math.floor(c.sampleRate*(d+.06))),b=c.createBuffer(1,n,c.sampleRate),ch=b.getChannelData(0);for(let i=0;i<n;i++)ch[i]=Math.random()*2-1;const s=c.createBufferSource();s.buffer=b;const f=c.createBiquadFilter();f.type=o.ft||"lowpass";f.frequency.setValueAtTime(o.f||1000,t);if(o.fto)f.frequency.exponentialRampToValueAtTime(o.fto,t+d);f.Q.value=o.q||1;const g=c.createGain();this.env(g,t,o.a||.01,d,o.v||.1);s.connect(f);f.connect(g);g.connect(this.m);s.start(t);s.stop(t+d+.06)},
+  play(n){this.init();if(!this.on||!this.ctx)return;const T=this;switch(n){
+    case"click":T.tone(1500,.03,{type:"square",v:.035});break;
+    case"ok":[587,740,880].forEach((f,i)=>T.tone(f,.16,{delay:i*.07,type:"triangle",v:.11}));break;
+    case"err":T.tone(200,.26,{type:"sawtooth",to:100,v:.08});break;
+    case"warn":T.tone(520,.09,{type:"square",v:.05});T.tone(390,.12,{type:"square",v:.05,delay:.12});break;
+    case"pour":T.noise(1.1,{f:600,fto:1500,q:.8,v:.12,a:.15});for(let i=0;i<6;i++)T.tone(320+Math.random()*500,.06,{delay:.1+Math.random()*.9,v:.025,to:950});break;
+    case"pipette":T.noise(.25,{ft:"bandpass",f:900,q:2,v:.08});T.tone(700,.07,{to:1500,v:.06,delay:.2});break;
+    case"squeeze":T.noise(.45,{ft:"bandpass",f:1800,fto:500,q:1.2,v:.14});T.tone(160,.3,{type:"triangle",to:90,v:.07});break;
+    case"slurp":T.noise(.6,{ft:"bandpass",f:400,fto:1400,q:3,v:.12});for(let i=0;i<4;i++)T.tone(500+i*120,.05,{delay:.1+i*.11,v:.04,to:900});break;
+    case"release":T.noise(.3,{ft:"highpass",f:2000,v:.07});break;
+    case"wash":T.noise(.9,{ft:"bandpass",f:1200,fto:3000,q:.6,v:.11});T.noise(.5,{f:500,v:.08,delay:.5});break;
+    case"start":T.tone(1760,.08,{type:"square",v:.06});break;
+    case"stop":T.tone(1320,.08,{type:"square",v:.06});T.tone(990,.1,{type:"square",v:.05,delay:.09});break;
+    case"tick":T.tone(3400,.012,{type:"square",v:.022});break;
+    case"mark":T.tone(1046,.09,{v:.07});break;
+    case"ice":for(let i=0;i<7;i++)T.tone(2500+Math.random()*2000,.04,{type:"triangle",v:.05,delay:i*.06});break;
+    case"heat":T.tone(110,.8,{type:"sawtooth",v:.03,to:140});T.noise(.8,{f:300,v:.04});break;
+    case"shake":for(let i=0;i<5;i++)T.noise(.08,{ft:"bandpass",f:900+i*100,q:2,v:.12,delay:i*.09});break;
+    case"clock":for(let i=0;i<6;i++)T.tone(i%2?2600:2200,.02,{type:"square",v:.03,delay:i*.12});break;
+    case"ding":T.tone(1568,.6,{v:.1});T.tone(2349,.5,{v:.04,delay:.02});break;
+    case"fanfare":[523,659,784,1046].forEach((f,i)=>T.tone(f,.3,{delay:i*.12,type:"triangle",v:.11}));break;
+    case"paper":T.noise(.18,{ft:"highpass",f:3000,v:.06});break;
+  }}
+};
+
+/* ============ FIZIK MODEL ============ */
+const rnd=(a,b)=>a+Math.random()*(b-a);
+function gauss(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
+function interp(tab,T,log){const ks=Object.keys(tab).map(Number).sort((a,b)=>a-b);if(T<=ks[0])return tab[ks[0]];if(T>=ks[ks.length-1])return tab[ks[ks.length-1]];for(let i=0;i<ks.length-1;i++){const a=ks[i],b=ks[i+1];if(T>=a&&T<=b){const f=(T-a)/(b-a);return log?Math.exp(Math.log(tab[a])+(Math.log(tab[b])-Math.log(tab[a]))*f):tab[a]+(tab[b]-tab[a])*f}}}
+const ETAW={0:1.792,10:1.307,20:1.002,25:.890,30:.798,40:.653,50:.547,60:.467};
+const RHOW={0:.9998,10:.9997,20:.9982,25:.9970,30:.9957,40:.9922,60:.9832};
+const REL05={0:18,5:7.5,10:3.6,15:2.1,20:1.58,25:1.42,30:1.33,40:1.24,60:1.15};
+const etaW=T=>interp(ETAW,T,true), rhoW=T=>interp(RHOW,T), fT=T=>(interp(REL05,T,true)-1)/.42;
+const relC=c=>1+.55*c+.35*c*c+.45*c*c*c;
+const SMP={
+ W:{n:"Distillangan suv",s:"Suv",c:0,base:1,col:"#4f9ff0",dr:0},
+ G1:{n:"1-eritma (1%)",s:"1% (20+0)",c:1,base:relC(1),col:"#e3ad2c",dr:0},
+ G2:{n:"2-eritma (0,75%)",s:"0,75% (15+5)",c:.75,base:relC(.75),col:"#e8bb48",dr:0},
+ G3:{n:"3-eritma (0,25%)",s:"0,25% (5+15)",c:.25,base:relC(.25),col:"#edcb6c",dr:0},
+ G4:{n:"4-eritma (0,1%)",s:"0,1% (2+18)",c:.1,base:relC(.1),col:"#f0d88f",dr:0},
+ G05:{n:"Jelatina 0,5% zoli",s:"0,5% zol",c:.5,base:1.42,col:"#e8bb48",dr:0},
+ SKI:{n:"Jelatina 1% + KI",s:"+ KI",c:.5,base:1.22,col:"#eccb75",dr:.06},
+ SK2:{n:"Jelatina 1% + K₂SO₄",s:"+ K₂SO₄",c:.5,base:1.78,col:"#e0a52a",dr:.035},
+ SW:{n:"Jelatina 1% + H₂O",s:"+ H₂O",c:.5,base:1.45,col:"#e8bb48",dr:0}
+};
+for(const k in SMP)SMP[k].jit=1+gauss()*.004;
+const C_TRUE=(.890/.9970)/rnd(44,47);                       // viskozimetr doimiysi, mm²/s²
+const etaRel=(k,T)=>k==="W"?1:1+(SMP[k].base-1)*fT(T);
+const rhoS=(k,T)=>rhoW(T)+.0025*SMP[k].c+SMP[k].dr;
+const tTrue=(k,T)=>etaRel(k,T)*etaW(T)/(rhoS(k,T)*C_TRUE)*SMP[k].jit;
+
+/* ============ HOLAT ============ */
+const S={stage:1,unlocked:1,glow:null,hints:0,L:{},pen:{1:0,2:0,3:0,4:0},events:[],q:{},quiz:{},
+ th:{set:25,T:21.5,on:false,ice:false},
+ V:{liq:null,washed:false,vT:21.5,phase:"empty",ym:420,fl:null},
+ speed:5, wait:{left:0,total:0,kind:""},
+ res:{}, // key -> [{t,tr,vT,eA,eB}]
+ t2:[{g:0,w:0},{g:0,w:0},{g:0,w:0},{g:0,w:0}], t2bad:[],
+ t4:[[],[],[]], sel4:0, aged:0,
+ T3:[0,20,40,60], i3:0
+};
+const $=s=>document.querySelector(s), el=id=>document.getElementById(id), svg=$("#scene");
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), lerp=(a,b,t)=>a+(b-a)*t;
+function attr(id,o){const e=el(id);if(!e)return;for(const k in o)e.setAttribute(k,o[k])}
+const f1=(v,n=1)=>(+v).toFixed(n).replace(".",",");
+const avg=a=>a.reduce((x,y)=>x+y,0)/a.length;
+function toast(msg,type="",ms=3200){const d=document.createElement("div");d.className="toast "+type;d.innerHTML=msg;const T=$("#toasts");T.appendChild(d);while(T.children.length>3)T.firstChild.remove();setTimeout(()=>d.remove(),ms)}
+function pen(w,msg,type="err",once){if(once){if(S.L["ev_"+once])return;S.L["ev_"+once]=1}S.pen[S.stage]=(S.pen[S.stage]||0)+w;S.events.push({st:S.stage,msg});toast((type==="err"?"⛔ ":"⚠️ ")+msg,type,4600);SFX.play(type==="err"?"err":"warn")}
+function okT(msg,ms=2600){toast("✓ "+msg,"ok",ms);SFX.play("ok")}
+
+/* ============ SAVOLLAR ============ */
+const QS={
+ 1:[{id:"k1",q:"Ostvald viskozimetrida qovushqoqlik qaysi formula bilan topiladi?",o:["η = η₀ · (ρ·t) / (ρ₀·t₀)","η = η₀ · t₀ / t","η = ρ·g·h·t","η = 6πr·t"],a:0},
+    {id:"k2",q:"Nima uchun oʻlchov termostatda olib boriladi?",o:["Suyuqliklar qovushqoqligi haroratga juda sezgir (suvda ≈ 2% / °C) — harorat oʻzgarmas boʻlishi shart","Viskozimetr sinmasligi uchun","Suyuqlik bugʻlanmasligi uchun","Sekundomer aniq ishlashi uchun"],a:0}],
+ 2:[{id:"c1",q:"Jelatina konsentratsiyasi ortishi bilan qovushqoqlik qanday oʻzgaradi?",o:["Nochiziqli (tez) ortadi — makromolekulalar oʻzaro taʼsirlashib, toʻrsimon struktura hosil qiladi","Chiziqli kamayadi","Oʻzgarmaydi","Avval ortib, keyin nolga tushadi"],a:0},
+    {id:"c2",q:"Nima uchun jelatina zoli Eynshteyn tenglamasiga (η = η₀(1 + 2,5φ)) boʻysunmaydi?",o:["Tenglama suyultirilgan, sharsimon, oʻzaro taʼsirlashmaydigan zarrachalar uchun; jelatina — zanjirsimon, solvatlangan, struktura hosil qiluvchi makromolekula","Jelatina suvda erimaydi","Tenglama faqat gazlar uchun","Jelatina zarrachalari zaryadsiz"],a:0}],
+ 3:[{id:"h1",q:"Harorat pasayishi bilan jelatina zolining qovushqoqligi qanday oʻzgaradi?",o:["Keskin ortadi; ≈ 0 °C da zol ivib, gelga (ilvirsimon struktura) aylanadi","Kamayadi","Oʻzgarmaydi","Avval kamayib, keyin ortadi"],a:0},
+    {id:"h2",q:"Harorat ortganda strukturalangan sistemaning qovushqoqligi nima uchun kamayadi?",o:["Issiqlik harakati makromolekulalar orasidagi kuchsiz (vodorod) bogʻlarni uzadi — struktura buziladi, erituvchi qovushqoqligi ham kamayadi","Zichlik ortadi","Jelatina parchalanib gazga aylanadi","Viskozimetr kengayadi"],a:0}],
+ 4:[{id:"s1",q:"Qaysi tuz jelatina zoli qovushqoqligini oshirdi va nima uchun?",o:["K₂SO₄ — SO₄²⁻ kuchli gidratlanib, suvni tortib oladi va strukturalanish (ivish)ni tezlashtiradi","KI — I⁻ ivishni tezlashtiradi","Ikkalasi ham bir xil taʼsir qiladi","Tuzlar qovushqoqlikka taʼsir qilmaydi"],a:0},
+    {id:"s2",q:"Anionlarning ivish (strukturalanish)ga taʼsiri boʻyicha liotrop (Gofmeyster) qatori qaysi?",o:["SO₄²⁻ > CH₃COO⁻ > Cl⁻ > NO₃⁻ > Br⁻ > I⁻ > SCN⁻ (chapdagilar strukturalashtiradi, oʻngdagilar toʻsqinlik qiladi)","I⁻ > Br⁻ > Cl⁻ > SO₄²⁻","Barcha anionlar teng","Faqat kationlar taʼsir qiladi"],a:0}]
+};
+const QZ=[
+ ["Qovushqoqlikning SI dagi birligi:",["Pa·s","N/m","kg/m³","m²/s²"],0],
+ ["Nyuton suyuqliklari uchun qaysi tasdiq toʻgʻri?",["Qovushqoqlik siljish kuchlanishiga bogʻliq emas","Qovushqoqlik bosim ortishi bilan nolga intiladi","Ular faqat kolloid sistemalar","Ular oqmaydi"],0],
+ ["Strukturalangan kolloid sistemalar (jelatina zoli, Fe(OH)₃ geli) uchun qovushqoqlik:",["Siljish kuchlanishiga bogʻliq — struktura buzilishi bilan kamayadi (strukturaviy qovushqoqlik)","Doimiy","Faqat haroratga bogʻliq emas","Hamisha suvnikiga teng"],0],
+ ["Tiksotropiya nima?",["Gelning mexanik taʼsirda zolga aylanishi va tinch qoʻyilganda yana gelga qaytishi (izotermik)","Zolning qizdirilganda bugʻlanishi","Zarrachalarning choʻkishi","Elektroforez"],0],
+ ["Ostvald viskozimetri qaysi qonunga asoslangan?",["Puazeyl qonuni (kapillyardan oqib oʻtish)","Stoks qonuni","Raul qonuni","Faradey qonuni"],0]
+];
+
+/* ============ SAHNA ============ */
+const DEFS=`<defs>
+<linearGradient id="gWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e3e5f5"/><stop offset="1" stop-color="#c3c7e3"/></linearGradient>
+<linearGradient id="gBench" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a4f86"/><stop offset=".05" stop-color="#3a3f73"/><stop offset="1" stop-color="#22264d"/></linearGradient>
+<linearGradient id="gGlass" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity=".6"/><stop offset=".25" stop-color="#fff" stop-opacity=".12"/><stop offset=".8" stop-color="#fff" stop-opacity=".06"/><stop offset="1" stop-color="#fff" stop-opacity=".45"/></linearGradient>
+<linearGradient id="gMetal" x1="0" x2="1"><stop offset="0" stop-color="#8a8fb5"/><stop offset=".5" stop-color="#f1f2fb"/><stop offset="1" stop-color="#6f74a0"/></linearGradient>
+<radialGradient id="gBulb" cx=".35" cy=".35" r=".8"><stop offset="0" stop-color="#ff9fbf"/><stop offset="1" stop-color="#c2185b"/></radialGradient>
+<filter id="fSh" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-opacity=".25"/></filter>
+<clipPath id="cpR"><rect id="cpRr" x="0" y="420" width="1000" height="200"/></clipPath>
+<clipPath id="cpL"><rect id="cpLr" x="0" y="420" width="1000" height="200"/></clipPath>
+</defs>`;
+function room(){return `<rect x="-3000" y="-3000" width="7000" height="3480" fill="url(#gWall)"/>
+<g opacity=".4" stroke="#aeb3d6">${Array.from({length:10},(_,i)=>`<line x1="-3000" y1="${i*48}" x2="4000" y2="${i*48}"/>`).join("")}</g>
+<rect x="-3000" y="480" width="7000" height="3000" fill="url(#gBench)"/><rect x="-3000" y="480" width="7000" height="5" fill="#6d72a8"/>`}
+// viskozimetr geometriyasi
+const VX=455, LX=380, YA=150, YB=252, YTOP=128, YLOW=420;
+function viscoInner(){ // ichki boʻshliq shakllari (suyuqlik uchun)
+  return {R:`<rect x="${VX-3}" y="40" width="6" height="${YA-40+12}"/><ellipse cx="${VX}" cy="201" rx="14" ry="40"/><rect x="${VX-1.6}" y="${YB-6}" width="3.2" height="${398-YB+6}"/><path d="M${VX-1.6} 396 L${VX-1.6} 420 Q${VX-1.6} 452 ${(VX+LX)/2} 452 Q${LX+1.6} 452 ${LX+1.6} 430 L${LX-1.6} 430 Q${LX-1.6} 455.2 ${(VX+LX)/2} 455.2 Q${VX+1.6} 455.2 ${VX+1.6} 420 L${VX+1.6} 396 Z"/>`,
+          L:`<rect x="${LX-6}" y="60" width="12" height="340"/><ellipse cx="${LX}" cy="${YLOW-18}" rx="24" ry="28"/><rect x="${LX-4}" y="420" width="8" height="18"/>`}}
+function viscometer(){
+  const ins=viscoInner();
+  return `<g id="visco">
+   <g clip-path="url(#cpL)"><g id="liqL" fill="#cfe8ff">${ins.L}</g></g>
+   <g clip-path="url(#cpR)"><g id="liqR" fill="#cfe8ff">${ins.R}</g></g>
+   <g fill="none" stroke="#5b6094" stroke-width="2">
+    <path d="M${VX-5} 40 L${VX-5} 160 Q${VX-16} 166 ${VX-16} 201 Q${VX-16} 236 ${VX-3.5} ${YB-2} L${VX-3.5} 420 Q${VX-3.5} 458 ${(VX+LX)/2} 458 Q${LX-8} 458 ${LX-8} 432 L${LX-8} 428 Q${LX-27} 420 ${LX-27} ${YLOW-18} Q${LX-27} 372 ${LX-8} 372 L${LX-8} 58"/>
+    <path d="M${VX+5} 40 L${VX+5} 160 Q${VX+16} 166 ${VX+16} 201 Q${VX+16} 236 ${VX+3.5} ${YB-2} L${VX+3.5} 420 Q${VX+3.5} 451 ${(VX+LX)/2} 450 Q${LX+8} 450 ${LX+8} 432 L${LX+8} 428 Q${LX+27} 420 ${LX+27} ${YLOW-18} Q${LX+27} 372 ${LX+8} 372 L${LX+8} 58"/>
+   </g>
+   <path d="M${VX-16} 166 Q${VX-6} 200 ${VX-14} 230" stroke="#fff" stroke-width="2" opacity=".6" fill="none"/>
+   <line x1="${VX-14}" y1="${YA}" x2="${VX+14}" y2="${YA}" stroke="#e04f5f" stroke-width="2"/><text x="${VX+18}" y="${YA+4}" font-size="12" font-weight="800" fill="#e04f5f">a</text>
+   <line x1="${VX-12}" y1="${YB}" x2="${VX+12}" y2="${YB}" stroke="#e04f5f" stroke-width="2"/><text x="${VX+18}" y="${YB+4}" font-size="12" font-weight="800" fill="#e04f5f">b</text>
+   <text x="${LX}" y="52" text-anchor="middle" font-size="9" fill="#3a3f73">keng</text>
+   <g id="bulb" class="clk" data-t="bulb"><path d="M${VX-4} 40 L${VX-4} 26 L${VX+4} 26 L${VX+4} 40" fill="#7c2048"/><ellipse id="bulbE" cx="${VX}" cy="10" rx="17" ry="20" fill="url(#gBulb)" stroke="#7c2048" stroke-width="1.5"/></g>
+  </g>`;
+}
+function bath(){
+  return `<g id="bath">
+   <rect x="300" y="78" width="232" height="402" rx="14" fill="rgba(255,255,255,.25)" stroke="#5b6094" stroke-width="3"/>
+   <rect id="bathW" x="303" y="96" width="226" height="381" rx="11" fill="#8fd3f0" opacity=".42"/>
+   <g id="ice" opacity="0">${[[322,110],[350,104],[490,112],[505,135],[318,160],[495,300],[330,330],[470,410]].map(([x,y],i)=>`<rect x="${x}" y="${y}" width="${16+i%3*4}" height="${14+i%2*5}" rx="3" fill="#f2fbff" stroke="#b7e3f5" transform="rotate(${i*17} ${x} ${y})"/>`).join("")}</g>
+   <path d="M318 120 ${Array.from({length:14},(_,i)=>`L${i%2?330:318} ${130+i*22}`).join(" ")}" fill="none" stroke="#d65a3a" stroke-width="3" opacity=".7"/>
+   <line x1="510" y1="60" x2="510" y2="430" stroke="#5b6094" stroke-width="3"/><g id="prop"><ellipse cx="510" cy="432" rx="14" ry="4" fill="#5b6094"/></g>
+   <rect x="500" y="44" width="20" height="18" rx="4" fill="#3a3f73"/>
+   <line x1="345" y1="40" x2="345" y2="350" stroke="#4a4f86" stroke-width="4"/><circle cx="345" cy="352" r="4" fill="#e04f5f"/>
+   <g id="steam" opacity="0">${[0,1,2].map(i=>`<path d="M${360+i*55} 90 q-8 -14 0 -26 q8 -12 0 -26" fill="none" stroke="#fff" stroke-width="3" opacity=".7"/>`).join("")}</g>
+   <g class="clk" data-t="thermo"><rect x="296" y="486" width="240" height="72" rx="12" fill="#1a1d3d" filter="url(#fSh)"/>
+    <text x="312" y="504" font-size="9" fill="#8f95d8" letter-spacing="1">TERMOSTAT</text><text x="312" y="540" font-family="monospace" font-size="24" font-weight="700" fill="#5ff0ff" id="thT">21,5°</text>
+    <text x="420" y="504" font-size="9" fill="#8f95d8">USTANOVKA</text><text x="420" y="526" font-family="monospace" font-size="15" fill="#ffd27a" id="thS">25°</text>
+    <text x="420" y="548" font-size="9" fill="#8f95d8">ICHIDA</text><text x="520" y="548" text-anchor="end" font-family="monospace" font-size="12" fill="#c7cbff" id="thV">—</text>
+    <circle id="thLed" cx="520" cy="502" r="5" fill="#555"/></g>
+  </g>`;
+}
+function stopwatch(){return `<g id="sw" class="clk" data-t="sw" filter="url(#fSh)">
+  <rect x="585" y="18" width="18" height="14" rx="3" fill="#3a3f73"/><circle cx="594" cy="92" r="58" fill="#1a1d3d"/><circle cx="594" cy="92" r="50" fill="#f7f8fd"/>
+  ${Array.from({length:60},(_,i)=>{const a=i*6*Math.PI/180,r1=i%5?45:41;return `<line x1="${594+Math.sin(a)*r1}" y1="${92-Math.cos(a)*r1}" x2="${594+Math.sin(a)*48}" y2="${92-Math.cos(a)*48}" stroke="#3a3f73" stroke-width="${i%5?1:2}"/>`}).join("")}
+  <rect x="566" y="102" width="56" height="18" rx="4" fill="#0f1230"/><text id="swD" x="594" y="115.5" text-anchor="middle" font-family="monospace" font-size="12" font-weight="700" fill="#5ff0ff">0,0</text>
+  <line id="swH" x1="594" y1="92" x2="594" y2="50" stroke="#e04f5f" stroke-width="2.5" stroke-linecap="round"/><circle cx="594" cy="92" r="4" fill="#e04f5f"/>
+  <text x="594" y="166" text-anchor="middle" font-size="10" font-weight="700" fill="#3a3f73">SEKUNDOMER · [Probel]</text></g>`}
+const BOT=[["W","Distillangan suv","H₂O","#cfe8ff"],["GEL1","Jelatina 1% (qaynoq)","Jel. 1%","#f3dc8e"],["G05","Jelatina 0,5%","Jel. 0,5%","#f5e3a6"],["KI","KI 1 n","KI","#eef1ff"],["K2SO4","K₂SO₄ 1 n","K₂SO₄","#eef1ff"],["FE","Fe(OH)₃ zoli","Fe(OH)₃","#a2401c"]];
+function bottles(){return BOT.map((b,i)=>{const x=672+i*54;return `<g class="clk" data-t="${b[0]}" filter="url(#fSh)"><rect x="${x+14}" y="226" width="14" height="10" rx="2" fill="#3a3f73"/><path d="M${x+10} 236 L${x+32} 236 L${x+32} 244 Q${x+42} 248 ${x+42} 258 L${x+42} 300 Q${x+42} 306 ${x+36} 306 L${x+6} 306 Q${x} 306 ${x} 300 L${x} 258 Q${x} 248 ${x+10} 244 Z" fill="rgba(255,255,255,.5)" stroke="#5b6094" stroke-width="1.5"/><rect x="${x+2}" y="272" width="38" height="32" rx="4" fill="${b[3]}" opacity=".9"/><rect x="${x+3}" y="256" width="36" height="16" rx="2" fill="#fff" stroke="#c7cbe6"/><text x="${x+21}" y="267" text-anchor="middle" font-size="${b[2].length>6?6.5:7.5}" font-weight="800" fill="#1a1d3d">${b[2]}</text></g>`}).join("")+`<rect x="660" y="306" width="335" height="8" rx="2" fill="#6d72a8"/>`}
+function rack(){const n=S.stage===2?4:S.stage===4?3:0;if(!n)return"";const x0=700;let s=`<rect x="${x0-20}" y="452" width="${n*62+30}" height="28" rx="4" fill="#5b6094"/><rect x="${x0-20}" y="380" width="${n*62+30}" height="10" rx="3" fill="#6d72a8"/>`;
+  for(let i=0;i<n;i++){const x=x0+i*62;s+=`<g class="clk" data-t="tube${i}"><path d="M${x} 340 L${x} 462 Q${x} 476 ${x+12} 476 Q${x+24} 476 ${x+24} 462 L${x+24} 340" fill="rgba(255,255,255,.35)" stroke="#5b6094" stroke-width="2"/><rect id="tl${i}" x="${x+2}" y="474" width="20" height="0" fill="#f3dc8e" opacity=".85"/><text x="${x+12}" y="334" text-anchor="middle" font-size="11" font-weight="800" fill="#1a1d3d">${i+1}</text><rect id="tsel${i}" x="${x-4}" y="324" width="32" height="158" rx="6" fill="none" stroke="#22c3d6" stroke-width="2.5" opacity="0"/></g>`}
+  return s}
+function sceneHTML(){
+  if(S.stage>4)return DEFS+room()+`<g filter="url(#fSh)"><rect x="370" y="110" width="260" height="320" rx="18" fill="#f7f8fd" stroke="#5b6094" stroke-width="3"/><text x="500" y="160" text-anchor="middle" font-size="20" font-weight="800" fill="#1a1d3d">HISOBOT</text>${[0,1,2,3,4,5,6].map(i=>`<rect x="400" y="${186+i*30}" width="${200-(i%3)*36}" height="9" rx="4" fill="#d6d9f0"/>`).join("")}</g><text x="500" y="520" text-anchor="middle" font-size="16" font-weight="600" fill="#e3e5f5">Laboratoriya ishi yakunlandi</text>`;
+  return DEFS+room()+bath()+viscometer()+stopwatch()+bottles()+rack()+
+   `<g class="clk" data-t="wash" filter="url(#fSh)"><rect x="600" y="410" width="62" height="70" rx="10" fill="#e8f7ff" stroke="#5b6094" stroke-width="2"/><path d="M612 410 L612 392 L640 392 L650 382" fill="none" stroke="#5b6094" stroke-width="3"/><text x="631" y="444" text-anchor="middle" font-size="16">🚿</text><text x="631" y="470" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1a1d3d">yuvish</text></g>
+   <g id="clockG" opacity="0"><rect x="560" y="190" width="100" height="100" rx="16" fill="#1a1d3d" opacity=".9"/><circle cx="610" cy="232" r="28" fill="#f7f8fd"/><line id="clkM" x1="610" y1="232" x2="610" y2="210" stroke="#1a1d3d" stroke-width="3" stroke-linecap="round"/><text id="clkT" x="610" y="280" text-anchor="middle" font-family="monospace" font-size="12" fill="#5ff0ff">0 min</text></g>
+   <text x="700" y="592" text-anchor="middle" font-size="11.5" fill="#c3c7e3">${["","Termostat → yuvish → toʻldirish → termostatlash → grusha → «a»…«b» vaqti","Jadval 4 boʻyicha eritmalar → har birining oqish vaqti","0,5% zol: 0 → 20 → 40 → 60 °C","KI · K₂SO₄ · suv qoʻshilgan zollar"][S.stage]}</text>`;
+}
+
+/* ============ KADR ============ */
+let phase=0;
+const SPD_EFF={v:1};
+function frame(dt){
+  phase+=dt;if(S.stage>4)return;
+  const th=S.th,V=S.V;
+  // kutish (vaqtni tezlashtirish)
+  if(S.wait.left>0){const step=Math.min(S.wait.left,dt*10);S.wait.left-=step;advance(step);if(Math.floor(S.wait.left)!==Math.floor(S.wait.left+step))SFX.play("tick");
+    attr("clockG",{opacity:1});attr("clkM",{transform:`rotate(${(S.wait.total-S.wait.left)/60*360} 610 232)`});const ct=el("clkT");if(ct)ct.textContent=`${Math.round(S.wait.total-S.wait.left)} / ${S.wait.total} min`;
+    if(S.wait.left<=0){attr("clockG",{opacity:0});SFX.play("ding");waitDone()}}
+  // oqim
+  if(V.phase==="flowing"){const f=V.fl;const nx=f.t<f.tA?f.tA:(f.t<f.tB?f.tB:null);let sp=S.speed,step=dt*sp;const W=2.5;
+    if(nx!==null){const rem=nx-f.t;if(rem<W){sp=1;step=dt}else if(step>rem-W+.001)step=rem-W+.001}
+    if(f.slowUntil&&f.t<f.slowUntil){sp=1;step=dt}SPD_EFF.v=sp;
+    const pt=f.t;f.t+=step;
+    if(pt<f.tA&&f.t>=f.tA){SFX.play("mark");f.slowUntil=f.t+1.2}
+    if(pt<f.tB&&f.t>=f.tB){SFX.play("mark")}
+    if(f.swOn&&sp<=2&&Math.floor(f.t)!==Math.floor(pt))SFX.play("tick");
+    if(f.t<f.tA)V.ym=YTOP+(YA-YTOP)*(f.t/f.tA);
+    else if(f.t<f.tB){const u=(f.t-f.tA)/(f.tB-f.tA);V.ym=YA+(YB-YA)*(1-Math.pow(1-u,1.18))}
+    else V.ym=YB+(f.t-f.tB)/(f.tdrain)*(398-YB);
+    if(f.swOn&&f.t>f.tB+12){swStop(true)}
+    if(V.ym>=398){V.ym=398;V.phase="done";if(f.swOn)swStop(true);renderPanel()}
+  } else SPD_EFF.v=S.speed;
+  // suyuqlik
+  const has=V.liq!==null;const col=has?SMP[V.liq].col:"#cfe8ff";
+  attr("liqL",{fill:col});attr("liqR",{fill:col});
+  let yR=420,yL=420;
+  if(has){if(V.phase==="rest"||V.phase==="done"){yR=V.phase==="done"?398:398;yL=372}else{yR=V.ym;yL=lerp(426,372,clamp((V.ym-YTOP)/(398-YTOP),0,1))}}
+  attr("cpRr",{y:yR});attr("cpLr",{y:has?yL:470});
+  // termostat
+  attr("bathW",{fill:th.ice?"#bfe9fb":th.T>45?"#9fd0ff":"#8fd3f0",opacity:th.T>45?.5:.42});attr("ice",{opacity:th.ice?1:0});attr("steam",{opacity:th.T>50?.6+Math.sin(phase*3)*.2:0});
+  attr("prop",{transform:th.on?`translate(510 432) scale(${Math.cos(phase*16)} 1) translate(-510 -432)`:""});
+  const tT=el("thT");if(tT)tT.textContent=f1(th.T)+"°";const tS=el("thS");if(tS)tS.textContent=th.ice?"0° (muz)":th.set+"°";const tV=el("thV");if(tV)tV.textContent=has?f1(V.vT)+" °C":"—";
+  attr("thLed",{fill:th.on?(Math.abs(th.T-th.set)<.2?"#21d07a":"#ffb020"):"#555"});
+  // grusha
+  S.bulbA=Math.max(0,(S.bulbA||0)-dt);attr("bulbE",{rx:S.bulbA>0?12:17,ry:S.bulbA>0?16:20});
+  // sekundomer
+  const f=V.fl;let sw=0;if(f){if(f.swOn)sw=f.t-f.s0;else if(f.s1!==null&&f.s0!==null)sw=f.s1-f.s0}
+  const d=el("swD");if(d)d.textContent=f1(sw,1);attr("swH",{transform:`rotate(${sw*6} 594 92)`});
+  // probirkalar
+  if(S.stage===2)S.t2.forEach((t,i)=>{const v=t.g+t.w,h=Math.min(118,v*5.6);attr("tl"+i,{y:474-h,height:h,fill:v?mix("#f2f0de","#f0cf6a",t.g/Math.max(1,v)):"#fff"});attr("tsel"+i,{opacity:S.t2bad.includes(i)?1:0,stroke:"#e04f5f"})});
+  if(S.stage===4)S.t4.forEach((t,i)=>{const h=Math.min(118,t.length*5*5.6);const c=t.includes("FE")?"#a2401c":t.length?"#f3dc8e":"#fff";attr("tl"+i,{y:474-h,height:h,fill:c});attr("tsel"+i,{opacity:S.sel4===i?1:0,stroke:"#22c3d6"})});
+  document.querySelectorAll("#scene [data-t]").forEach(g=>g.classList.toggle("glow",S.glow===g.dataset.t));
+  const sl=el("slowI");if(sl)sl.textContent=V.phase==="flowing"?(SPD_EFF.v<S.speed?"🐢 belgi yaqin — ×1":"×"+SPD_EFF.v):"";
+}
+function mix(a,b,t){const A=[1,3,5].map(i=>parseInt(a.substr(i,2),16)),B=[1,3,5].map(i=>parseInt(b.substr(i,2),16));return "#"+A.map((v,i)=>Math.round(v+(B[i]-v)*t).toString(16).padStart(2,"0")).join("")}
+function advance(min){ // simulyatsiya daqiqalari
+  const th=S.th,V=S.V,amb=21.5;const tgt=th.on?(th.ice?0:th.set):amb;const tau=th.ice?2:3.2;
+  th.T=tgt+(th.T-tgt)*Math.exp(-min/tau);
+  if(V.liq!==null)V.vT=th.T+(V.vT-th.T)*Math.exp(-min/2.4);
+}
+
+/* ============ VISKOZIMETR AMALLARI ============ */
+function needWaitIdle(){if(S.wait.left>0){toast("Kutish tugashini kuting…","",1200);return true}if(S.V.phase==="flowing"){toast("Suyuqlik oqmoqda — oʻlchovni tugating.","warn",1500);return true}return false}
+function wash(){if(needWaitIdle())return;const V=S.V;V.liq=null;V.washed=true;V.phase="empty";V.fl=null;V.vT=S.th.T;SFX.play("wash");toast("🚿 Viskozimetr yuvildi va quritildi.","ok",1800);if(S.stage===1)S.L.w1=1;check();renderPanel()}
+function fill(k){if(needWaitIdle())return;const V=S.V;
+  if(!avail(k)){pen(.5,`<b>${SMP[k]?SMP[k].n:k}</b> hali tayyor emas yoki bu bosqichda kerak emas.`,"warn");return}
+  if(V.liq===k){toast("Viskozimetrda allaqachon shu suyuqlik.","",1500);return}
+  if(V.liq!==null){pen(1,"Viskozimetrda boshqa suyuqlik bor — avval <b>yuving</b> (aralashma notoʻgʻri natija beradi).","err");return}
+  if(!V.washed){pen(.5,"Viskozimetr yuvilmagan — avval yuvib, quriting.","warn","nowash");return}
+  V.liq=k;V.washed=false;V.phase="rest";V.vT=S.stage===2?26:21.5;V.fl=null;SFX.play("pipette");setTimeout(()=>SFX.play("pour"),150);toast(`💧 Keng tirsakka 10 ml <b>${SMP[k].n}</b> quyildi.`,"ok",2200);check();renderPanel()}
+function avail(k){const st=S.stage;if(st===1)return k==="W";if(st===2)return S.L.cool&&["G1","G2","G3","G4"].includes(k);if(st===3)return k==="G05";if(st===4)return S.L.aged&&["SKI","SK2","SW"].includes(k);return false}
+function startWait(m,kind=""){if(needWaitIdle())return;S.wait={left:m,total:m,kind};SFX.play("clock");renderPanel()}
+function waitDone(){const k=S.wait.kind;if(k==="age"){S.L.aged=1;okT("1 soat oʻtdi — zollar struktura hosil qilishga ulgurdi.")}if(k==="cool"){S.L.cool=1;okT("Eritmalar 25 °C gacha sovitildi.")}check();renderPanel()}
+function setTh(v){if(needWaitIdle())return;const th=S.th;
+  if(S.stage===3){const need=S.T3[S.i3];if(need===undefined){toast("Barcha haroratlarda oʻlchandi.","",1500);return}if(v!==need){pen(.5,`Harorat ketma-ketligi: hozir <b>${need} °C</b> kerak (0 → 20 → 40 → 60).`,"warn");return}}
+  th.on=true;th.ice=v===0;th.set=v;SFX.play(v===0?"ice":v>=40?"heat":"click");toast(v===0?"🧊 Viskozimetr muz va suv aralashmasiga botirildi.":`🌡 Termostat ${v} °C ga sozlandi.`,"ok",2000);check();renderPanel()}
+function suck(){if(needWaitIdle())return;const V=S.V;
+  if(!V.liq){pen(.5,"Viskozimetr boʻsh.","warn");return}
+  if(V.phase==="sucked"){toast("Suyuqlik allaqachon «a» dan yuqorida. Endi qoʻyib yuboring.","",1600);return}
+  V.phase="sucked";V.ym=YTOP;V.fl=null;S.bulbA=.5;SFX.play("squeeze");setTimeout(()=>SFX.play("slurp"),200);S.L.sucked=1;check();renderPanel()}
+function release(){const V=S.V;if(V.phase!=="sucked"){toast("Avval grusha bilan suyuqlikni «a» belgisidan yuqoriga soʻring.","warn",1800);return}
+  const set=S.th.ice?0:S.th.set;
+  if(!S.th.on){pen(1,"Termostat yoqilmagan!","err");return}
+  const need=S.stage===3?S.T3[S.i3]:25;if(set!==need){pen(.5,`Bu oʻlchov <b>${need} °C</b> da bajariladi — termostatni sozlang.`,"warn");return}
+  if(Math.abs(V.vT-set)>.3){pen(.5,`Suyuqlik hali termostatlanmagan: viskozimetr ichida <b>${f1(V.vT)} °C</b> (kerak ${set} ± 0,3 °C). Kuting.`,"warn");return}
+  const tf=tTrue(V.liq,V.vT);V.fl={t:0,tA:Math.max(2.5,tf*.09),tB:0,tf,tdrain:clamp(tf*.25,4,25),s0:null,s1:null,swOn:false,key:V.liq,vT:V.vT,slowUntil:0};V.fl.tB=V.fl.tA+tf;V.phase="flowing";S.bulbA=0;SFX.play("release");renderPanel()}
+function swToggle(){const V=S.V,f=V.fl;
+  if(!f||V.phase!=="flowing"){if(V.phase==="done"&&f&&f.s1!==null)toast("Oʻlchov tugagan. Yana oʻlchash uchun qayta soʻring.","",1800);else toast("Sekundomer suyuqlik oqayotganda, menisk «a» dan oʻtganda yoqiladi.","warn",2200);return}
+  if(!f.swOn&&f.s0===null){f.s0=f.t;f.swOn=true;SFX.play("start");if(f.t<f.tA-.8)toast("Erta! Menisk hali «a» ga yetmagan.","warn",1600);renderPanel();return}
+  if(f.swOn)swStop(false);
+}
+function swStop(auto){const f=S.V.fl;if(!f||!f.swOn)return;f.swOn=false;f.s1=f.t;SFX.play("stop");
+  const m=f.s1-f.s0,eA=f.s0-f.tA,eB=f.s1-f.tB,rel=Math.abs(m-f.tf)/f.tf;
+  (S.res[f.key]=S.res[f.key]||[]).push({t:m,tr:f.tf,vT:f.vT,eA,eB,T:S.th.ice?0:S.th.set,st:S.stage});
+  if(auto)pen(.5,"Sekundomer kech toʻxtatildi (menisk «b» dan ancha oʻtib ketdi).","warn");
+  else if(rel<.012&&Math.abs(eA)<.7&&Math.abs(eB)<.7)okT(`Oqish vaqti t = <b>${f1(m,1)} s</b> — aniq oʻlchov!`,2800);
+  else{toast(`t = ${f1(m,1)} s. ${Math.abs(eA)>=.7?(eA<0?"Start erta":"Start kech")+` (${f1(Math.abs(eA),1)} s). `:""}${Math.abs(eB)>=.7?(eB<0?"Stop erta":"Stop kech")+` (${f1(Math.abs(eB),1)} s).`:""} Xohlasangiz qayta oʻlchang.`,"warn",4200);SFX.play("warn")}
+  if(S.stage===3)S.res[f.key].at(-1).T3=S.T3[S.i3];
+  check();renderPanel()}
+function dropLast(k){if(needWaitIdle())return;const r=S.res[k];if(!r||!r.length)return;r.pop();S.pen[S.stage]+=.25;toast("Oxirgi oʻlchov oʻchirildi — qayta oʻlchang.","",1800);SFX.play("paper");S.L["i"+S.stage]=0;if(S.stage===3)S.i3=0;S.quiet=1;check();S.quiet=0;renderPanel()}
+
+/* ============ NATIJALAR HISOBI ============ */
+const t0=()=>{const r=S.res.W;return r&&r.length?avg(r.slice(-2).map(x=>x.t)):null};
+const Ccal=()=>{const a=t0();return a?(.890/.9970)/a:null}; // mm²/s²
+function etaOf(k,rec){return Ccal()*rec.t*rhoS(k,rec.vT)} // mPa·s
+function last(k){const r=S.res[k];return r&&r.length?r[r.length-1]:null}
+function res3(T){const r=(S.res.G05||[]).filter(x=>x.T3===T);return r.length?r[r.length-1]:null}
+
+/* ============ BOSQICHLAR ============ */
+const TASKS={
+ 1:[["Termostatni <b>25 °C</b> ga sozlab yoqing",()=>S.th.on&&!S.th.ice&&S.th.set===25],
+    ["Viskozimetrni yuvib quriting",()=>S.L.w1],
+    ["Keng tirsakka 10 ml distillangan suv quying",()=>S.V.liq==="W"||(S.res.W||[]).length],
+    ["Termostatlang: suv harorati 25 ± 0,3 °C (≈ 5–10 min)",()=>(S.V.liq==="W"&&Math.abs(S.V.vT-25)<=.3)||(S.res.W||[]).length],
+    ["Grusha bilan suvni «a» belgisidan yuqoriga soʻring",()=>S.L.sucked||(S.res.W||[]).length],
+    ["Menisk «a» → «b» oqish vaqtini <b>2 marta</b> oʻlchang (t₀)",()=>(S.res.W||[]).length>=2]],
+ 2:[["Jadval 4 boʻyicha 4 ta eritma tayyorlang",()=>S.L.prep],
+    ["Eritmalarni tajriba haroratigacha (25 °C) soviting",()=>S.L.cool],
+    ["Har bir eritmaning oqish vaqtini oʻlchang (yuvish → toʻldirish → termostatlash)",()=>["G1","G2","G3","G4"].every(k=>last(k))],
+    ["η = f(C) egri chizigʻini tuzing",()=>S.L.g2]],
+ 3:[["Viskozimetrni yuvib, 0,5% jelatina zoli bilan toʻldiring",()=>S.V.liq==="G05"||(S.res.G05||[]).length],
+    ["<b>0 °C</b> (muz + suv), 20 min termostatlab oʻlchang",()=>res3(0)],
+    ["<b>20 °C</b> da oʻlchang",()=>res3(20)],
+    ["<b>40 °C</b> da oʻlchang",()=>res3(40)],
+    ["<b>60 °C</b> da oʻlchang",()=>res3(60)],
+    ["η = f(T) egri chizigʻini tuzing",()=>S.L.g3]],
+ 4:[["Uchta probirkaga 5 ml dan 1% jelatina zoli quying",()=>S.t4.every(t=>t[0]==="GEL1")],
+    ["1-ga 5 ml KI, 2-ga 5 ml K₂SO₄, 3-ga 5 ml suv qoʻshing",()=>S.t4[0][1]==="KI"&&S.t4[1][1]==="K2SO4"&&S.t4[2][1]==="W"],
+    ["Chayqating va ≈ 1 soat tinch qoʻying",()=>S.L.aged],
+    ["Termostat 25 °C, uchala zolning oqish vaqtini oʻlchang",()=>["SKI","SK2","SW"].every(k=>last(k))],
+    ["5-jadvalni toʻldirib, anionlar taʼsirini taqqoslang",()=>S.L.g4]]
+};
+function check(){const st=S.stage;if(!TASKS[st])return;let i=S.L["i"+st]||0,ch=false;while(i<TASKS[st].length&&TASKS[st][i][1]()){i++;ch=true}
+  if(ch&&!S.quiet){S.L["i"+st]=i;if(i>=TASKS[st].length){okT("Bosqich amaliy qismi bajarildi! Savollarga javob bering.",3200)}else SFX.play("ok")}else if(ch)S.L["i"+st]=i;
+  if(st===3){while(S.i3<4&&res3(S.T3[S.i3]))S.i3++}}
+const idx=st=>S.L["i"+st]||0;
+
+/* --- 2-bosqich: eritmalar --- */
+const TAB4=[[20,0],[15,5],[5,15],[2,18]];
+function addT2(i,k,v){if(S.L.prep){toast("Eritmalar tayyor.","",1200);return}const t=S.t2[i];t[k]=clamp(t[k]+v,0,30);S.t2bad=S.t2bad.filter(x=>x!==i);SFX.play(v>0?"pipette":"click");renderPanel()}
+function checkT2(){const bad=[];S.t2.forEach((t,i)=>{if(t.g!==TAB4[i][0]||t.w!==TAB4[i][1])bad.push(i)});S.t2bad=bad;
+  if(bad.length){pen(.75*bad.length,`Jadval 4 ga mos emas: ${bad.map(i=>i+1+"-eritma").join(", ")}. Hajmlarni tekshiring.`,"err");renderPanel();return}
+  S.L.prep=1;SFX.play("shake");okT("Barcha eritmalar jadval boʻyicha tayyorlandi.");check();renderPanel()}
+/* --- 4-bosqich: tuzlar --- */
+const RN={GEL1:"1% jelatina",G05:"0,5% jelatina",KI:"KI 1 n",K2SO4:"K₂SO₄ 1 n",W:"distillangan suv",FE:"Fe(OH)₃ zoli"};
+function add4(r){if(S.L.aged||S.L.shaken){toast("Probirkalar tayyor.","",1200);return}const i=S.sel4,t=S.t4[i];
+  if(r==="FE"){pen(1,"Fe(OH)₃ zoli bu tajribada ishlatilmaydi.","err");return}
+  if(r==="G05"){pen(.75,"Tajriba uchun <b>1%</b> li jelatina zoli kerak.","err");return}
+  if(t.length>=2){pen(.5,`${i+1}-probirka toʻla (5 + 5 ml).`,"warn");return}
+  if(t.length===0&&r!=="GEL1"){pen(.75,"Avval probirkaga 5 ml jelatina zoli quying.","warn");return}
+  if(t.length===1){if(r==="GEL1"){pen(.5,"Jelatina allaqachon quyilgan — endi qoʻshimcha kerak.","warn");return}const need=["KI","K2SO4","W"][i];if(r!==need){pen(1,`${i+1}-probirkaga <b>${RN[need]}</b> qoʻshilishi kerak, ${RN[r]} emas.`,"err");return}}
+  t.push(r);SFX.play("pipette");setTimeout(()=>SFX.play("pour"),120);toast(`🧪 ${i+1}-probirka: +5 ml ${RN[r]}`,"ok",1600);
+  if(t.length===1&&S.t4.some(x=>x.length===0)){S.sel4=S.t4.findIndex(x=>x.length===0)}else if(t.length===2&&S.t4.some(x=>x.length<2)){S.sel4=S.t4.findIndex(x=>x.length<2)}
+  check();renderPanel()}
+function sel4(i){S.sel4=i;SFX.play("click");renderPanel()}
+function shake4(){if(idx(4)<2){pen(.5,"Avval barcha probirkalarni toʻldiring.","warn");return}S.L.shaken=1;SFX.play("shake");startWait(60,"age")}
+
+/* ============ SAHNA BOSISH ============ */
+function sceneClick(t){SFX.init();const st=S.stage;
+  if(t==="bulb"){suck();return}
+  if(t==="sw"){swToggle();return}
+  if(t==="wash"){wash();return}
+  if(t==="thermo"){toast("Haroratni paneldagi termostat tugmalari bilan oʻrnating.","",1800);return}
+  if(t.startsWith("tube")){const i=+t[4];if(st===2){if(S.L.cool)fill(["G1","G2","G3","G4"][i]);else toast("Hajmlarni paneldagi pipetka tugmalari bilan oʻlchang.","",1800)}if(st===4){if(S.L.aged)fill(["SKI","SK2","SW"][i]);else sel4(i)}return}
+  // shishalar
+  if(st===1){if(t==="W")fill("W");else pen(.5,`<b>${BOT.find(b=>b[0]===t)[1]}</b> bu bosqichda kerak emas.`,"warn");return}
+  if(st===2){if(t==="GEL1"||t==="W")toast("Eritmalarni paneldagi pipetka tugmalari bilan tayyorlang.","",2000);else pen(.5,`<b>${BOT.find(b=>b[0]===t)[1]}</b> bu tajribada kerak emas.`,"warn");return}
+  if(st===3){if(t==="G05")fill("G05");else pen(.5,`Bu tajriba uchun <b>0,5%</b> li jelatina zoli kerak.`,"warn");return}
+  if(st===4){add4(t);return}
+}
+
+/* ============ GRAFIKLAR ============ */
+function nice(max){const e=Math.pow(10,Math.floor(Math.log10(max))),f=max/e;return (f<=1.5?.2:f<=3?.5:f<=7?1:2)*e}
+function chart(pts,o){const W=360,H=210,x=46,y=16,w=W-x-12,h=H-y-34;const xm=o.xm,ym=o.ym;const X=v=>x+(v-(o.x0||0))/(xm-(o.x0||0))*w,Y=v=>y+h-(v-(o.y0||0))/(ym-(o.y0||0))*h;
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;background:#fff;border:1px solid #dfe2f2;border-radius:10px"><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#fbfbff"/>`;
+  const sx=o.sx||nice(xm-(o.x0||0)),sy=nice(ym-(o.y0||0));
+  for(let v=(o.x0||0);v<=xm+1e-9;v+=sx)s+=`<line x1="${X(v)}" y1="${y}" x2="${X(v)}" y2="${y+h}" stroke="#eceefa"/><text x="${X(v)}" y="${y+h+13}" text-anchor="middle" font-size="9.5" fill="#6a6f96">${+v.toFixed(3)}</text>`;
+  for(let v=(o.y0||0);v<=ym+1e-9;v+=sy)s+=`<line x1="${x}" y1="${Y(v)}" x2="${x+w}" y2="${Y(v)}" stroke="#eceefa"/><text x="${x-4}" y="${Y(v)+3}" text-anchor="end" font-size="9.5" fill="#6a6f96">${+v.toFixed(2)}</text>`;
+  s+=`<text x="${x+w}" y="${H-4}" text-anchor="end" font-size="10.5" font-weight="700" fill="#1a1d3d">${o.xl}</text><text x="${x+3}" y="${y+11}" font-size="10.5" font-weight="700" fill="#1a1d3d">${o.yl}</text>`;
+  if(o.bars){const bw=w/pts.length*.5;pts.forEach((p,i)=>{const cx=x+w*(i+.5)/pts.length;s+=`<rect x="${cx-bw/2}" y="${Y(p.y)}" width="${bw}" height="${Y(o.y0||0)-Y(p.y)}" rx="4" fill="${p.c}"/><text x="${cx}" y="${Y(p.y)-4}" text-anchor="middle" font-size="10" font-weight="700" fill="#1a1d3d">${f1(p.y,3)}</text><text x="${cx}" y="${y+h+13}" text-anchor="middle" font-size="10" fill="#1a1d3d">${p.l}</text>`})}
+  else{const P=[...pts].sort((a,b)=>a.x-b.x);let d="";const N=60;if(P.length>1){for(let i=0;i<=N;i++){const xx=P[0].x+(P[P.length-1].x-P[0].x)*i/N;d+=(i?"L":"M")+X(xx)+" "+Y(spl(P,xx))}}s+=`<path d="${d}" fill="none" stroke="#7a5cff" stroke-width="2.2"/>`+P.map(p=>`<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="4" fill="#22c3d6" stroke="#1a1d3d"/>`).join("")}
+  return s+`</svg>`}
+function spl(P,x){ // monoton kubik interpolyatsiya (oddiy)
+  let i=0;while(i<P.length-2&&x>P[i+1].x)i++;const a=P[i],b=P[i+1];const t=(x-a.x)/(b.x-a.x);
+  const m=j=>{if(j<=0)return (P[1].y-P[0].y)/(P[1].x-P[0].x);if(j>=P.length-1)return (P[j].y-P[j-1].y)/(P[j].x-P[j-1].x);const d1=(P[j].y-P[j-1].y)/(P[j].x-P[j-1].x),d2=(P[j+1].y-P[j].y)/(P[j+1].x-P[j].x);return d1*d2<=0?0:2/(1/d1+1/d2)};
+  const h=b.x-a.x,t2=t*t,t3=t2*t;return (2*t3-3*t2+1)*a.y+(t3-2*t2+t)*h*m(i)+(-2*t3+3*t2)*b.y+(t3-t2)*h*m(i+1)}
+function chartC(){const P=["G4","G3","G2","G1"].map(k=>({x:SMP[k].c,y:etaOf(k,last(k))}));P.unshift({x:0,y:.890});return chart(P,{xm:1.1,ym:Math.max(...P.map(p=>p.y))*1.15,y0:0,sx:.2,xl:"C, %",yl:"η, mPa·s"})}
+function chartT(){const P=[0,20,40,60].map(T=>({x:T,y:etaOf("G05",res3(T))}));const lg=P.map(p=>({x:p.x,y:Math.log10(p.y)}));return chart(P,{xm:60,ym:Math.max(...P.map(p=>p.y))*1.12,sx:10,xl:"T, °C",yl:"η, mPa·s"})}
+function chartS(){const P=[["SKI","+ KI","#9aa0ff"],["SW","+ H₂O","#22c3d6"],["SK2","+ K₂SO₄","#ff6fa5"]].map(([k,l,c])=>({l,c,y:etaOf(k,last(k))/etaW(25)}));return chart(P,{bars:1,xm:1,ym:Math.max(...P.map(p=>p.y))*1.2,y0:0,xl:"",yl:"η_nis"})}
+
+/* ============ PANEL ============ */
+const STG=[null,{s:"t₀ (suv)",t:"Viskozimetrni kalibrlash: suvning oqish vaqti"},{s:"Konsentratsiya",t:"Konsentratsiyaning qovushqoqlikka taʼsiri"},{s:"Harorat",t:"Haroratning qovushqoqlikka taʼsiri"},{s:"Tuzlar",t:"Tuzlarning (anionlarning) qovushqoqlikka taʼsiri"},{s:"Natija",t:"Hisobot"}];
+function shuf(n,seed){const a=[...Array(n).keys()];let s=seed;for(let i=n-1;i>0;i--){s=(s*9301+49297)%233280;const j=Math.floor(s/233280*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function qBlock(Q,seed){const q=S.q[Q.id]||{};return `<div class="q"><p>${Q.q}</p>${shuf(Q.o.length,seed).map(oi=>{let c="";if(q.ans!==undefined&&oi===Q.a)c="right";else if(q.wrong&&q.wrong.includes(oi))c="wrong";return `<button class="${c}" onclick="ansQ('${Q.id}',${oi})" ${q.ans!==undefined||(q.wrong&&q.wrong.includes(oi))?"disabled":""}>${Q.o[oi]}</button>`}).join("")}</div>`}
+function ansQ(id,i){let Q;for(const k in QS){Q=QS[k].find(x=>x.id===id);if(Q)break}const q=S.q[id]||(S.q[id]={tries:0,wrong:[],pts:0});if(q.ans!==undefined)return;q.tries++;
+  if(i===Q.a){q.ans=i;q.pts=q.tries===1?2:1;okT("Toʻgʻri!",1200)}else{q.wrong.push(i);if(q.tries>=2){q.ans=Q.a;toast("Javob koʻrsatildi. 📘 Nazariyani koʻrib chiqing.","warn");SFX.play("warn")}else{toast("✗ Notoʻgʻri. Yana bir urinish.","err",1600);SFX.play("err")}}renderPanel()}
+const qDone=id=>S.q[id]&&S.q[id].ans!==undefined;
+function tl(st){const i=idx(st);return `<ul class="tl">${TASKS[st].map((t,k)=>`<li class="${k<i?"done":k===i?"cur":""}">${t[0]}</li>`).join("")}</ul>`}
+function thCard(opts){const th=S.th;const b=opts.map(v=>`<button class="${th.on&&((v===0&&th.ice)||(v!==0&&!th.ice&&th.set===v))?"on":""}" onclick="setTh(${v})">${v===0?"🧊 0 °C":v+" °C"}</button>`).join("");
+  return `<div class="card"><h4>🌡 Termostat</h4><div class="row">${b}</div><div class="kv" style="margin-top:6px"><span>Hammom / viskozimetr ichida</span><b id="thLive">${f1(th.T)} / ${S.V.liq?f1(S.V.vT):"—"} °C</b></div><div class="row" style="margin-top:4px"><span class="note">Kutish:</span><button onclick="startWait(1)">+1 min</button><button onclick="startWait(5)">+5 min</button><button onclick="startWait(20)">+20 min</button></div></div>`}
+function vCard(list){const V=S.V,f=V.fl;
+  let sw="0,0";if(f){if(f.swOn)sw=f1(f.t-f.s0,1);else if(f.s0!==null&&f.s1!==null)sw=f1(f.s1-f.s0,1)}
+  return `<div class="card"><h4>🧪 Viskozimetr</h4><div class="kv"><span>Ichida</span><b>${V.liq?SMP[V.liq].n:(V.washed?"toza, quruq":"boʻsh")}</b></div>
+   <div class="row" style="margin:6px 0"><button onclick="wash()">🚿 Yuvish</button>${list.map(k=>`<button onclick="fill('${k}')" ${avail(k)?"":"disabled"}>💧 ${SMP[k].s}</button>`).join("")}</div>
+   <div class="row"><button onclick="suck()" ${V.liq&&V.phase!=="flowing"?"":"disabled"}>🫧 Grusha bilan soʻrish</button><button onclick="release()" ${V.phase==="sucked"?"":"disabled"}>▶ Qoʻyib yuborish</button></div>
+   <div class="lcd" style="margin-top:8px"><small>SEKUNDOMER <span id="slowI"></span></small><span id="swP">${sw}</span> s</div>
+   <button class="pri next" style="margin-top:0" onclick="swToggle()" ${V.phase==="flowing"?"":"disabled"}>${f&&f.swOn?"■ STOP (menisk «b» da)":"▶ START (menisk «a» da)"} · Probel</button>
+   <div class="note" style="margin-top:6px">Menisk belgiga yaqinlashganda vaqt avtomatik ×1 ga sekinlashadi. Tezlik — pastki panelda.</div></div>`}
+function resRows(keys,lbl){return keys.map((k,i)=>{const r=S.res[k]||[];return r.map((x,j)=>`<tr><td>${lbl?lbl[i]:SMP[k].s}${r.length>1?` #${j+1}`:""}</td><td>${f1(x.vT)}</td><td>${f1(x.t,1)}</td><td>${Ccal()?f1(etaOf(k,x),3):"—"}</td><td><button class="ghost" style="padding:1px 7px;font-size:11px" onclick="dropLast('${k}')" ${j===r.length-1&&S.stage<5?"":"hidden"}>↺</button></td></tr>`).join("")}).join("")}
+function renderPanel(){
+  const P=$("#panel");const st=S.stage;let h="";
+  if(st>4){P.innerHTML=report();renderTabs();return}
+  h+=`<h2>${st}. ${STG[st].t}</h2>`;const i=idx(st),n=TASKS[st].length;
+  if(st===1){h+=`<div class="sub">Ostvald viskozimetrida suyuqlikning ingichka kapillyardan «a» va «b» belgilar orasida oqib oʻtish vaqti oʻlchanadi. Avval suv uchun t₀ topiladi.</div>`+tl(1);
+    if(i<n){h+=thCard([25])+vCard(["W"])}
+    const r=S.res.W||[];if(r.length)h+=`<div class="card"><h4>Suv · t₀</h4><table class="j"><tr><th>№</th><th>T, °C</th><th>t, s</th><th></th></tr>${r.map((x,j)=>`<tr><td>${j+1}</td><td>${f1(x.vT)}</td><td>${f1(x.t,1)}</td><td><button class="ghost" style="padding:1px 7px;font-size:11px" onclick="dropLast('W')" ${j===r.length-1?"":"hidden"}>↺</button></td></tr>`).join("")}</table>${r.length>=2?`<div class="kv" style="margin-top:6px"><span>t₀ (oʻrtacha)</span><b>${f1(t0(),2)} s</b></div><div class="kv"><span>Viskozimetr doimiysi C = ν₀/t₀</span><b>${f1(Ccal()*1000,3)}·10⁻³ mm²/s²</b></div>`:""}</div>`;
+    if(i>=n)h+=QS[1].map((q,k)=>`<div class="card"><h4>Savol ${k+1}</h4>${qBlock(q,11+k*5)}</div>`).join("")}
+  if(st===2){h+=`<div class="sub">Qaynoq 1% li jelatina zolidan 4-jadval boʻyicha suyultirilgan eritmalar tayyorlanadi, soʻng har birining qovushqoqligi 25 °C da oʻlchanadi.</div>`+tl(2);
+    if(!S.L.prep)h+=`<div class="card"><h4>4-jadval · pipetka bilan oʻlchang</h4>${S.t2.map((t,k)=>`<div class="tube ${S.t2bad.includes(k)?"bad":""}"><span class="nm">${k+1}-eritma</span><span class="note">jami ${t.g+t.w} ml</span><span>Jelatina zoli</span><span class="row mini"><button onclick="addT2(${k},'g',-1)">−1</button><b style="font-family:var(--mono);min-width:44px;text-align:center">${t.g} ml</b><button onclick="addT2(${k},'g',1)">+1</button><button onclick="addT2(${k},'g',5)">+5</button></span><span>Suv</span><span class="row mini"><button onclick="addT2(${k},'w',-1)">−1</button><b style="font-family:var(--mono);min-width:44px;text-align:center">${t.w} ml</b><button onclick="addT2(${k},'w',1)">+1</button><button onclick="addT2(${k},'w',5)">+5</button></span></div>`).join("")}<button class="pri next" onclick="checkT2()">✓ Tekshirish</button><div class="note">Hajmlarni darslikdagi 4-jadvaldan oling (📘 Nazariya).</div></div>`;
+    else if(!S.L.cool)h+=`<button class="pri next" onclick="startWait(25,'cool')">❄️ 25 °C gacha sovitish (≈ 25 min)</button>`;
+    if(S.L.cool&&i<n){h+=thCard([25])+vCard(["G4","G3","G2","G1"]);h+=`<div class="hint">Maslahat: suyultirilgandan konsentrlanganga qarab oʻlchash qulay. Har bir yangi eritmadan oldin viskozimetrni yuvish shart.</div>`}
+    if(S.L.cool)h+=`<div class="card"><h4>Natijalar (t₀ = ${f1(t0(),2)} s)</h4><table class="j"><tr><th>Eritma</th><th>T</th><th>t, s</th><th>η, mPa·s</th><th></th></tr>${resRows(["G4","G3","G2","G1"])}</table></div>`;
+    if(i===3)h+=`<button class="pri next" onclick="S.L.g2=1;SFX.play('paper');check();renderPanel()">📈 η = f(C) grafigini tuzish</button>`;
+    if(S.L.g2)h+=`<div class="card"><h4>η = f(C), 25 °C</h4>${chartC()}</div>`;
+    if(i>=n)h+=QS[2].map((q,k)=>`<div class="card"><h4>Savol ${k+1}</h4>${qBlock(q,21+k*5)}</div>`).join("")}
+  if(st===3){h+=`<div class="sub">0,5% li jelatina zolining oqish vaqti 0, 20, 40 va 60 °C da oʻlchanadi. Har bir haroratda viskozimetr <b>≈ 20 min</b> termostatlanadi; harorat elektron termometrda kuzatiladi.</div>`+tl(3);
+    if(i<n-1)h+=thCard([0,20,40,60])+vCard(["G05"]);
+    const rows=[0,20,40,60].map(T=>{const r=res3(T);return `<tr><td>${T} °C</td><td>${r?f1(r.vT):"—"}</td><td>${r?f1(r.t,1):"—"}</td><td>${r?f1(etaOf("G05",r),3):"—"}</td><td>${r?f1(etaOf("G05",r)/etaW(T),2):"—"}</td></tr>`}).join("");
+    h+=`<div class="card"><h4>Natijalar</h4><table class="j"><tr><th>T</th><th>T ichida</th><th>t, s</th><th>η, mPa·s</th><th>η_nis</th></tr>${rows}</table>${(S.res.G05||[]).length?`<div class="row" style="margin-top:6px"><button class="ghost" onclick="dropLast('G05')">↺ Oxirgisini qayta oʻlchash</button></div>`:""}<div class="note" style="margin-top:4px">η = C·t·ρ; η_nis = η / η(suv, T)</div></div>`;
+    if(i===n-1)h+=`<button class="pri next" onclick="S.L.g3=1;SFX.play('paper');check();renderPanel()">📈 η = f(T) grafigini tuzish</button>`;
+    if(S.L.g3)h+=`<div class="card"><h4>η = f(T), 0,5% jelatina</h4>${chartT()}</div>`;
+    if(i>=n)h+=QS[3].map((q,k)=>`<div class="card"><h4>Savol ${k+1}</h4>${qBlock(q,31+k*5)}</div>`).join("")}
+  if(st===4){h+=`<div class="sub">1% li jelatina zoliga teng hajm 1 n KI, 1 n K₂SO₄ yoki suv qoʻshiladi; 1 soatdan keyin qovushqoqliklar taqqoslanadi.</div>`+tl(4);
+    if(i<2)h+=`<div class="card"><h4>Probirkalar</h4>${S.t4.map((t,k)=>`<div class="tube"><button class="${S.sel4===k?"on":""}" style="padding:5px 10px" onclick="sel4(${k})">${k+1}-probirka</button><span class="note">${t.length?t.map(r=>"5 ml "+RN[r]).join(" + "):"boʻsh"}</span></div>`).join("")}
+      <div class="row" style="margin-top:8px">${["GEL1","G05","KI","K2SO4","W","FE"].map(r=>`<button onclick="add4('${r}')">+5 ml ${RN[r]}</button>`).join("")}</div><div class="note" style="margin-top:6px">Probirkani tanlang, soʻng reaktivni qoʻshing (yoki sahnadagi shishani bosing).</div></div>`;
+    if(i===2&&!S.L.shaken)h+=`<button class="pri next" onclick="shake4()">🤲 Chayqatish va 1 soat tinch qoʻyish</button>`;
+    if(S.L.aged&&i<n-1)h+=thCard([25])+vCard(["SKI","SK2","SW"]);
+    if(S.L.aged)h+=`<div class="card"><h4>5-jadval</h4><table class="j"><tr><th>Eritma</th><th>T</th><th>t, s</th><th>η, mPa·s</th><th></th></tr>${resRows(["SW","SKI","SK2"],["Jelatina 1% + H₂O","Jelatina 1% + KI","Jelatina 1% + K₂SO₄"])}</table></div>`;
+    if(i===n-1)h+=`<button class="pri next" onclick="S.L.g4=1;SFX.play('paper');check();renderPanel()">📊 Taqqoslash diagrammasi</button>`;
+    if(S.L.g4)h+=`<div class="card"><h4>Nisbiy qovushqoqlik, 25 °C</h4>${chartS()}</div>`;
+    if(i>=n)h+=QS[4].map((q,k)=>`<div class="card"><h4>Savol ${k+1}</h4>${qBlock(q,41+k*5)}</div>`).join("")}
+  if(stageDone(st))h+=`<button class="pri next" onclick="nextStage()">${st===4?"Hisobotni koʻrish →":`${st+1}-bosqichga oʻtish →`}</button>`;
+  h+=`<div class="row noprint" style="margin-top:10px"><button class="ghost" onclick="hint()">💡 Maslahat</button></div>`;
+  P.innerHTML=h;renderTabs();
+}
+function stageDone(st){return st<=4&&idx(st)>=TASKS[st].length&&QS[st].every(q=>qDone(q.id))}
+function nextStage(){const n=S.stage+1;if(n>S.unlocked)S.unlocked=n;goStage(n)}
+function goStage(n){if(n>S.unlocked)return;if(S.V.phase==="flowing"||S.wait.left>0){toast("Joriy amal tugashini kuting.","warn");return}
+  const prev=S.stage;S.stage=n;S.glow=null;
+  if(n!==prev&&n<=4){const V=S.V;if(V.liq&&!avail(V.liq)){/* oldingi bosqich suyuqligi qoladi — yuvish talab qilinadi */}if(V.phase==="sucked")V.phase="rest"}
+  svg.innerHTML=sceneHTML();bindScene();check();renderPanel();$("#panel").scrollTop=0;SFX.play("paper")}
+function bindScene(){svg.querySelectorAll("[data-t]").forEach(g=>g.addEventListener("click",e=>{e.stopPropagation();sceneClick(g.dataset.t)}))}
+function renderTabs(){$("#tabs").innerHTML=STG.slice(1).map((x,i)=>{const n=i+1,d=stageDone(n);return `<button class="${n===S.stage?"cur":""} ${d?"done":""}" ${n>S.unlocked?"disabled":""} onclick="goStage(${n})" title="${x.t}">${d?"✓ ":""}${n} · ${x.s}</button>`}).join("");$("#chip").textContent=total().tot+" ball";
+  document.querySelectorAll("footer [data-sp]").forEach(b=>b.classList.toggle("on",+b.dataset.sp===S.speed))}
+
+/* ============ BAHOLASH ============ */
+function total(){
+  let proc=0;for(let k=1;k<=4;k++)if(stageDone(k)||k<S.unlocked)proc+=Math.max(0,10-(S.pen[k]||0));
+  const all=[1,2,3,4].flatMap(k=>QS[k].map(q=>q.id));const qp=all.reduce((s,id)=>s+((S.q[id]&&S.q[id].pts)||0),0);
+  const errs=[];for(const k in S.res)S.res[k].forEach(r=>errs.push(Math.abs(r.t-r.tr)/r.tr*100));
+  const me=errs.length?avg(errs):null;const need=13,got=Math.min(need,errs.length);
+  const acc=me===null?0:20*clamp(1-(me-.4)/2.6,0,1)*(got/need);
+  const qz=QZ.filter((q,i)=>S.quiz[i]===q[2]).length*2;const hp=Math.min(5,S.hints*.5);
+  return {proc:Math.round(proc),acc:Math.round(acc),qs:Math.round(30*qp/(all.length*2)),qz,hp,me,tot:clamp(Math.round(proc+acc+30*qp/(all.length*2)+qz-hp),0,100)}}
+function report(){
+  const g=total(),mark=g.tot>=86?"aʼlo (5)":g.tot>=71?"yaxshi (4)":g.tot>=56?"qoniqarli (3)":"qoniqarsiz (2)";
+  const ok2=["G1","G2","G3","G4"].every(k=>last(k)),ok3=[0,20,40,60].every(res3),ok4=["SKI","SK2","SW"].every(k=>last(k));
+  const tabC=ok2?`<table class="j"><tr><th>Eritma</th><th>Jel., ml</th><th>Suv, ml</th><th>C, %</th><th>t, s</th><th>η, mPa·s</th><th>η_nis</th><th>η_sol/C</th></tr>${["G1","G2","G3","G4"].map((k,i)=>{const r=last(k),e=etaOf(k,r),rel=e/etaW(r.vT);return `<tr><td>${i+1}</td><td>${TAB4[i][0]}</td><td>${TAB4[i][1]}</td><td>${f1(SMP[k].c,2)}</td><td>${f1(r.t,1)}</td><td>${f1(e,3)}</td><td>${f1(rel,3)}</td><td>${f1((rel-1)/SMP[k].c,2)}</td></tr>`}).join("")}</table>`:"<p class='note'>Bajarilmagan</p>";
+  const tabT=ok3?`<table class="j"><tr><th>T, °C</th><th>t, s</th><th>η, mPa·s</th><th>η_suv</th><th>η_nis</th></tr>${[0,20,40,60].map(T=>{const r=res3(T),e=etaOf("G05",r);return `<tr><td>${T}</td><td>${f1(r.t,1)}</td><td>${f1(e,3)}</td><td>${f1(etaW(T),3)}</td><td>${f1(e/etaW(T),2)}</td></tr>`}).join("")}</table>`:"<p class='note'>Bajarilmagan</p>";
+  const tabS=ok4?`<table class="j"><tr><th>Eritma</th><th>t, s</th><th>η, mPa·s</th><th>η_nis</th></tr>${[["SW","Jelatina 1% + H₂O"],["SKI","Jelatina 1% + KI"],["SK2","Jelatina 1% + K₂SO₄"]].map(([k,l])=>{const r=last(k),e=etaOf(k,r);return `<tr><td>${l}</td><td>${f1(r.t,1)}</td><td>${f1(e,3)}</td><td>${f1(e/etaW(25),2)}</td></tr>`}).join("")}</table>`:"<p class='note'>Bajarilmagan</p>";
+  return `<div class="rep"><h2>Laboratoriya ishi natijalari</h2>
+  <div class="sub">9-laboratoriya ishi · Kolloid sistemalarda hosil boʻladigan strukturalar. Qovushqoqlikni viskozimetrda aniqlash<br>${new Date().toLocaleDateString("uz-UZ")}</div>
+  <div class="score"><div class="n">${g.tot}</div><div>/100 ball<br><b>${mark}</b></div></div>
+  <div class="card"><h4>Ball tarkibi</h4>
+   <div class="kv"><span>Tajriba texnikasi (4 bosqich)</span><b>${g.proc}/40</b></div>
+   <div class="kv"><span>Vaqt oʻlchash aniqligi (oʻrt. xato ${g.me!==null?f1(g.me,2)+"%":"—"})</span><b>${g.acc}/20</b></div>
+   <div class="kv"><span>Bosqich savollari</span><b>${g.qs}/30</b></div>
+   <div class="kv"><span>Nazorat savollari</span><b>${g.qz}/10</b></div>
+   ${g.hp?`<div class="kv"><span>Maslahatlar (${S.hints})</span><b>−${g.hp}</b></div>`:""}</div>
+  <div class="card"><h4>Kalibrlash</h4><div class="kv"><span>t₀ (suv, 25 °C)</span><b>${t0()?f1(t0(),2)+" s":"—"}</b></div><div class="kv"><span>η₀ / ρ₀ (25 °C)</span><b>0,890 mPa·s / 0,997 g/sm³</b></div><div class="kv"><span>C = η₀/(ρ₀t₀)</span><b>${Ccal()?f1(Ccal()*1000,3)+"·10⁻³ mm²/s²":"—"}</b></div></div>
+  <div class="card"><h4>1 · Konsentratsiya taʼsiri (4-jadval)</h4>${tabC}${ok2?`<div style="margin-top:8px">${chartC()}</div>`:""}</div>
+  <div class="card"><h4>2 · Harorat taʼsiri (0,5% zol)</h4>${tabT}${ok3?`<div style="margin-top:8px">${chartT()}</div>`:""}</div>
+  <div class="card"><h4>3 · Tuzlar taʼsiri (5-jadval)</h4>${tabS}${ok4?`<div style="margin-top:8px">${chartS()}</div>`:""}</div>
+  ${S.events.length?`<div class="card"><h4>Xatolar va ogohlantirishlar</h4><ul style="padding-left:18px;font-size:13px;line-height:1.5">${S.events.map(e=>`<li>${e.st}-bosqich: ${e.msg}</li>`).join("")}</ul></div>`:""}
+  <div class="card"><h4>Nazorat savollari</h4>${QZ.map((q,qi)=>`<div class="q"><p>${qi+1}. ${q[0]}</p>${q[1].map((o,oi)=>{const a=S.quiz[qi];let c="";if(a!==undefined){if(oi===q[2])c="right";else if(oi===a)c="wrong"}return `<button class="${c}" onclick="quizA(${qi},${oi})" ${a!==undefined?"disabled":""}>${o}</button>`}).join("")}</div>`).join("")}</div>
+  <div class="card"><h4>Xulosa</h4><div class="note">Jelatina zolining qovushqoqligi konsentratsiya ortishi bilan nochiziqli ortadi — makromolekulalar oʻzaro taʼsirlashib, fazoviy toʻr (struktura) hosil qiladi, shuning uchun sistema Eynshteyn tenglamasiga boʻysunmaydi. Harorat pasayganda qovushqoqlik keskin ortadi va ≈ 0 °C da zol ivib gelga aylanadi; qizdirilganda struktura buziladi. Liotrop qatorga muvofiq SO₄²⁻ ionlari gidratlanib, strukturalanishni kuchaytiradi (qovushqoqlik ortadi), I⁻ ionlari esa unga toʻsqinlik qiladi (qovushqoqlik kamayadi).</div></div>
+  <div class="row noprint"><button class="dark" onclick="window.print()">🖨 Hisobotni PDF / chop etish</button><button class="ghost" onclick="if(confirm('Ishni qaytadan boshlaysizmi?'))location.reload()">↺ Qaytadan</button></div></div>`}
+function quizA(q,i){if(S.quiz[q]!==undefined)return;S.quiz[q]=i;SFX.play(i===QZ[q][2]?"ok":"err");renderPanel()}
+
+/* ============ MODALLAR ============ */
+function modal(h){$("#mc").innerHTML=h;$("#modal").classList.add("on")}
+function closeModal(){$("#modal").classList.remove("on")}
+function intro(){modal(`<h1>🧫 Qovushqoqlik. Ostvald viskozimetri</h1><p style="color:#6a6f96">9-laboratoriya ishi · Kolloid sistemalarda hosil boʻladigan strukturalar va ularning xossalari</p>
+ <h3>Ishning maqsadi</h3><p>Qovushqoqlik tushunchasi bilan tanishish, uni kapillyar viskozimetrda aniqlash hamda jelatina zoli qovushqoqligiga konsentratsiya, harorat va tuzlar taʼsirini oʻrganish.</p>
+ <h3>Bosqichlar</h3><ul>${STG.slice(1).map((s,i)=>`<li><b>${i+1}.</b> ${s.t}</li>`).join("")}</ul>
+ <h3>Jihozlar va reaktivlar</h3><p>Termostat, Ostvald viskozimetri, grusha, sekundomer, elektron termometr; jelatinaning 1% va 0,5% zollari, 1 n KI, 1 n K₂SO₄, temir(III) gidroksid zoli, distillangan suv.</p>
+ <h3>Asosiy mahorat — vaqtni aniq oʻlchash</h3><ul><li>Suyuqlikni grusha bilan «a» belgisidan yuqoriga soʻring, soʻng qoʻyib yuboring.</li><li>Menisk <b>«a»</b> dan oʻtgan zahoti — <b>START</b>, <b>«b»</b> dan oʻtganda — <b>STOP</b> (tugma, sahnadagi sekundomer yoki <b>Probel</b>).</li><li>Uzun oqishlarni tezlashtirish mumkin (×2…×50) — belgiga yaqinlashganda vaqt avtomatik sekinlashadi.</li><li>Har bir yangi suyuqlikdan oldin viskozimetrni yuving va termostatlang.</li></ul>
+ <div class="row" style="margin-top:16px"><button class="pri" style="padding:12px 18px" onclick="closeModal();SFX.play('fanfare')">Laboratoriyaga kirish →</button></div>
+ <p class="note" style="margin-top:12px">Simulyatsiya — jarayonning soddalashtirilgan taʼlimiy modeli. 🔊 Ovoz effektlarini pastki panelda oʻchirish mumkin.</p>`)}
+function theory(){modal(`<h1>📘 Nazariya</h1>
+ <h3>Qovushqoqlik</h3><p>Qovushqoqlik (ichki ishqalanish) — suyuqlik qatlamlarining bir-biriga nisbatan siljishiga qarshilik. Nyuton qonuni: <span class="eq" style="display:inline-block">F = η·S·dv/dx</span>; η birligi — Pa·s (1 mPa·s = 1 sP). Suvning qovushqoqligi 20 °C da 1,002 mPa·s, 25 °C da 0,890 mPa·s.</p>
+ <h3>Kapillyar viskozimetr (Ostvald)</h3><p>Puazeyl qonuniga koʻra kapillyardan oqib oʻtgan hajm: <span class="eq" style="display:inline-block">V = πr⁴Pt / 8ηl</span>. Bir xil hajm (a…b) bir xil viskozimetrdan oʻz ogʻirligi taʼsirida oqib oʻtganda P ~ ρ, shuning uchun:</p>
+ <div class="eq">η / η₀ = (ρ · t) / (ρ₀ · t₀)    ⇒    η = η₀ · ρt / (ρ₀t₀) = C·ρ·t</div>
+ <p>Nisbiy qovushqoqlik η_nis = η/η₀; solishtirma η_sol = η_nis − 1; keltirilgan η_sol/C.</p>
+ <h3>Kolloid sistemalarda strukturalar</h3><p>Eynshteyn tenglamasi <span class="eq" style="display:inline-block">η = η₀(1 + 2,5φ)</span> faqat suyultirilgan, sharsimon, oʻzaro taʼsirlashmaydigan zarrachalar uchun oʻrinli. Yuqori molekulyar moddalar (jelatina) zollari undan kuchli chetlanadi: zanjirsimon makromolekulalar solvatlanadi va oʻzaro bogʻlanib fazoviy toʻr — <b>struktura</b> hosil qiladi. Bunday sistemalarning qovushqoqligi siljish kuchlanishiga bogʻliq (strukturaviy qovushqoqlik, Bingam oqimi).</p>
+ <h3>4-jadval · eritmalar tayyorlash</h3><table class="j" style="max-width:420px"><tr><th>Tarkibi</th><th>1</th><th>2</th><th>3</th><th>4</th></tr><tr><td>Jelatina zoli 1%, ml</td><td>20</td><td>15</td><td>5</td><td>2</td></tr><tr><td>Suv, ml</td><td>0</td><td>5</td><td>15</td><td>18</td></tr></table>
+ <h3>Harorat taʼsiri</h3><p>Harorat pasayganda makromolekulalar orasidagi vodorod bogʻlar koʻpayadi — qovushqoqlik keskin ortadi, jelatina zoli ≈ 0–15 °C da <b>ivib</b>, gel (ilvira) hosil qiladi. Qizdirilganda gel yana zolga aylanadi.</p>
+ <h3>Elektrolitlar taʼsiri. Liotrop qator</h3><div class="eq">SO₄²⁻ > CH₃COO⁻ > Cl⁻ > NO₃⁻ > Br⁻ > I⁻ > SCN⁻</div><p>Qatorning boshidagi kuchli gidratlanuvchi ionlar makromolekulalardan suvni tortib oladi va ivish (strukturalanish)ni tezlashtiradi — qovushqoqlik ortadi; oxiridagilar (I⁻, SCN⁻) makromolekulalarga adsorbsiyalanib, struktura hosil boʻlishiga toʻsqinlik qiladi — qovushqoqlik kamayadi.</p>
+ <h3>Adabiyotlar</h3><ul style="font-size:13px"><li>Axmedov K.S., Raximov X.R. Kolloid ximiya. T., 1992.</li><li>Grigorov O.N. Rukovodstvo k prakticheskim zanyatiyam po kolloidnoy ximii. L., 1964.</li><li>Frolov Yu.G. Kurs kolloidnoy ximii. M., 1989.</li><li>Aminov S.N. va boshq. Fizik va kolloid kimyodan amaliy mashgʻulotlar. T., 2006.</li></ul>
+ <div class="row" style="margin-top:16px"><button class="pri" onclick="closeModal()">Yopish</button></div>`)}
+function journal(){const rows=[];for(const k in S.res)S.res[k].forEach((r,j)=>rows.push(`<tr><td>${SMP[k].n}${S.res[k].length>1?" #"+(j+1):""}</td><td>${f1(r.vT)}</td><td>${f1(r.t,2)}</td><td>${Ccal()?f1(etaOf(k,r),3):"—"}</td></tr>`));
+  modal(`<h1>📋 Oʻlchov jurnali</h1>${rows.length?`<table class="j"><tr><th>Suyuqlik</th><th>T, °C</th><th>t, s</th><th>η, mPa·s</th></tr>${rows.join("")}</table>`:"<p>Hali oʻlchovlar yoʻq.</p>"}<div class="row" style="margin-top:12px"><button class="pri" onclick="closeModal()">Yopish</button></div>`)}
+function hint(){S.hints++;const st=S.stage,V=S.V,i=idx(st);let m="Savollarga javob bering; 📘 Nazariyada formulalar bor.";S.glow=null;
+  if(st<=4&&i<TASKS[st].length){
+    const set=S.th.ice?0:S.th.set;
+    if(!S.th.on||(st===1&&S.th.set!==25)){m="Termostat tugmasini bosing.";}
+    else if(st===2&&!S.L.prep)m="1-eritma: 20 ml zol + 0 ml suv; 2: 15+5; 3: 5+15; 4: 2+18.";
+    else if(st===4&&i<2){const t=S.t4[S.sel4];m=t.length===0?"Tanlangan probirkaga 5 ml 1% jelatina quying.":`Bu probirkaga: ${RN[["KI","K2SO4","W"][S.sel4]]}.`;S.glow=t.length===0?"GEL1":["KI","K2SO4","W"][S.sel4]}
+    else if(V.phase==="flowing")m=V.fl.swOn?"Menisk «b» chizigʻidan oʻtganda STOP ni bosing.":"Menisk «a» chizigʻidan oʻtganda START ni bosing (Probel).";
+    else if(!V.liq){m="Viskozimetrni yuving, soʻng kerakli suyuqlik bilan toʻldiring.";S.glow=V.washed?null:"wash"}
+    else if(Math.abs(V.vT-set)>.3)m=`Suyuqlik harorati ${f1(V.vT)} °C — «+5 min» yoki «+20 min» kutish tugmasini bosing.`;
+    else if(V.phase!=="sucked"){m="Grushani bosing — suyuqlik «a» dan yuqoriga koʻtariladi.";S.glow="bulb"}
+    else m="«Qoʻyib yuborish» tugmasini bosing va meniskni kuzating.";}
+  toast("💡 "+m,"",5600);SFX.play("click")}
+
+/* ============ ISHGA TUSHIRISH ============ */
+$("#btnHint").onclick=hint;$("#btnTheory").onclick=()=>{SFX.play("paper");theory()};$("#btnJ").onclick=()=>{SFX.play("paper");journal()};
+$("#btnSnd").onclick=()=>{SFX.on=!SFX.on;$("#btnSnd").textContent=SFX.on?"🔊":"🔇";if(SFX.on)SFX.play("click")};
+$("#btnFull").onclick=()=>{document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen()};
+document.querySelectorAll("footer [data-sp]").forEach(b=>b.onclick=()=>{S.speed=+b.dataset.sp;SFX.play("click");renderTabs()});
+$("#modal").addEventListener("click",e=>{if(e.target.id==="modal")closeModal()});
+document.addEventListener("pointerdown",()=>SFX.init(),{once:true});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeModal();if(e.code==="Space"&&!$("#modal").classList.contains("on")){e.preventDefault();SFX.init();swToggle()}});
+let lastT=performance.now(),pT=0;
+function loop(now){const dt=Math.min(.1,(now-lastT)/1000);lastT=now;frame(dt);pT+=dt;if(pT>.1){pT=0;const f=S.V.fl,e=el("swP");if(e&&f&&f.swOn)e.textContent=f1(f.t-f.s0,1);const tl=el("thLive");if(tl)tl.textContent=`${f1(S.th.T)} / ${S.V.liq?f1(S.V.vT):"—"} °C`}requestAnimationFrame(loop)}
+goStage(1);intro();requestAnimationFrame(loop);
+if(window.KKBridge){KKBridge.mount(9);const _rt=renderTabs;renderTabs=function(){_rt();KKBridge.save(9,total().tot,S.stage>4||stageDone(4));};renderTabs();}
+</script>
+</body>
+</html>

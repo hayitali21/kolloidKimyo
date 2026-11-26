@@ -1,0 +1,1603 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="author" content="Qayumov Hayitali">
+<meta name="description" content="7-laboratoriya ishi: Gidrofob zollarning (As2S3, Fe(OH)3) elektrolitlar ta'sirida koagullanishi, Shultse–Gardi qoidasi, koagullanish ostonasi va ikki kolloidning (Fe(OH)3+As2S3, AgI) o'zaro koagullanishi.">
+<title>7-laboratoriya · Gidrofob zollarning koagullanishi</title>
+<link rel="stylesheet" href="../assets/lab-core.css">
+<style>
+  .sol-pills { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px; }
+  .sol-pill { display: flex; align-items: center; gap: 7px; padding: 8px 10px; border-radius: 10px; border: 1.5px solid var(--line); background: #fff; font-size: 12.5px; font-weight: 600; text-align: left; }
+  .sol-pill .sw { width: 13px; height: 13px; border-radius: 50%; flex: none; border: 1px solid rgba(0,0,0,.18); }
+  .sol-pill.act { border-color: var(--accent); background: #fff9ee; box-shadow: 0 0 0 2px rgba(232,155,60,.18); }
+  .ele-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px; }
+  .ele-btn { padding: 7px 6px; font-size: 12px; background: #fff; border: 1.5px solid var(--line); border-radius: 9px; line-height: 1.3; text-align: center; }
+  .ele-btn.act { border-color: var(--top); background: #eaf3f2; font-weight: 700; }
+  .ele-btn.done { border-color: var(--ok); background: #e9f9f1; }
+  .ele-btn small { display: block; font-size: 10.5px; color: var(--muted); font-family: var(--mono); font-weight: 500; }
+  .meter-bar { height: 10px; background: #e4eeec; border-radius: 99px; overflow: hidden; margin: 6px 0 4px; }
+  .meter-fill { height: 100%; border-radius: 99px; transition: width .2s, background .2s; }
+  .subtabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+  .subtabs button { font-size: 12.5px; padding: 8px; border: 1.5px solid var(--line); background: #fff; font-weight: 600; }
+  .subtabs button.act { background: var(--top); color: #fff; border-color: var(--top); }
+  .subtabs button.done::after { content: " ✓"; color: #7fe6be; }
+  .frame-cell { border: 2px solid var(--err) !important; background: #fff3f3 !important; font-weight: 800; color: #9c1f1f; }
+  .tube-chip { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 7px; border: 1.5px solid var(--line); background: #fff; font-family: var(--mono); font-size: 12px; font-weight: 700; padding: 0; }
+  .tube-chip.sel { border-color: var(--accent); background: #fff5e3; }
+  .tube-chip.ok { border-color: var(--ok); background: #e3f7ee; color: #0e593b; }
+</style>
+</head>
+<body>
+<header class="lab-head">
+  <a class="home-link" href="../index.html">← Bosh sahifa</a>
+  <div class="lab-switch-wrap" id="labSwitchWrap"></div>
+  <div class="brand">Gidrofob zollar · Shultse–Gardi qoidasi<small>7-laboratoriya · elektrolitlar va oʻzaro koagullanish</small></div>
+  <nav class="tabs" id="tabs"></nav>
+  <div class="scorechip" id="chip">0 / 100 ball</div>
+</header>
+
+<main class="lab-main">
+  <div id="stageWrap">
+    <svg id="scene" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+  <aside id="panel"></aside>
+</main>
+
+<footer class="lab-foot">
+  <button id="btnTable">📋 Jurnal</button>
+  <button id="btnHint">💡 Maslahat</button>
+  <button id="btnTheory">📘 Nazariya</button>
+  <span class="sp"></span>
+  <button id="btnSnd">🔊 Ovoz</button>
+  <button id="btnFull">⛶ Ekran</button>
+  <a class="ig-credit" href="https://instagram.com/hayitali1612" target="_blank" rel="noopener noreferrer" title="Instagram: @hayitali1612">hayitali1612</a>
+</footer>
+
+<div id="toasts"></div>
+<div id="modal"><div class="card" id="modalCard"></div></div>
+
+<script src="../assets/lab-core.js"></script>
+<script>
+"use strict";
+const LAB_ID = 7;
+const { el, clamp, lerp, f1, rnd, shuf } = LabUI;
+const svg = document.getElementById("scene");
+
+/* ============ KIMYOVIY MODEL VA MA'LUMOTLAR (3-, 4-, 5-JADVALLAR) ============ */
+const jitter = (base, pct = 0.04) => +(base * (1 + (Math.random() * 2 - 1) * pct)).toFixed(2);
+
+// 1-bosqich: 3-jadval (25 ml zol + 50 ml byuretka, Shultse-Gardi γ ~ 1/z^6)
+const S1_SOLS = {
+  As2S3: {
+    name: "As₂S₃ zoli",
+    full: "Mishyak (III) sulfid zoli",
+    charge: "−",
+    chargeTxt: "Manfiy (−)",
+    ionRole: "kation",
+    col: "#f2c63d",
+    colDark: "#c99714",
+    flocCol: "#d49c0e",
+    ele: [
+      { id: "As_NaCl",  f: "NaCl",  ion: "Na⁺",  z: 1, cn: 2.0,   cM: 2000, vCrit: jitter(1.22, 0.04) },
+      { id: "As_CaCl2", f: "CaCl₂", ion: "Ca²⁺", z: 2, cn: 0.01,  cM: 5,    vCrit: jitter(4.20, 0.04) },
+      { id: "As_AlCl3", f: "AlCl₃", ion: "Al³⁺", z: 3, cn: 0.001, cM: 0.333,vCrit: jitter(3.48, 0.04) }
+    ]
+  },
+  FeOH3: {
+    name: "Fe(OH)₃ zoli",
+    full: "Temir (III) gidroksid zoli",
+    charge: "+",
+    chargeTxt: "Musbat (+)",
+    ionRole: "anion",
+    col: "#b83b24",
+    colDark: "#7b1f10",
+    flocCol: "#6d1b0e",
+    ele: [
+      { id: "Fe_NaCl",   f: "NaCl",         ion: "Cl⁻",          z: 1, cn: 2.0,   cM: 2000,  vCrit: jitter(1.38, 0.04) },
+      { id: "Fe_Na2SO4", f: "Na₂SO₄",       ion: "SO₄²⁻",        z: 2, cn: 0.01,  cM: 5,     vCrit: jitter(4.95, 0.04) },
+      { id: "Fe_K3FeCN", f: "K₃[Fe(CN)₆]",  ion: "[Fe(CN)₆]³⁻",  z: 3, cn: 0.001, cM: 0.333, vCrit: jitter(4.12, 0.04) }
+    ]
+  }
+};
+
+// 2-bosqich: 4-jadval (12 ta probirka = 3 seriya × 4 probirka: 5 ml Fe(OH)3 + 4.5/4/3/1 ml H2O + 0.5/1/2/4 ml elektrolit)
+const S2_VOLS = [
+  { n: 1, sol: 5, w: 4.5, e: 0.5 },
+  { n: 2, sol: 5, w: 4.0, e: 1.0 },
+  { n: 3, sol: 5, w: 3.0, e: 2.0 },
+  { n: 4, sol: 5, w: 1.0, e: 4.0 }
+];
+const S2_SERIES = [
+  {
+    id: "KCl", label: "1 N KCl", short: "KCl (1 N)", cn: 1.0, cM: 1000, z: 1, ion: "Cl⁻",
+    gammaTrueN: 92, // mmol-ekv/L -> 1-prob (50) tiniq, 2-prob (100) loyqalanish, 3-4 cho'kma
+    firstTube: 2,
+    tubeDesc: ["Tiniq (barqaror)", "Loyqalanish (ostona!)", "Kuchli koagullanish", "Toʻliq choʻkish"]
+  },
+  {
+    id: "K2SO4", label: "0,01 N K₂SO₄", short: "K₂SO₄ (0,01 N)", cn: 0.01, cM: 5, z: 2, ion: "SO₄²⁻",
+    gammaTrueN: 1.65, // 1-prob (0.5) tiniq, 2-prob (1.0) tiniq, 3-prob (2.0) loyqalanish, 4-prob (4.0) cho'kma
+    firstTube: 3,
+    tubeDesc: ["Tiniq (barqaror)", "Tiniq (yengil opales.)", "Loyqalanish (ostona!)", "Toʻliq choʻkish"]
+  },
+  {
+    id: "K3FeCN", label: "0,001 N K₃[Fe(CN)₆]", short: "K₃[Fe(CN)₆] (0,001 N)", cn: 0.001, cM: 0.333, z: 3, ion: "[Fe(CN)₆]³⁻",
+    gammaTrueN: 0.145, // 1-prob (0.05) tiniq, 2-prob (0.10) tiniq, 3-prob (0.20) loyqalanish, 4-prob (0.40) cho'kma
+    firstTube: 3,
+    tubeDesc: ["Tiniq (barqaror)", "Tiniq (barqaror)", "Loyqalanish (ostona!)", "Toʻliq choʻkish"]
+  }
+];
+
+// 3-bosqich A: 5-jadval — Fe(OH)3 (+) va As2S3 (-) o'zaro koagullanishi (6 probirka)
+const S3A_TUBES = [
+  { n: 1, fe: 9, as: 1, supCol: "#b93d24", supOp: 0.85, sedH: 8,  sedCol: "#7c3214", supTxt: "Toʻq qizil-qoʻngʻir (Fe(OH)₃ ortiqcha)", eq: false },
+  { n: 2, fe: 7, as: 3, supCol: "#cf683e", supOp: 0.62, sedH: 18, sedCol: "#8a4818", supTxt: "Och qizgʻish-qoʻngʻir (+)", eq: false },
+  { n: 3, fe: 5, as: 5, supCol: "#e6f2f5", supOp: 0.22, sedH: 31, sedCol: "#965a15", supTxt: "Rangsiz, tiniq (toʻliq oʻzaro koag.)", eq: true },
+  { n: 4, fe: 3, as: 7, supCol: "#edd05b", supOp: 0.60, sedH: 19, sedCol: "#a87018", supTxt: "Och sariq (−)", eq: false },
+  { n: 5, fe: 2, as: 8, supCol: "#f1c942", supOp: 0.78, sedH: 12, sedCol: "#b48218", supTxt: "Sariq (As₂S₃ ortiqcha)", eq: false },
+  { n: 6, fe: 1, as: 9, supCol: "#f2c12c", supOp: 0.90, sedH: 6,  sedCol: "#bd8e18", supTxt: "Toʻq sariq (As₂S₃ kuchli ortiqcha)", eq: false }
+];
+
+// 3-bosqich B: 11-probirka jadvali — AgI(-) va AgI(+) o'zaro koagullanishi (10 va 11 - nazorat)
+const S3B_TUBES = [
+  { n: 1,  neg: 1,  pos: 9,  chg: "+", ctrl: false, turb: 0.14, sed: 2  },
+  { n: 2,  neg: 2,  pos: 8,  chg: "+", ctrl: false, turb: 0.22, sed: 4  },
+  { n: 3,  neg: 3,  pos: 7,  chg: "+", ctrl: false, turb: 0.36, sed: 8  },
+  { n: 4,  neg: 4,  pos: 6,  chg: "+", ctrl: false, turb: 0.68, sed: 16 },
+  { n: 5,  neg: 5,  pos: 5,  chg: "0", ctrl: false, turb: 0.18, sed: 30, eq: true },
+  { n: 6,  neg: 6,  pos: 4,  chg: "−", ctrl: false, turb: 0.66, sed: 15 },
+  { n: 7,  neg: 7,  pos: 3,  chg: "−", ctrl: false, turb: 0.35, sed: 7  },
+  { n: 8,  neg: 8,  pos: 2,  chg: "−", ctrl: false, turb: 0.20, sed: 3  },
+  { n: 9,  neg: 9,  pos: 1,  chg: "−", ctrl: false, turb: 0.13, sed: 2  },
+  { n: 10, neg: 10, pos: 0,  chg: "−", ctrl: true,  turb: 0.08, sed: 0  },
+  { n: 11, neg: 0,  pos: 10, chg: "+", ctrl: true,  turb: 0.08, sed: 0  }
+];
+
+/* ============ HOLAT (STATE) ============ */
+const S = {
+  stage: 1,
+  pen: { 1: 0, 2: 0, 3: 0 },
+  events: [],
+  q: {},
+  quiz: {},
+  // 1-bosqich
+  s1: {
+    sol: "As2S3",
+    eleIdx: 0,
+    flaskFilled: false,
+    buretteLoaded: false,
+    vol: 0,
+    rec: {}, // id -> { v, gammaN, gammaM }
+    swirl: 0,
+    drops: [],
+    overWarned: false
+  },
+  // 2-bosqich
+  s2: {
+    solAdded: false,
+    waterAdded: false,
+    eleAdded: { KCl: false, K2SO4: false, K3FeCN: false },
+    shaken: false,
+    waitProg: 0, // 0..1 (1 soat)
+    waiting: false,
+    waited: false,
+    selSeries: 0,
+    selTube: null,
+    pickedThreshold: { KCl: null, K2SO4: null, K3FeCN: null },
+    deducedCharge: null,
+    deducedIon: null,
+    shakeT: 0
+  },
+  // 3-bosqich
+  s3: {
+    sub: "A", // "A" or "B"
+    // Part A
+    aFe: false, aAs: false, aShaken: false,
+    aWaitProg: 0, aWaiting: false, aWaited: false,
+    aPickedEq: null, aShakeT: 0,
+    // Part B
+    bNeg: false, bPos: false, bShaken: false,
+    bSettled: 0, bSettling: false, bDoneSettle: false,
+    bFramed: null, bShakeT: 0, bSelTube: null
+  }
+};
+
+/* ============ SAVOLLAR ============ */
+const QS = {
+  1: [
+    {
+      id: "q1a",
+      q: "Shultse–Gardi qoidasiga koʻra, koagullovchi ion valentligi z=1 dan z=3 ga ortganda koagullanish ostonasi (γ) taxminan necha marta kamayadi?",
+      o: [
+        "γ ~ 1/z⁶ boʻlgani uchun 3⁶ = 729 marta kamayadi",
+        "3 marta kamayadi (chiziqli bogʻliqlik)",
+        "9 marta kamayadi (1/z²)",
+        "Koagullanish ostonasi ion valentligiga bogʻliq emas"
+      ],
+      a: 0
+    },
+    {
+      id: "q1b",
+      q: "Manfiy zaryadlangan As₂S₃ zolini AlCl₃, CaCl₂ va NaCl eritmalari bilan koagullaganda koagullovchi ionlar qaysilar?",
+      o: [
+        "Kationlar: Al³⁺, Ca²⁺, Na⁺ (zarracha zaryadiga qarama-qarshi ishorali ionlar)",
+        "Faqat Cl⁻ anioni",
+        "H⁺ va OH⁻ ionlari",
+        "Elektrolitning ikkala ioni bir xil taʼsir koʻrsatadi"
+      ],
+      a: 0
+    }
+  ],
+  2: [
+    {
+      id: "q2a",
+      q: "KCl (1 N), K₂SO₄ (0,01 N) va K₃[Fe(CN)₆] (0,001 N) taʼsirida Fe(OH)₃ zolining ostonasi keskin kamayishi nimani isbotlaydi?",
+      o: [
+        "Koagullovchi ion — anionlar (Cl⁻, SO₄²⁻, [Fe(CN)₆]³⁻), demak Fe(OH)₃ zoli musbat (+) zaryadlangan",
+        "K⁺ kationi zolni kuchli koagullaydi",
+        "Fe(OH)₃ zoli manfiy (−) zaryadlangan",
+        "Zolning zaryadi nolga teng"
+      ],
+      a: 0
+    },
+    {
+      id: "q2b",
+      q: "4-jadvalda barcha probirkalarda umumiy hajm (5 ml zol + suv + elektrolit) necha ml ga teng qilib olinadi va nima uchun?",
+      o: [
+        "10 ml; zolning barcha probirkalardagi konsentratsiyasi bir xil boʻlishi uchun",
+        "15 ml; suv koagullanishni tezlashtirishi uchun",
+        "5 ml; distillangan suv hajmi hisobga olinmaydi",
+        "20 ml; probirka toʻlib turishi uchun"
+      ],
+      a: 0
+    }
+  ],
+  3: [
+    {
+      id: "q3a",
+      q: "Fe(OH)₃ (+) va As₂S₃ (−) zollari ekvivalent nisbatda aralashtirilganda choʻkma ustidagi eritma qanday boʻladi?",
+      o: [
+        "Rangsiz va tiniq — ikkala zol ham toʻliq oʻzaro zaryadsizlanib choʻkmaga tushadi",
+        "Toʻq qizil rangda qoladi",
+        "Toʻq sariq rangda qoladi",
+        "Koagullanish umuman sodir boʻlmaydi"
+      ],
+      a: 0
+    },
+    {
+      id: "q3b",
+      q: "AgI(−) va AgI(+) zollarini aralashtirish tajribasida 10- va 11-probirkalar nima vazifani bajaradi?",
+      o: [
+        "Nazorat (kontrol) probirkalari — sof manfiy va sof musbat zollarning barqarorligini solishtirish uchun",
+        "Eng tez choʻkadigan probirkalar",
+        "Elektrolit konsentratsiyasini oʻlchash uchun",
+        "Ortiqcha suv quyiladigan probirkalar"
+      ],
+      a: 0
+    }
+  ]
+};
+
+const QUIZ = [
+  {
+    id: "z1",
+    q: "Koagullanish ostonasi (γ) qaysi formula bilan hisoblanadi?",
+    o: [
+      "γ = (C · Vₑ) / (V_zol + Vₑ)",
+      "γ = (V_zol + Vₑ) / (C · Vₑ)",
+      "γ = C · V_zol · Vₑ",
+      "γ = C / z"
+    ],
+    a: 0
+  },
+  {
+    id: "z2",
+    q: "Musbat zaryadlangan Fe(OH)₃ zolini eng kam konsentratsiyada koagullaydigan elektrolit qaysi?",
+    o: [
+      "K₃[Fe(CN)₆] (uch valentli [Fe(CN)₆]³⁻ anioni)",
+      "NaCl (bir valentli Cl⁻ anioni)",
+      "Na₂SO₄ (ikki valentli SO₄²⁻ anioni)",
+      "AlCl₃ (uch valentli Al³⁺ kationi)"
+    ],
+    a: 0
+  },
+  {
+    id: "z3",
+    q: "Koagullash qobiliyati (koagullash kuchi) koagullanish ostonasi bilan qanday bogʻlangan?",
+    o: [
+      "Teskari proporsional: P = 1 / γ (ostona qancha kichik boʻlsa, koagullash kuchi shuncha katta)",
+      "Toʻgʻri proporsional: P = γ",
+      "Kvadratik bogʻlangan: P = γ²",
+      "Oʻzaro bogʻliq emas"
+    ],
+    a: 0
+  },
+  {
+    id: "z4",
+    q: "Ikki qarama-qarshi zaryadli AgI zoli (mAgI·xAg⁺ + nAgI·eI⁻) aralashtirilganda x < e boʻlsa, hosil boʻlgan zarrachalar qanday zaryadga ega boʻladi?",
+    o: [
+      "Manfiy (−) zaryadga — ortiqcha I⁻ ionlari sirtda ustunlik qiladi",
+      "Musbat (+) zaryadga",
+      "Har doim neytral (0) boʻladi",
+      "Zaryad yoʻqolib, gaz ajraladi"
+    ],
+    a: 0
+  },
+  {
+    id: "z5",
+    q: "Gidrofob zollarga elektrolit qoʻshilganda koagullanishning fizik sababi nimada?",
+    o: [
+      "Qoʻsh elektr qavatining diffuz qismi siqiladi, ζ-potensial kritik qiymatdan pasayib zarrachalar yopishadi",
+      "Dispers faza suvda erib ketadi",
+      "Harorat keskin koʻtarilib zol qaynaydi",
+      "Zarrachalar oʻlchami kichrayib molekulyar eritma hosil boʻladi"
+    ],
+    a: 0
+  }
+];
+
+/* ============ YORDAMCHI FUNKSIYALAR ============ */
+function curSolObj() { return S1_SOLS[S.s1.sol]; }
+function curEleObj() { return S1_SOLS[S.s1.sol].ele[S.s1.eleIdx]; }
+function s1Count() { return Object.keys(S.s1.rec).length; }
+
+function pen(w, msg, once) {
+  if (once && S.events.some(e => e.once === once)) return;
+  S.pen[S.stage] = (S.pen[S.stage] || 0) + w;
+  S.events.push({ st: S.stage, msg, once });
+  LabUI.toast("⚠️ " + msg, "warn", 4000);
+  SFX.play("warn");
+}
+function okT(msg) { LabUI.toast("✓ " + msg, "ok", 2800); SFX.play("ok"); }
+
+function s1Done() { return s1Count() === 6 && QS[1].every(q => S.q[q.id] === q.a); }
+function s2Done() {
+  const thrOk = S2_SERIES.every(ser => S.s2.pickedThreshold[ser.id] === ser.firstTube);
+  return S.s2.waited && thrOk && S.s2.deducedCharge === "+" && S.s2.deducedIon === "anion" && QS[2].every(q => S.q[q.id] === q.a);
+}
+function s3ADone() { return S.s3.aWaited && S.s3.aPickedEq === 3; }
+function s3BDone() { return S.s3.bDoneSettle && S.s3.bFramed === 5; }
+function s3Done() { return s3ADone() && s3BDone() && QS[3].every(q => S.q[q.id] === q.a); }
+
+function total() {
+  // Stage 1: max 28 (6 titrations × 3.5 = 21, 2 Qs × 3.5 = 7)
+  let p1 = s1Count() * 3.5 + QS[1].filter(q => S.q[q.id] === q.a).length * 3.5;
+  p1 = clamp(Math.round(p1 - (S.pen[1] || 0)), 0, 28);
+
+  // Stage 2: max 24 (prep & wait 8, 3 thresholds × 2 = 6, charge & ion 4, 2 Qs × 3 = 6)
+  let p2 = (S.s2.solAdded ? 1.5 : 0) + (S.s2.waterAdded ? 1.5 : 0)
+    + Object.values(S.s2.eleAdded).filter(Boolean).length * 1
+    + (S.s2.waited ? 2 : 0)
+    + S2_SERIES.filter(ser => S.s2.pickedThreshold[ser.id] === ser.firstTube).length * 2
+    + (S.s2.deducedCharge === "+" ? 2 : 0) + (S.s2.deducedIon === "anion" ? 2 : 0)
+    + QS[2].filter(q => S.q[q.id] === q.a).length * 3;
+  p2 = clamp(Math.round(p2 - (S.pen[2] || 0)), 0, 24);
+
+  // Stage 3: max 28 (Part A: 11, Part B: 11, 2 Qs × 3 = 6)
+  let p3 = (S.s3.aFe ? 2 : 0) + (S.s3.aAs ? 2 : 0) + (S.s3.aWaited ? 4 : 0) + (S.s3.aPickedEq === 3 ? 3 : 0)
+    + (S.s3.bNeg ? 2 : 0) + (S.s3.bPos ? 2 : 0) + (S.s3.bDoneSettle ? 4 : 0) + (S.s3.bFramed === 5 ? 3 : 0)
+    + QS[3].filter(q => S.q[q.id] === q.a).length * 3;
+  p3 = clamp(Math.round(p3 - (S.pen[3] || 0)), 0, 28);
+
+  // Quiz: max 20 (5 × 4)
+  const pq = QUIZ.filter(q => S.quiz[q.id] === q.a).length * 4;
+  return { p1, p2, p3, pq, tot: clamp(p1 + p2 + p3 + pq, 0, 100) };
+}
+
+function renderTabs() {
+  const names = [
+    [1, "1. Shultse–Gardi", s1Done()],
+    [2, "2. Fe(OH)₃ ostonasi", s2Done()],
+    [3, "3. Oʻzaro koagullanish", s3Done()],
+    [4, "4. Hisobot", s1Done() && s2Done() && s3Done() && QUIZ.every(q => S.quiz[q.id] !== undefined)]
+  ];
+  el("tabs").innerHTML = names.map(([i, t, d]) =>
+    `<button class="${S.stage === i ? "cur" : ""} ${d ? "done" : ""}" onclick="goStage(${i})">${d ? "✓ " : ""}${t}</button>`
+  ).join("");
+  const sc = total();
+  el("chip").textContent = `${sc.tot} / 100 ball`;
+  const isDone = s1Done() && s2Done() && s3Done();
+  LabProgress.save(LAB_ID, sc.tot, isDone);
+}
+
+window.goStage = function (n) {
+  S.stage = n;
+  SFX.play("click");
+  renderAll();
+};
+
+/* ============ STAGE 1 AMALLAR ============ */
+window.s1SelectSol = function (k) {
+  if (S.s1.sol === k) return;
+  S.s1.sol = k;
+  S.s1.eleIdx = 0;
+  S.s1.flaskFilled = false;
+  S.s1.buretteLoaded = false;
+  S.s1.vol = 0;
+  S.s1.overWarned = false;
+  SFX.play("click");
+  renderAll();
+};
+window.s1SelectEle = function (idx) {
+  S.s1.eleIdx = idx;
+  S.s1.buretteLoaded = true;
+  S.s1.vol = 0;
+  S.s1.overWarned = false;
+  SFX.play("pour");
+  LabUI.toast(`Byuretkaga <b>${curEleObj().f} (${f1(curEleObj().cn, curEleObj().cn < 0.01 ? 3 : curEleObj().cn < 1 ? 2 : 1)} n)</b> quyildi.`, "ok", 2200);
+  renderAll();
+};
+window.s1PourSol = function () {
+  S.s1.flaskFilled = true;
+  S.s1.vol = 0;
+  S.s1.overWarned = false;
+  SFX.play("pipette");
+  LabUI.toast(`100 ml kolbaga pipetka bilan <b>25 ml ${curSolObj().name}</b> quyildi.`, "ok", 2200);
+  renderAll();
+};
+window.s1AddDrop = function (dv) {
+  if (!S.s1.flaskFilled) {
+    LabUI.toast("Avval 100 ml kolbaga 25 ml zol quying!", "warn");
+    SFX.play("warn");
+    return;
+  }
+  if (!S.s1.buretteLoaded) {
+    S.s1.buretteLoaded = true;
+  }
+  const ele = curEleObj();
+  if (S.s1.vol + dv > 50) return;
+  S.s1.vol = +(S.s1.vol + dv).toFixed(2);
+  S.s1.swirl = 1.0;
+  const count = dv >= 1 ? 3 : 1;
+  for (let i = 0; i < count; i++) {
+    S.s1.drops.push({ y: 274 - i * 16, v: 260 + i * 25 });
+  }
+  SFX.play(dv >= 1 ? "pour" : "drip");
+  const ratio = S.s1.vol / ele.vCrit;
+  if (ratio >= 1.0 && ratio < 1.0 + dv / ele.vCrit + 0.02) {
+    LabUI.toast(`🔬 <b>Koagullanish belgilari paydo boʻldi!</b> Zol loyqalandi (V = ${f1(S.s1.vol, 2)} ml). Natijani qayd eting!`, "ok", 3400);
+    SFX.play("bell");
+  } else if (ratio > 1.55 && !S.s1.overWarned) {
+    S.s1.overWarned = true;
+    pen(1, "Ortiqcha elektrolit quyib yuborildi — koagullanishning dastlabki belgisi oʻtib ketdi. Kolbani yangilab qayta titrlang!", "s1over_" + ele.id);
+  }
+  renderAll();
+};
+window.s1Record = function () {
+  const ele = curEleObj();
+  if (!S.s1.flaskFilled || S.s1.vol <= 0) return;
+  const ratio = S.s1.vol / ele.vCrit;
+  if (ratio < 0.94) {
+    LabUI.toast("Hali koagullanish boshlanmadi (zol tiniq). Ehtiyotlik bilan tomchilashda davom eting.", "warn");
+    SFX.play("warn");
+    return;
+  }
+  const V = S.s1.vol;
+  const gammaN = (ele.cn * 1000 * V) / (25 + V); // mmol-ekv/L
+  const gammaM = (ele.cM * V) / (25 + V);        // mmol/L
+  S.s1.rec[ele.id] = { v: V, gammaN, gammaM, z: ele.z, f: ele.f, ion: ele.ion, sol: S.s1.sol };
+  okT(`${ele.f} qayd etildi: V = ${f1(V, 2)} ml, γ = ${gammaN >= 10 ? f1(gammaN, 1) : gammaN >= 1 ? f1(gammaN, 2) : f1(gammaN, 3)} mmol-ekv/L`);
+  // Avtomatik keyingi o'lchanmagan elektrolitga taklif
+  const sol = curSolObj();
+  const nextIdx = sol.ele.findIndex(e => !S.s1.rec[e.id]);
+  if (nextIdx >= 0) {
+    S.s1.eleIdx = nextIdx;
+    S.s1.flaskFilled = false;
+    S.s1.buretteLoaded = false;
+    S.s1.vol = 0;
+    S.s1.overWarned = false;
+  } else {
+    const otherKey = S.s1.sol === "As2S3" ? "FeOH3" : "As2S3";
+    if (S1_SOLS[otherKey].ele.some(e => !S.s1.rec[e.id])) {
+      LabUI.toast(`<b>${sol.name}</b> uchun barcha 3 elektrolit oʻlchandi! Endi <b>${S1_SOLS[otherKey].name}</b> ga oʻting.`, "ok", 3800);
+    }
+  }
+  renderAll();
+};
+window.s1ResetRun = function () {
+  S.s1.vol = 0;
+  S.s1.overWarned = false;
+  S.s1.flaskFilled = true;
+  SFX.play("splash");
+  renderAll();
+};
+
+/* ============ STAGE 2 AMALLAR ============ */
+window.s2AddSol = function () {
+  S.s2.solAdded = true;
+  SFX.play("pipette");
+  okT("12 ta probirkaning har biriga 5 ml dan Fe(OH)₃ zoli quyildi.");
+  renderAll();
+};
+window.s2AddWater = function () {
+  if (!S.s2.solAdded) { LabUI.toast("Avval barcha probirkalarga 5 ml dan Fe(OH)₃ zolini quying.", "warn"); return; }
+  S.s2.waterAdded = true;
+  SFX.play("pour");
+  okT("Distillangan suv (4,5; 4; 3; 1 ml) jadval boʻyicha quyildi.");
+  renderAll();
+};
+window.s2AddEle = function (id) {
+  if (!S.s2.waterAdded) { LabUI.toast("Avval distillangan suvni jadval boʻyicha qoʻshing.", "warn"); return; }
+  S.s2.eleAdded[id] = true;
+  SFX.play("drip");
+  const ser = S2_SERIES.find(x => x.id === id);
+  okT(`${ser.label} (0,5; 1; 2; 4 ml) qoʻshildi.`);
+  renderAll();
+};
+window.s2Shake = function () {
+  if (!Object.values(S.s2.eleAdded).every(Boolean)) {
+    LabUI.toast("Avval barcha 3 ta elektrolit seriyasini probirkalarga qoʻshing!", "warn");
+    return;
+  }
+  S.s2.shaken = true;
+  S.s2.shakeT = 1.0;
+  SFX.play("shake");
+  okT("Barcha 12 probirka yaxshilab aralashtirildi! Endi 1 soat kuting.");
+  renderAll();
+};
+window.s2WaitHour = function () {
+  if (!S.s2.shaken) { LabUI.toast("Avval probirkalarni aralashtiring (chayqating)!", "warn"); return; }
+  if (S.s2.waiting || S.s2.waited) return;
+  S.s2.waiting = true;
+  S.s2.waitProg = 0;
+  SFX.play("tick");
+  renderPanel();
+};
+window.s2PickThr = function (serId, tubeNo) {
+  const ser = S2_SERIES.find(s => s.id === serId);
+  S.s2.pickedThreshold[serId] = tubeNo;
+  if (tubeNo === ser.firstTube) {
+    okT(`${ser.short}: ${tubeNo}-probirkada dastlabki loyqalanish — toʻgʻri!`);
+  } else {
+    pen(1, `${ser.short} seriyasida birinchi loyqalangan probirkani diqqat bilan tekshiring (${tubeNo}-probirka emas).`, "s2t_" + serId + "_" + tubeNo);
+  }
+  renderAll();
+};
+window.s2PickDeduction = function (kind, val) {
+  if (kind === "ion") {
+    S.s2.deducedIon = val;
+    if (val === "anion") okT("Toʻgʻri! K⁺ barcha tuzlarda bir xil, faqat anion valentligi (1→2→3) oʻzgarmoqda.");
+    else pen(1, "Eʼtibor bering: KCl, K₂SO₄, K₃[Fe(CN)₆] da kation (K⁺) bir xil, anion zaryadi ortib bormoqda!", "s2ion");
+  } else {
+    S.s2.deducedCharge = val;
+    if (val === "+") okT("Toʻgʻri! Anionlar (−) koagullovchi boʻlgani uchun Fe(OH)₃ zoli musbat (+) zaryadlangan!");
+    else pen(1, "Koagullovchi ion — manfiy anionlar; zol zarrachasi unga qarama-qarshi ishorali boʻladi!", "s2chg");
+  }
+  renderAll();
+};
+
+/* ============ STAGE 3 AMALLAR ============ */
+window.s3Sub = function (sub) {
+  S.s3.sub = sub;
+  SFX.play("click");
+  renderAll();
+};
+window.s3AAdd = function (which) {
+  if (which === "fe") {
+    S.s3.aFe = true;
+    SFX.play("pipette");
+    okT("6 ta probirkaga Fe(OH)₃ zoli (9; 7; 5; 3; 2; 1 ml) quyildi.");
+  } else {
+    if (!S.s3.aFe) { LabUI.toast("Avval Fe(OH)₃ zolini quying.", "warn"); return; }
+    S.s3.aAs = true;
+    SFX.play("pipette");
+    okT("6 ta probirkaga As₂S₃ zoli (1; 3; 5; 7; 8; 9 ml) quyildi.");
+  }
+  renderAll();
+};
+window.s3AShake = function () {
+  if (!S.s3.aAs) { LabUI.toast("Avval ikkala zolni ham probirkalarga quying.", "warn"); return; }
+  S.s3.aShaken = true;
+  S.s3.aShakeT = 1.0;
+  SFX.play("shake");
+  okT("Probirkalar chayqatildi! Endi 2 soat tinch qoʻying.");
+  renderAll();
+};
+window.s3AWait = function () {
+  if (!S.s3.aShaken || S.s3.aWaiting || S.s3.aWaited) return;
+  S.s3.aWaiting = true;
+  S.s3.aWaitProg = 0;
+  SFX.play("tick");
+  renderPanel();
+};
+window.s3APickEq = function (n) {
+  S.s3.aPickedEq = n;
+  if (n === 3) okT("Toʻgʻri! 3-probirkada (5 ml + 5 ml) choʻkma ustidagi eritma rangsiz va tiniq — toʻliq oʻzaro koagullanish!");
+  else pen(1, `${n}-probirkada ortiqcha zol tufayli ustki eritma rangli qolgan. Rangsiz tiniq eritmali probirkani toping!`, "s3a_" + n);
+  renderAll();
+};
+
+window.s3BAdd = function (which) {
+  if (which === "neg") {
+    S.s3.bNeg = true;
+    SFX.play("pour");
+    okT("1–10-probirkalarga manfiy AgI(−) zoli (1 dan 10 ml gacha) quyildi. 11-probirka boʻsh qoldirildi.");
+  } else {
+    if (!S.s3.bNeg) { LabUI.toast("Avval manfiy AgI(−) zolini quying.", "warn"); return; }
+    S.s3.bPos = true;
+    SFX.play("pour");
+    okT("Musbat AgI(+) zoli (9 dan 1 ml gacha, 11-nazoratga 10 ml) quyildi — har birida jami 10 ml!");
+  }
+  renderAll();
+};
+window.s3BShake = function () {
+  if (!S.s3.bPos) { LabUI.toast("Avval ikkala AgI zolini ham quying.", "warn"); return; }
+  S.s3.bShaken = true;
+  S.s3.bShakeT = 1.0;
+  S.s3.bSettling = true;
+  S.s3.bSettled = 0;
+  SFX.play("shake");
+  LabUI.toast("Probirkalar chayqatildi — dispers fazaning tez choʻkishini kuzating!", "ok", 2800);
+  renderPanel();
+};
+window.s3BFramed = function (n) {
+  if (!S.s3.bDoneSettle) { LabUI.toast("Avval probirkalarni chayqating va choʻkishni kuzating.", "warn"); return; }
+  S.s3.bFramed = n;
+  if (n === 5) okT("Ajoyib! 5-probirka (5 ml AgI⁻ + 5 ml AgI⁺) ramkaga olindi — ekvivalent oʻzaro koagullanish!");
+  else pen(1, `${n}-probirkada zollardan biri ortiqcha. Eng tez va toʻliq choʻkkan probirkani ramkaga oling!`, "s3b_" + n);
+  renderAll();
+};
+
+/* ============ SAVOL VA TEST JAVOBLARI ============ */
+window.ansQ = function (st, id, idx) {
+  const q = QS[st].find(x => x.id === id);
+  if (!q || S.q[id] === q.a) return;
+  S.q[id] = idx;
+  if (idx === q.a) { okT("Toʻgʻri javob!"); }
+  else { SFX.play("err"); LabUI.toast("Notoʻgʻri — qayta oʻylab koʻring.", "err", 2200); }
+  renderAll();
+};
+window.ansQuiz = function (id, idx) {
+  const q = QUIZ.find(x => x.id === id);
+  if (!q || S.quiz[id] !== undefined) return;
+  S.quiz[id] = idx;
+  if (idx === q.a) { okT("Toʻgʻri!"); }
+  else { SFX.play("err"); LabUI.toast("Notoʻgʻri javob.", "err", 2000); }
+  renderAll();
+};
+
+function renderQBlock(st) {
+  return `<div class="box"><h4>Nazorat savollari</h4>` + QS[st].map((q, qi) => {
+    const order = shuf(q.o.length, st * 31 + qi * 17 + 7);
+    const chosen = S.q[q.id];
+    const solved = chosen === q.a;
+    return `<div class="q"><p>${qi + 1}. ${q.q}</p>` + order.map(orig => {
+      let cls = "";
+      if (chosen === orig) cls = orig === q.a ? "right" : "wrong";
+      else if (solved && orig === q.a) cls = "right";
+      return `<button class="${cls}" ${solved ? "disabled" : ""} onclick="ansQ(${st},'${q.id}',${orig})">${q.o[orig]}</button>`;
+    }).join("") + `</div>`;
+  }).join("") + `</div>`;
+}
+
+/* ============ SVG LAB SAHNASI ============ */
+function benchDefs() {
+  return `<defs>
+    <linearGradient id="wallG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#dfecea"/><stop offset="100%" stop-color="#c5dad7"/>
+    </linearGradient>
+    <linearGradient id="benchG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5d777a"/><stop offset="18%" stop-color="#445c60"/><stop offset="100%" stop-color="#2c3f42"/>
+    </linearGradient>
+    <linearGradient id="woodG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#c99357"/><stop offset="100%" stop-color="#8c5a2b"/>
+    </linearGradient>
+    <linearGradient id="glassShine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#fff" stop-opacity=".55"/>
+      <stop offset="22%" stop-color="#fff" stop-opacity=".08"/>
+      <stop offset="85%" stop-color="#0f2e33" stop-opacity=".06"/>
+      <stop offset="100%" stop-color="#fff" stop-opacity=".35"/>
+    </linearGradient>
+    <linearGradient id="metalG" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#607378"/><stop offset="45%" stop-color="#cfdadc"/><stop offset="100%" stop-color="#4b5d61"/>
+    </linearGradient>
+    <clipPath id="flaskClip">
+      <path d="M475 348 L475 390 L422 486 Q417 498 430 500 L570 500 Q583 498 578 486 L525 390 L525 348 Z"/>
+    </clipPath>
+  </defs>`;
+}
+
+function benchBG(titleTxt, subTxt) {
+  let g = `<rect width="1000" height="475" fill="url(#wallG)"/>`;
+  // Subtle lab tiles
+  for (let x = 0; x <= 1000; x += 64) g += `<line x1="${x}" y1="0" x2="${x}" y2="475" stroke="#fff" stroke-opacity=".22"/>`;
+  for (let y = 0; y <= 475; y += 64) g += `<line x1="0" y1="${y}" x2="1000" y2="${y}" stroke="#fff" stroke-opacity=".22"/>`;
+  // Header placard on wall
+  g += `<rect x="24" y="18" width="490" height="54" rx="12" fill="#0f2e33" fill-opacity=".9"/>
+    <text x="40" y="42" fill="#fff" font-size="16" font-weight="800">${titleTxt}</text>
+    <text x="40" y="61" fill="#9fd6cd" font-size="11.5">${subTxt}</text>`;
+  // Benchtop
+  g += `<rect x="0" y="472" width="1000" height="128" fill="url(#benchG)"/>
+    <rect x="0" y="472" width="1000" height="8" fill="#7c989b"/>`;
+  return g;
+}
+
+function drawClock(cx, cy, r, prog, label) {
+  const ang = -Math.PI / 2 + prog * Math.PI * 2;
+  const mx = cx + Math.cos(ang) * (r - 9);
+  const my = cy + Math.sin(ang) * (r - 9);
+  const hx = cx + Math.cos(-Math.PI / 2 + prog * Math.PI / 6) * (r - 16);
+  const hy = cy + Math.sin(-Math.PI / 2 + prog * Math.PI / 6) * (r - 16);
+  return `<g>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="#fff" stroke="#1b484f" stroke-width="4"/>
+    <circle cx="${cx}" cy="${cy}" r="${r - 4}" fill="none" stroke="#dce8e6" stroke-width="1"/>
+    ${[0,1,2,3,4,5,6,7,8,9,10,11].map(k => {
+      const a = k * Math.PI / 6;
+      return `<line x1="${cx + Math.cos(a)*(r-6)}" y1="${cy + Math.sin(a)*(r-6)}" x2="${cx + Math.cos(a)*(r-2)}" y2="${cy + Math.sin(a)*(r-2)}" stroke="#1b484f" stroke-width="${k%3===0?2:1}"/>`;
+    }).join("")}
+    <line x1="${cx}" y1="${cy}" x2="${hx}" y2="${hy}" stroke="#132629" stroke-width="3" stroke-linecap="round"/>
+    <line x1="${cx}" y1="${cy}" x2="${mx}" y2="${my}" stroke="#e89b3c" stroke-width="2.2" stroke-linecap="round"/>
+    <circle cx="${cx}" cy="${cy}" r="3" fill="#0f2e33"/>
+    <rect x="${cx - 48}" y="${cy + r + 6}" width="96" height="22" rx="6" fill="#0f2e33"/>
+    <text x="${cx}" y="${cy + r + 21}" text-anchor="middle" fill="#9bf2c8" font-size="11.5" font-family="JetBrains Mono,monospace" font-weight="700">${label}</text>
+  </g>`;
+}
+
+function drawStage1() {
+  const sol = curSolObj();
+  const ele = curEleObj();
+  const ratio = S.s1.flaskFilled ? S.s1.vol / ele.vCrit : 0;
+  // Turbidity 0..1
+  const turb = !S.s1.flaskFilled ? 0 : ratio < 0.72 ? 0.04 : ratio < 1.0 ? lerp(0.04, 0.45, (ratio - 0.72) / 0.28) : clamp(0.55 + (ratio - 1.0) * 0.8, 0.55, 1.0);
+  const burY = 104 + (S.s1.vol / 50) * 145; // 50 ml burette liquid top
+
+  let s = benchDefs() + benchBG("1-bosqich · Shultse–Gardi qoidasi (3-jadval)", "25 ml gidrofob zolni 50 ml byuretkadan elektrolit bilan tomchilab koagullash");
+
+  // Left shelf: 2 sol bottles + 3 electrolyte bottles
+  s += `<rect x="34" y="295" width="268" height="14" rx="4" fill="url(#woodG)"/>`;
+  // Sol bottles on bench left
+  const solKeys = ["As2S3", "FeOH3"];
+  solKeys.forEach((k, i) => {
+    const bx = 66 + i * 112;
+    const so = S1_SOLS[k];
+    const act = S.s1.sol === k;
+    s += `<g class="clk ${act ? "glow" : ""}" onclick="s1SelectSol('${k}')">
+      <rect x="${bx}" y="196" width="76" height="99" rx="12" fill="#e9f4f2" stroke="${act ? "#e89b3c" : "#3a5659"}" stroke-width="${act ? 3 : 1.8}"/>
+      <rect x="${bx + 22}" y="176" width="32" height="22" rx="4" fill="#d9e8e6" stroke="#3a5659" stroke-width="1.6"/>
+      <rect x="${bx + 19}" y="168" width="38" height="10" rx="3" fill="#2c4448"/>
+      <rect x="${bx + 4}" y="220" width="68" height="71" rx="8" fill="${so.col}" fill-opacity=".88"/>
+      <rect x="${bx + 4}" y="196" width="68" height="99" rx="10" fill="url(#glassShine)"/>
+      <rect x="${bx + 8}" y="236" width="60" height="38" rx="4" fill="#fff" fill-opacity=".92"/>
+      <text x="${bx + 38}" y="253" text-anchor="middle" font-size="12" font-weight="800" fill="#132629">${k === "As2S3" ? "As₂S₃" : "Fe(OH)₃"}</text>
+      <text x="${bx + 38}" y="268" text-anchor="middle" font-size="10" font-weight="700" fill="${k === "As2S3" ? "#9a6c00" : "#9c2512"}">zol (${so.charge})</text>
+    </g>`;
+  });
+
+  // 3 electrolyte bottles on bench below shelf
+  sol.ele.forEach((e, i) => {
+    const bx = 46 + i * 88;
+    const act = S.s1.eleIdx === i && S.s1.buretteLoaded;
+    const done = Boolean(S.s1.rec[e.id]);
+    s += `<g class="clk ${act ? "glow" : ""}" onclick="s1SelectEle(${i})">
+      <rect x="${bx}" y="388" width="68" height="84" rx="10" fill="#eef6f7" stroke="${done ? "#1f9d6b" : act ? "#e89b3c" : "#3a5659"}" stroke-width="${act || done ? 2.6 : 1.6}"/>
+      <rect x="${bx + 20}" y="370" width="28" height="20" rx="3" fill="#dceaea" stroke="#3a5659" stroke-width="1.5"/>
+      <rect x="${bx + 17}" y="363" width="34" height="9" rx="3" fill="#1b484f"/>
+      <rect x="${bx + 4}" y="410" width="60" height="58" rx="6" fill="${e.f.includes("Fe") ? "#f4df7a" : "#cce8f4"}" fill-opacity=".68"/>
+      <rect x="${bx + 6}" y="418" width="56" height="42" rx="4" fill="#fff" fill-opacity=".93"/>
+      <text x="${bx + 34}" y="434" text-anchor="middle" font-size="10.2" font-weight="800" fill="#132629">${e.f}</text>
+      <text x="${bx + 34}" y="447" text-anchor="middle" font-size="9.2" font-family="JetBrains Mono,monospace" fill="#587276">${f1(e.cn, e.cn < 0.01 ? 3 : e.cn < 1 ? 2 : 1)} n</text>
+      <text x="${bx + 34}" y="457" text-anchor="middle" font-size="8.8" font-weight="700" fill="${done ? "#1f9d6b" : "#1b484f"}">${done ? "✓ qayd" : "z=" + e.z}</text>
+    </g>`;
+  });
+
+  // Retort stand + 50 ml burette (center x=500)
+  s += `<rect x="382" y="492" width="236" height="16" rx="5" fill="#223538"/>
+    <rect x="404" y="64" width="12" height="432" rx="3" fill="url(#metalG)"/>
+    <rect x="414" y="152" width="76" height="10" rx="3" fill="#3a4f52"/>
+    <rect x="484" y="146" width="32" height="22" rx="4" fill="#2c3e41"/>
+    <rect x="414" y="230" width="76" height="10" rx="3" fill="#3a4f52"/>
+    <rect x="484" y="224" width="32" height="22" rx="4" fill="#2c3e41"/>`;
+
+  // Burette glass tube (x=491..509, y=94..272)
+  s += `<g>
+    <rect x="491" y="92" width="18" height="176" rx="2" fill="#f3fafb" fill-opacity=".85" stroke="#2c4a4e" stroke-width="1.8"/>`;
+  if (S.s1.buretteLoaded) {
+    s += `<rect x="492.5" y="${burY}" width="15" height="${267 - burY}" fill="${ele.f.includes("Fe") ? "#f0d768" : "#9fd5f2"}" fill-opacity=".75"/>
+      <ellipse cx="500" cy="${burY}" rx="7.5" ry="2.2" fill="#5aa8d6" fill-opacity=".7"/>`;
+  }
+  // Graduation ticks 0..50 ml
+  for (let ml = 0; ml <= 50; ml += 5) {
+    const ty = 104 + (ml / 50) * 145;
+    s += `<line x1="491" y1="${ty}" x2="${ml % 10 === 0 ? 500 : 496}" y2="${ty}" stroke="#132629" stroke-width="1"/>`;
+    if (ml % 10 === 0) s += `<text x="487" y="${ty + 3}" text-anchor="end" font-size="8.5" font-family="JetBrains Mono,monospace" fill="#132629">${ml}</text>`;
+  }
+  // Burette tip & clickable stopcock
+  s += `<path d="M495 268 L505 268 L502 288 L498 288 Z" fill="#e6f3f5" stroke="#2c4a4e" stroke-width="1.4"/>
+    <g class="clk" onclick="s1AddDrop(0.1)" title="Tomchilash (+0,1 ml)">
+      <rect x="485" y="266" width="30" height="8" rx="3" fill="#e89b3c" stroke="#7d4a09" stroke-width="1.2"/>
+      <circle cx="500" cy="270" r="5" fill="#fff" stroke="#7d4a09" stroke-width="1.4"/>
+    </g>
+    <text x="518" y="114" font-size="11" font-weight="700" fill="#132629">50 ml byuretka</text>
+    <text x="518" y="130" font-size="11" font-family="JetBrains Mono,monospace" fill="#1b484f">${S.s1.buretteLoaded ? ele.f + " (" + f1(ele.cn, ele.cn < 0.01 ? 3 : ele.cn < 1 ? 2 : 1) + " n)" : "Boʻsh — elektrolit tanlang"}</text>
+    <rect x="518" y="140" width="94" height="24" rx="6" fill="#0f2e33"/>
+    <text x="565" y="156" text-anchor="middle" font-size="12" font-family="JetBrains Mono,monospace" font-weight="700" fill="#9bf2c8">V = ${f1(S.s1.vol, 2)} ml</text>
+  </g>`;
+
+  // Falling drops layer
+  s += `<g id="s1Drops"></g>`;
+
+  // White contrast tile + 100 ml Conical Flask
+  s += `<rect x="434" y="486" width="132" height="10" rx="3" fill="#f7fbfa" stroke="#b9cecb"/>`;
+  const liqH = S.s1.flaskFilled ? clamp(52 + S.s1.vol * 1.4, 52, 84) : 0;
+  const liqTop = 500 - liqH;
+  s += `<g class="clk" onclick="${S.s1.flaskFilled ? "s1AddDrop(0.1)" : "s1PourSol()"}" id="s1FlaskG">`;
+  if (S.s1.flaskFilled) {
+    s += `<g clip-path="url(#flaskClip)">
+      <rect x="415" y="${liqTop}" width="170" height="${liqH + 4}" fill="${sol.col}" fill-opacity="${0.82 + turb * 0.16}"/>`;
+    // Cloudiness overlay
+    if (turb > 0.1) {
+      s += `<rect x="415" y="${liqTop}" width="170" height="${liqH + 4}" fill="#fff" fill-opacity="${(turb * 0.34).toFixed(2)}"/>`;
+    }
+    // Floccules appear when approaching/past coagulation threshold
+    if (ratio >= 0.88) {
+      const nFloc = Math.min(48, Math.floor((ratio - 0.82) * 58));
+      const settle = ratio > 1.3 ? clamp((ratio - 1.3) * 18, 0, 22) : 0;
+      for (let i = 0; i < nFloc; i++) {
+        const fx = 434 + ((i * 37) % 132);
+        const fy = clamp(liqTop + 8 + ((i * 29) % Math.max(14, liqH - 12)) + settle, liqTop + 6, 496);
+        const fr = 1.6 + (i % 3) * 0.8 + (ratio >= 1 ? 0.7 : 0);
+        s += `<circle cx="${fx}" cy="${fy}" r="${fr.toFixed(1)}" fill="${sol.flocCol}" fill-opacity="${clamp(0.45 + (ratio - 0.85) * 0.7, 0.3, 0.92).toFixed(2)}"/>`;
+      }
+      if (ratio > 1.35) {
+        const sedH = clamp((ratio - 1.35) * 14, 3, 16);
+        s += `<rect x="418" y="${500 - sedH}" width="164" height="${sedH}" fill="${sol.colDark}" fill-opacity=".85"/>`;
+      }
+    }
+    s += `<ellipse cx="500" cy="${liqTop}" rx="${28 + (500 - liqTop) * 0.25}" ry="3.2" fill="${sol.colDark}" fill-opacity=".32"/>
+    </g>`;
+  }
+  // Conical flask glass outline
+  s += `<path d="M475 344 L475 390 L422 486 Q417 498 430 500 L570 500 Q583 498 578 486 L525 390 L525 344" fill="url(#glassShine)" stroke="#264549" stroke-width="2.4" stroke-linejoin="round"/>
+    <ellipse cx="500" cy="344" rx="25" ry="4.5" fill="#e6f2f1" stroke="#264549" stroke-width="2"/>
+    <text x="500" y="472" text-anchor="middle" font-size="11.5" font-weight="800" fill="${S.s1.flaskFilled ? (S.s1.sol === "FeOH3" ? "#fff" : "#3a2800") : "#587276"}">${S.s1.flaskFilled ? `25 ml ${sol.name}` : "Boʻsh kolba (bosing)"}</text>
+  </g>`;
+
+  // Right side: Live optical turbidity monitor & 3-jadval dashboard on wall
+  const coagHit = ratio >= 1.0;
+  s += `<g transform="translate(656, 86)">
+    <rect width="318" height="148" rx="14" fill="#0f2e33" stroke="#24575f" stroke-width="2"/>
+    <text x="16" y="26" fill="#9fd6cd" font-size="11" font-weight="700" letter-spacing="1">OPTIK LOYQALIK DATCHIGI (τ)</text>
+    <text x="16" y="58" fill="${coagHit ? "#ffcf66" : "#9bf2c8"}" font-size="26" font-family="JetBrains Mono,monospace" font-weight="800">${Math.round(turb * 100)}%</text>
+    <text x="108" y="53" fill="#fff" font-size="12.5" font-weight="700">${!S.s1.flaskFilled ? "Zol quyilmagan" : ratio < 0.78 ? "Tiniq kolloid zol" : ratio < 1.0 ? "Yengil opalesensiya..." : ratio > 1.5 ? "Kuchli choʻkish (ortiqcha)" : "KOAGULLANISH BOSHLANDI!"}</text>
+    <rect x="16" y="72" width="286" height="14" rx="7" fill="#1d444b"/>
+    <rect x="16" y="72" width="${Math.round(turb * 286)}" height="14" rx="7" fill="${coagHit ? "#e89b3c" : "#22b583"}"/>
+    <line x1="${16 + 0.55 * 286}" y1="68" x2="${16 + 0.55 * 286}" y2="90" stroke="#fff" stroke-dasharray="3 2" stroke-width="1.5"/>
+    <text x="${16 + 0.55 * 286}" y="102" text-anchor="middle" fill="#ffcf66" font-size="9.5">Ostona chegarasi</text>
+    <text x="16" y="128" fill="#cde3df" font-size="11">Koagullovchi ion: <tspan fill="#fff" font-weight="700">${ele.ion} (z=${ele.z})</tspan></text>
+    <text x="210" y="128" fill="#cde3df" font-size="11">Qayd: <tspan fill="#9bf2c8" font-weight="700">${s1Count()}/6</tspan></text>
+  </g>`;
+
+  // Mini 3-jadval live card on right
+  s += `<g transform="translate(656, 250)">
+    <rect width="318" height="212" rx="14" fill="#ffffff" fill-opacity=".95" stroke="#c3d6d3" stroke-width="1.5"/>
+    <text x="14" y="22" font-size="12" font-weight="800" fill="#132629">3-JADVAL · OʻLCHOV NATIJALARI</text>
+    <line x1="12" y1="30" x2="306" y2="30" stroke="#d4e1df"/>
+    <text x="14" y="45" font-size="10" font-weight="700" fill="#587276">Zol / Elektrolit</text>
+    <text x="168" y="45" text-anchor="end" font-size="10" font-weight="700" fill="#587276">Kons.</text>
+    <text x="224" y="45" text-anchor="end" font-size="10" font-weight="700" fill="#587276">Vₑ, ml</text>
+    <text x="304" y="45" text-anchor="end" font-size="10" font-weight="700" fill="#587276">γ, mgek/L</text>`;
+  const rows = [
+    ...S1_SOLS.As2S3.ele.map(e => ({ sol: "As₂S₃", ...e })),
+    ...S1_SOLS.FeOH3.ele.map(e => ({ sol: "Fe(OH)₃", ...e }))
+  ];
+  rows.forEach((r, idx) => {
+    const ry = 66 + idx * 24;
+    const rec = S.s1.rec[r.id];
+    const isCur = r.id === ele.id;
+    if (isCur) s += `<rect x="8" y="${ry - 14}" width="302" height="21" rx="5" fill="#fff4df"/>`;
+    s += `<text x="14" y="${ry}" font-size="10.5" font-weight="${isCur ? 700 : 500}" fill="#132629">${r.sol} · ${r.f}</text>
+      <text x="168" y="${ry}" text-anchor="end" font-size="10" font-family="JetBrains Mono,monospace" fill="#587276">${f1(r.cn, r.cn < 0.01 ? 3 : r.cn < 1 ? 2 : 1)} n</text>
+      <text x="224" y="${ry}" text-anchor="end" font-size="10.5" font-family="JetBrains Mono,monospace" font-weight="700" fill="${rec ? "#1f9d6b" : "#99aba8"}">${rec ? f1(rec.v, 2) : "—"}</text>
+      <text x="304" y="${ry}" text-anchor="end" font-size="10.5" font-family="JetBrains Mono,monospace" font-weight="700" fill="${rec ? "#0f2e33" : "#99aba8"}">${rec ? (rec.gammaN >= 10 ? f1(rec.gammaN, 1) : rec.gammaN >= 1 ? f1(rec.gammaN, 2) : f1(rec.gammaN, 3)) : "—"}</text>`;
+  });
+  s += `</g>`;
+  return s;
+}
+
+function drawStage2() {
+  let s = benchDefs() + benchBG("2-bosqich · Fe(OH)₃ zolining koagullanish ostonasi (4-jadval)", "12 ta probirka (3 elektrolit × 4 suyultirish): 5 ml zol + H₂O + elektrolit = 10 ml");
+
+  // Clock top right
+  const mins = Math.round(S.s2.waitProg * 60);
+  s += drawClock(902, 76, 40, S.s2.waitProg, S.s2.waited ? "60 min ✓" : S.s2.waiting ? `${mins} min...` : "0 min");
+
+  // 3 Wooden test tube racks side-by-side (each 290px wide)
+  const shakeDx = S.s2.shakeT > 0 ? Math.sin(S.s2.shakeT * 36) * 5 * S.s2.shakeT : 0;
+  S2_SERIES.forEach((ser, si) => {
+    const rx = 34 + si * 316;
+    const eleIn = S.s2.eleAdded[ser.id];
+    const picked = S.s2.pickedThreshold[ser.id];
+
+    s += `<g transform="translate(${rx + shakeDx}, 178)">
+      <rect x="0" y="-22" width="286" height="28" rx="8" fill="${si === S.s2.selSeries ? "#0f2e33" : "#254c52"}"/>
+      <text x="143" y="-4" text-anchor="middle" fill="#fff" font-size="12.5" font-weight="700">${ser.label} (${ser.ion}, z=${ser.z})</text>
+      <!-- Wooden rack frame -->
+      <rect x="0" y="260" width="286" height="24" rx="5" fill="url(#woodG)" stroke="#6d431d" stroke-width="1.5"/>
+      <rect x="8" y="88" width="12" height="174" fill="url(#woodG)"/>
+      <rect x="266" y="88" width="12" height="174" fill="url(#woodG)"/>
+      <rect x="4" y="92" width="278" height="12" rx="3" fill="#b47e42" stroke="#6d431d"/>`;
+
+    S2_VOLS.forEach((v, ti) => {
+      const tx = 44 + ti * 60;
+      const totVol = (S.s2.solAdded ? v.sol : 0) + (S.s2.waterAdded ? v.w : 0) + (eleIn ? v.e : 0);
+      const cTubeN = (ser.cn * 1000 * v.e) / 10; // mmol-ekv/L
+      const over = cTubeN >= ser.gammaTrueN;
+      const strong = cTubeN >= ser.gammaTrueN * 1.9;
+      const wp = S.s2.waitProg;
+      const hLiq = (totVol / 10) * 145;
+      const yTop = 256 - hLiq;
+      const isPicked = picked === v.n;
+      const isFirst = v.n === ser.firstTube && S.s2.waited;
+
+      s += `<g class="clk" onclick="${S.s2.waited ? `s2PickThr('${ser.id}',${v.n})` : ""}">`;
+      // Liquid inside tube
+      if (totVol > 0) {
+        const supOp = S.s2.waited && strong ? lerp(0.86, 0.25, wp) : S.s2.waited && over ? lerp(0.86, 0.58, wp) : 0.84;
+        s += `<path d="M${tx - 15} ${yTop} L${tx + 15} ${yTop} L${tx + 15} 244 A15 15 0 0 1 ${tx - 15} 244 Z" fill="#b83b24" fill-opacity="${supOp.toFixed(2)}"/>`;
+        // Turbidity & flocculation after waiting
+        if (eleIn && wp > 0.08 && over) {
+          const sedH = (strong ? 28 : 14) * wp;
+          s += `<path d="M${tx - 14} ${258 - sedH} L${tx + 14} ${258 - sedH} L${tx + 14} 244 A14 14 0 0 1 ${tx - 14} 244 Z" fill="#631509" fill-opacity="${(0.85 * wp).toFixed(2)}"/>`;
+          // Floating floccules
+          const nf = strong ? 14 : 10;
+          for (let k = 0; k < nf; k++) {
+            const fx = tx - 10 + ((k * 7 + ti * 3) % 21);
+            const fy = lerp(yTop + 12 + ((k * 13) % 90), 246 - sedH * 0.5, wp * (strong ? 0.75 : 0.35));
+            s += `<circle cx="${fx}" cy="${fy}" r="${strong ? 2.3 : 1.7}" fill="#6e190b" fill-opacity="${(0.75 * wp).toFixed(2)}"/>`;
+          }
+        }
+      }
+      // Glass tube outline
+      s += `<path d="M${tx - 16} 56 L${tx - 16} 244 A16 16 0 0 0 ${tx + 16} 244 L${tx + 16} 56" fill="url(#glassShine)" stroke="${isPicked ? (v.n === ser.firstTube ? "#1f9d6b" : "#d64545") : "#2a4549"}" stroke-width="${isPicked ? 3 : 1.8}"/>
+        <ellipse cx="${tx}" cy="56" rx="16" ry="3.2" fill="#edf6f5" stroke="#2a4549" stroke-width="1.6"/>
+        <circle cx="${tx}" cy="34" r="11" fill="${isPicked ? (v.n === ser.firstTube ? "#1f9d6b" : "#d64545") : "#0f2e33"}"/>
+        <text x="${tx}" y="38" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">${v.n}</text>
+        <text x="${tx}" y="298" text-anchor="middle" fill="#eef6f5" font-size="9.5" font-family="JetBrains Mono,monospace">${f1(v.e, 1)} ml</text>
+        <text x="${tx}" y="311" text-anchor="middle" fill="${isFirst ? "#ffcf66" : "#bcd3d0"}" font-size="9" font-family="JetBrains Mono,monospace">${cTubeN >= 10 ? f1(cTubeN, 0) : cTubeN >= 1 ? f1(cTubeN, 1) : f1(cTubeN, 2)}</text>
+      </g>`;
+    });
+    s += `<text x="143" y="328" text-anchor="middle" fill="#9fd6cd" font-size="9.5">C (mmol-ekv/L) · 1 soatdan keyin loyqalangan birinchi probirkani bosing</text></g>`;
+  });
+
+  return s;
+}
+
+function drawStage3() {
+  if (S.s3.sub === "A") {
+    let s = benchDefs() + benchBG("3A-tajriba · Fe(OH)₃ (+) va As₂S₃ (−) oʻzaro koagullanishi (5-jadval)", "6 ta probirkada turli hajmiy nisbatlarda aralashtirish va 2 soatdan soʻng eritma rangini kuzatish");
+    const mins = Math.round(S.s3.aWaitProg * 120);
+    s += drawClock(902, 76, 40, S.s3.aWaitProg, S.s3.aWaited ? "2 soat ✓" : S.s3.aWaiting ? `${mins} min` : "0 min");
+
+    // Two stock sol flasks on left
+    s += `<g transform="translate(46, 260)">
+      <rect x="0" y="92" width="84" height="118" rx="14" fill="#eef6f5" stroke="#2c4a4e" stroke-width="2"/>
+      <rect x="5" y="122" width="74" height="83" rx="9" fill="#b83b24" fill-opacity=".88"/>
+      <rect x="10" y="140" width="64" height="40" rx="5" fill="#fff" fill-opacity=".93"/>
+      <text x="42" y="157" text-anchor="middle" font-size="11.5" font-weight="800" fill="#132629">Fe(OH)₃</text>
+      <text x="42" y="172" text-anchor="middle" font-size="10" font-weight="700" fill="#9e2412">musbat (+)</text>
+
+      <rect x="100" y="92" width="84" height="118" rx="14" fill="#eef6f5" stroke="#2c4a4e" stroke-width="2"/>
+      <rect x="105" y="122" width="74" height="83" rx="9" fill="#f2c63d" fill-opacity=".9"/>
+      <rect x="110" y="140" width="64" height="40" rx="5" fill="#fff" fill-opacity=".93"/>
+      <text x="142" y="157" text-anchor="middle" font-size="11.5" font-weight="800" fill="#132629">As₂S₃</text>
+      <text x="142" y="172" text-anchor="middle" font-size="10" font-weight="700" fill="#9a6b00">manfiy (−)</text>
+    </g>`;
+
+    // 6-tube wooden rack
+    const shakeDx = S.s3.aShakeT > 0 ? Math.sin(S.s3.aShakeT * 36) * 6 * S.s3.aShakeT : 0;
+    const wp = S.s3.aWaitProg;
+    s += `<g transform="translate(${274 + shakeDx}, 172)">
+      <rect x="0" y="276" width="676" height="26" rx="6" fill="url(#woodG)" stroke="#6d431d" stroke-width="1.6"/>
+      <rect x="12" y="96" width="14" height="182" fill="url(#woodG)"/>
+      <rect x="650" y="96" width="14" height="182" fill="url(#woodG)"/>
+      <rect x="6" y="102" width="664" height="14" rx="4" fill="#b47e42" stroke="#6d431d"/>`;
+
+    S3A_TUBES.forEach((t, i) => {
+      const tx = 88 + i * 100;
+      const totV = (S.s3.aFe ? t.fe : 0) + (S.s3.aAs ? t.as : 0);
+      const hLiq = (totV / 10) * 162;
+      const yTop = 272 - hLiq;
+      const picked = S.s3.aPickedEq === t.n;
+
+      s += `<g class="clk" onclick="${S.s3.aWaited ? `s3APickEq(${t.n})` : ""}">`;
+      if (totV > 0) {
+        // Unsettled mix color before wait -> transitions to supernatant + precipitate during wait
+        const mixCol = t.fe > t.as ? "#bf5c28" : t.fe === t.as ? "#cb7e26" : "#dfa22d";
+        const curSupCol = S.s3.aShaken && wp > 0.15 ? t.supCol : (S.s3.aAs ? mixCol : "#b83b24");
+        const curSupOp = S.s3.aShaken && wp > 0.15 ? lerp(0.86, t.supOp, wp) : 0.86;
+        s += `<path d="M${tx - 21} ${yTop} L${tx + 21} ${yTop} L${tx + 21} 254 A21 21 0 0 1 ${tx - 21} 254 Z" fill="${curSupCol}" fill-opacity="${curSupOp.toFixed(2)}"/>`;
+        if (S.s3.aFe && !S.s3.aAs) {
+          // Only Fe(OH)3
+        } else if (S.s3.aAs && !S.s3.aShaken) {
+          // Layered before shaking: yellow As2S3 layer on top
+          const hAs = (t.as / 10) * 162;
+          s += `<rect x="${tx - 21}" y="${yTop}" width="42" height="${hAs}" fill="#f2c63d" fill-opacity=".88"/>`;
+        } else if (S.s3.aShaken && wp > 0.05) {
+          const sedH = t.sedH * wp;
+          s += `<path d="M${tx - 20} ${273 - sedH} L${tx + 20} ${273 - sedH} L${tx + 20} 254 A20 20 0 0 1 ${tx - 20} 254 Z" fill="${t.sedCol}" fill-opacity="${(0.92 * wp).toFixed(2)}"/>`;
+          if (wp < 0.95) {
+            for (let k = 0; k < 10; k++) {
+              const fx = tx - 14 + ((k * 9) % 29);
+              const fy = lerp(yTop + 14 + ((k * 17) % 100), 262 - sedH * 0.4, wp);
+              s += `<circle cx="${fx}" cy="${fy}" r="2.2" fill="${t.sedCol}" fill-opacity="${(0.8 * (1 - wp * 0.4)).toFixed(2)}"/>`;
+            }
+          }
+        }
+      }
+      s += `<path d="M${tx - 22} 54 L${tx - 22} 254 A22 22 0 0 0 ${tx + 22} 254 L${tx + 22} 54" fill="url(#glassShine)" stroke="${picked ? (t.eq ? "#1f9d6b" : "#d64545") : "#244347"}" stroke-width="${picked ? 3.5 : 2}"/>
+        <ellipse cx="${tx}" cy="54" rx="22" ry="4" fill="#eef6f5" stroke="#244347" stroke-width="1.8"/>
+        <circle cx="${tx}" cy="30" r="13" fill="${picked ? (t.eq ? "#1f9d6b" : "#d64545") : "#0f2e33"}"/>
+        <text x="${tx}" y="35" text-anchor="middle" fill="#fff" font-size="12.5" font-weight="800">${t.n}</text>
+        <text x="${tx}" y="320" text-anchor="middle" fill="#fff" font-size="10.5" font-family="JetBrains Mono,monospace">${t.fe} + ${t.as} ml</text>
+        <text x="${tx}" y="336" text-anchor="middle" fill="${t.eq && S.s3.aWaited ? "#9bf2c8" : "#c6dbd8"}" font-size="9.5" font-weight="${t.eq && S.s3.aWaited ? 800 : 500}">${S.s3.aWaited ? (t.eq ? "Tiniq (0)" : t.fe > t.as ? "Qizgʻish (+)" : "Sariq (−)") : "Fe(+) + As(−)"}</text>
+      </g>`;
+    });
+    s += `</g>`;
+    return s;
+  } else {
+    // Part B: 11-tube AgI(-) + AgI(+) rack + dual burettes!
+    let s = benchDefs() + benchBG("3B-tajriba · Kumush yodid (AgI⁻ + AgI⁺) oʻzaro koagullanishi", "11 ta probirka (1–9 aralashma, 10 va 11 nazorat): tez choʻkkan probirkani topib ramkaga oling");
+
+    // Two 25 ml burettes overhead (left AgI-, right AgI+)
+    s += `<g>
+      <rect x="270" y="78" width="16" height="96" rx="2" fill="#f3f9fa" stroke="#2c4a4e" stroke-width="1.6"/>
+      <rect x="272" y="96" width="12" height="76" fill="#ebe7b5" fill-opacity=".8"/>
+      <text x="296" y="106" font-size="11.5" font-weight="800" fill="#132629">25 ml byuretka: AgI (−)</text>
+      <text x="296" y="122" font-size="10" fill="#587276">[mAgI]·nI⁻ (KI ortiqcha)</text>
+
+      <rect x="650" y="78" width="16" height="96" rx="2" fill="#f3f9fa" stroke="#2c4a4e" stroke-width="1.6"/>
+      <rect x="652" y="96" width="12" height="76" fill="#e6e5cc" fill-opacity=".8"/>
+      <text x="676" y="106" font-size="11.5" font-weight="800" fill="#132629">25 ml byuretka: AgI (+)</text>
+      <text x="676" y="122" font-size="10" fill="#587276">[mAgI]·nAg⁺ (AgNO₃ ortiqcha)</text>
+    </g>`;
+
+    const shakeDx = S.s3.bShakeT > 0 ? Math.sin(S.s3.bShakeT * 36) * 5 * S.s3.bShakeT : 0;
+    const sp = S.s3.bSettled;
+    s += `<g transform="translate(${36 + shakeDx}, 184)">
+      <rect x="0" y="264" width="928" height="24" rx="6" fill="url(#woodG)" stroke="#6d431d" stroke-width="1.6"/>
+      <rect x="10" y="96" width="12" height="170" fill="url(#woodG)"/>
+      <rect x="906" y="96" width="12" height="170" fill="url(#woodG)"/>
+      <rect x="4" y="102" width="920" height="12" rx="3" fill="#b47e42" stroke="#6d431d"/>`;
+
+    S3B_TUBES.forEach((t, i) => {
+      const tx = 58 + i * 81;
+      const totV = (S.s3.bNeg ? t.neg : 0) + (S.s3.bPos ? t.pos : 0);
+      const hLiq = (totV / 10) * 150;
+      const yTop = 260 - hLiq;
+      const framed = S.s3.bFramed === t.n;
+      const isCtrl = t.ctrl;
+
+      s += `<g class="clk" onclick="s3BFramed(${t.n})">`;
+      if (framed) {
+        s += `<rect x="${tx - 30}" y="12" width="60" height="304" rx="10" fill="#fff3f3" fill-opacity=".28" stroke="${t.eq ? "#1f9d6b" : "#d64545"}" stroke-width="3" stroke-dasharray="6 3"/>`;
+      }
+      if (totV > 0) {
+        // Pale opalescent yellow-cream AgI sol
+        const op = t.eq && sp > 0.2 ? lerp(0.75, 0.16, sp) : (0.55 + t.turb * 0.35);
+        s += `<path d="M${tx - 16} ${yTop} L${tx + 16} ${yTop} L${tx + 16} 245 A16 16 0 0 1 ${tx - 16} 245 Z" fill="#efe9b8" fill-opacity="${op.toFixed(2)}"/>`;
+        // Turbidity cloud
+        if (S.s3.bShaken && t.turb > 0.2 && !t.eq) {
+          s += `<path d="M${tx - 15} ${yTop + 4} L${tx + 15} ${yTop + 4} L${tx + 15} 245 A15 15 0 0 1 ${tx - 15} 245 Z" fill="#dcd386" fill-opacity="${(t.turb * 0.55 * sp).toFixed(2)}"/>`;
+        }
+        // Precipitate
+        if (S.s3.bShaken && sp > 0.05 && t.sed > 0) {
+          const sh = t.sed * sp;
+          s += `<path d="M${tx - 15} ${261 - sh} L${tx + 15} ${261 - sh} L${tx + 15} 245 A15 15 0 0 1 ${tx - 15} 245 Z" fill="#d9c968" fill-opacity="${(0.95 * sp).toFixed(2)}"/>`;
+          if (t.eq && sp < 0.95) {
+            for (let k = 0; k < 12; k++) {
+              const fx = tx - 11 + ((k * 7) % 23);
+              const fy = lerp(yTop + 14 + ((k * 13) % 90), 250 - sh * 0.5, sp);
+              s += `<circle cx="${fx}" cy="${fy}" r="2.2" fill="#c9b44a"/>`;
+            }
+          }
+        }
+      }
+      s += `<path d="M${tx - 17} 54 L${tx - 17} 245 A17 17 0 0 0 ${tx + 17} 245 L${tx + 17} 54" fill="url(#glassShine)" stroke="${framed ? (t.eq ? "#1f9d6b" : "#d64545") : isCtrl ? "#e89b3c" : "#244347"}" stroke-width="${framed ? 3 : 1.8}"/>
+        <ellipse cx="${tx}" cy="54" rx="17" ry="3.2" fill="#eef6f5" stroke="#244347" stroke-width="1.6"/>
+        <circle cx="${tx}" cy="32" r="11" fill="${framed ? (t.eq ? "#1f9d6b" : "#d64545") : isCtrl ? "#b87414" : "#0f2e33"}"/>
+        <text x="${tx}" y="36" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">${t.n}</text>
+        <text x="${tx}" y="302" text-anchor="middle" fill="#eef6f5" font-size="9.5" font-family="JetBrains Mono,monospace">${t.neg}/${t.pos}</text>
+        <text x="${tx}" y="317" text-anchor="middle" fill="${S.s3.bDoneSettle ? (t.chg === "0" ? "#9bf2c8" : "#ffcf66") : "#9ab6b3"}" font-size="11" font-weight="800">${S.s3.bDoneSettle ? (isCtrl ? `Naz(${t.chg})` : t.chg) : (isCtrl ? "Nazorat" : "− / +")}</text>
+      </g>`;
+    });
+    s += `</g>`;
+    return s;
+  }
+}
+
+function drawStage4() {
+  const sc = total();
+  let s = benchDefs() + benchBG("7-laboratoriya · Yakuniy xulosa va Shultse–Gardi grafigi", "Gidrofob zollarning koagullanish ostonasi va ikki kolloidning oʻzaro koagullanishi");
+
+  // Two side-by-side summary cards on SVG stage
+  s += `<g transform="translate(36, 94)">
+    <rect width="450" height="354" rx="16" fill="#fff" fill-opacity=".96" stroke="#c3d6d3" stroke-width="2"/>
+    <text x="20" y="30" font-size="14" font-weight="800" fill="#132629">Shultse–Gardi qoidasi: lg(γ) va ion valentligi (z)</text>
+    <text x="20" y="48" font-size="11" fill="#587276">γ = (C · Vₑ) / (25 + Vₑ), mmol-ekv/L · logarifmik shkalada taqqoslash</text>`;
+  const bars = [
+    ...S1_SOLS.As2S3.ele.map(e => ({ l: e.ion, rec: S.s1.rec[e.id], c: "#d99b16", grp: "As₂S₃" })),
+    ...S1_SOLS.FeOH3.ele.map(e => ({ l: e.ion, rec: S.s1.rec[e.id], c: "#b83b24", grp: "Fe(OH)₃" }))
+  ];
+  // Baseline y=296 (lg γ = -1.2), top y=82 (lg γ = 2.4)
+  s += `<line x1="56" y1="76" x2="56" y2="296" stroke="#587276" stroke-width="1.5"/>
+    <line x1="56" y1="296" x2="426" y2="296" stroke="#587276" stroke-width="1.5"/>`;
+  [-1, 0, 1, 2].forEach(lv => {
+    const yy = 296 - ((lv + 1.2) / 3.6) * 214;
+    s += `<line x1="56" y1="${yy}" x2="426" y2="${yy}" stroke="#e4eeec"/>
+      <text x="50" y="${yy + 4}" text-anchor="end" font-size="10" font-family="JetBrains Mono,monospace" fill="#587276">10${lv < 0 ? "⁻¹" : lv === 0 ? "⁰" : lv === 1 ? "¹" : "²"}</text>`;
+  });
+  bars.forEach((b, i) => {
+    const bx = 74 + i * 56 + (i >= 3 ? 16 : 0);
+    if (b.rec) {
+      const lv = Math.log10(Math.max(0.06, b.rec.gammaN));
+      const bh = clamp(((lv + 1.2) / 3.6) * 214, 6, 214);
+      const by = 296 - bh;
+      s += `<rect x="${bx}" y="${by}" width="34" height="${bh}" rx="5" fill="${b.c}"/>
+        <text x="${bx + 17}" y="${by - 6}" text-anchor="middle" font-size="9.5" font-family="JetBrains Mono,monospace" font-weight="700" fill="#132629">${b.rec.gammaN >= 10 ? f1(b.rec.gammaN, 0) : f1(b.rec.gammaN, 2)}</text>`;
+    } else {
+      s += `<rect x="${bx}" y="280" width="34" height="16" rx="4" fill="#dce7e5"/>`;
+    }
+    s += `<text x="${bx + 17}" y="313" text-anchor="middle" font-size="9.5" font-weight="700" fill="#132629">${b.l}</text>
+      <text x="${bx + 17}" y="328" text-anchor="middle" font-size="8.5" fill="#587276">z=${(i % 3) + 1}</text>`;
+  });
+  s += `<text x="150" y="344" text-anchor="middle" font-size="10.5" font-weight="800" fill="#b37f06">As₂S₃ (−)</text>
+    <text x="340" y="344" text-anchor="middle" font-size="10.5" font-weight="800" fill="#9c2a15">Fe(OH)₃ (+)</text>
+  </g>`;
+
+  // Right card: Score & Key conclusions
+  s += `<g transform="translate(514, 94)">
+    <rect width="450" height="354" rx="16" fill="#0f2e33" stroke="#24575f" stroke-width="2"/>
+    <text x="24" y="36" fill="#9fd6cd" font-size="11.5" font-weight="700" letter-spacing="1.2">LABORATORIYA NATIJASI</text>
+    <text x="24" y="92" fill="#e89b3c" font-size="54" font-family="JetBrains Mono,monospace" font-weight="800">${sc.tot}</text>
+    <text x="148" y="84" fill="#fff" font-size="18" font-weight="700">/ 100 ball</text>
+    <text x="148" y="104" fill="#9bf2c8" font-size="12.5">${sc.tot >= 86 ? "Aʼlo natija!" : sc.tot >= 70 ? "Yaxshi natija!" : "Barcha bosqichlarni yakunlang"}</text>
+    <line x1="24" y1="124" x2="426" y2="124" stroke="#24575f"/>
+    <text x="24" y="152" fill="#fff" font-size="13" font-weight="700">Asosiy kimyoviy xulosalar:</text>
+    <text x="24" y="180" fill="#d9ece9" font-size="12">• Shultse–Gardi: γ₁ : γ₂ : γ₃ ≈ 1 : 1/64 : 1/729 (γ ∝ 1/z⁶)</text>
+    <text x="24" y="206" fill="#d9ece9" font-size="12">• As₂S₃ (−) kationlar, Fe(OH)₃ (+) esa anionlar bilan koagullanadi</text>
+    <text x="24" y="232" fill="#d9ece9" font-size="12">• 4-jadval: KCl &gt; K₂SO₄ &gt; K₃[Fe(CN)₆] ⇒ Fe(OH)₃ musbat (+)</text>
+    <text x="24" y="258" fill="#d9ece9" font-size="12">• Oʻzaro koagullanish ekvivalent nisbatda toʻliq boradi (tiniq eritma)</text>
+    <text x="24" y="284" fill="#d9ece9" font-size="12">• AgI(−) + AgI(+): 5-probirkada tez choʻkish, chetlarda qayta zaryad</text>
+    <rect x="24" y="304" width="402" height="32" rx="8" fill="#1b484f"/>
+    <text x="225" y="324" text-anchor="middle" fill="#ffcf66" font-size="11.5" font-family="JetBrains Mono,monospace">nAgI·xI⁻ + nAgI·xAg⁺ → (2n + x)AgI↓</text>
+  </g>`;
+  return s;
+}
+
+function renderScene() {
+  if (S.stage === 1) svg.innerHTML = drawStage1();
+  else if (S.stage === 2) svg.innerHTML = drawStage2();
+  else if (S.stage === 3) svg.innerHTML = drawStage3();
+  else svg.innerHTML = drawStage4();
+}
+
+/* ============ O'NG BOSHQARUV PANELI ============ */
+function renderPanel() {
+  const P = el("panel");
+  if (S.stage === 1) {
+    const sol = curSolObj();
+    const ele = curEleObj();
+    const ratio = S.s1.flaskFilled ? S.s1.vol / ele.vCrit : 0;
+    const turbPct = Math.round((!S.s1.flaskFilled ? 0 : ratio < 0.72 ? 0.04 : ratio < 1.0 ? lerp(0.04, 0.45, (ratio - 0.72) / 0.28) : clamp(0.55 + (ratio - 1.0) * 0.8, 0.55, 1.0)) * 100);
+
+    // Chart if >= 3 measurements recorded
+    let chartHTML = "";
+    const curRecs = sol.ele.map(e => S.s1.rec[e.id]).filter(Boolean);
+    if (curRecs.length >= 2) {
+      const bars = sol.ele.map(e => {
+        const r = S.s1.rec[e.id];
+        const lv = r ? Math.max(0.05, Math.log10(r.gammaN) + 1.2) : 0;
+        return {
+          l: `${e.ion} (z=${e.z})`,
+          y: lv,
+          val: r ? (r.gammaN >= 10 ? f1(r.gammaN, 1) : f1(r.gammaN, 2)) : "—",
+          c: e.z === 1 ? "#1b484f" : e.z === 2 ? "#e89b3c" : "#1f9d6b"
+        };
+      });
+      chartHTML = `<div class="box"><h4>Logarifmik taqqoslash (${sol.name}, γ mgek/L)</h4>
+        ${LabUI.svgChart({ bars, y0: 0, ym: 3.6, yl: "lg γ + 1,2", xl: "Koagullovchi ion", H: 175 })}
+      </div>`;
+    }
+
+    P.innerHTML = `
+      <h2>1. Shultse–Gardi qoidasi (3-jadval)</h2>
+      <p class="sub">100 ml kolbaga 25 ml zol quying va 50 ml byuretkadan elektrolitni dastlabki loyqalanish koʻringuncha tomchilab qoʻshing.</p>
+      <ul class="tasks">
+        <li class="${s1Count() >= 3 ? "done" : "cur"}"><span class="b">${s1Count() >= 3 ? "✓" : "1"}</span>As₂S₃ (−) zolini NaCl, CaCl₂, AlCl₃ bilan titrlang</li>
+        <li class="${s1Count() === 6 ? "done" : s1Count() >= 3 ? "cur" : ""}"><span class="b">${s1Count() === 6 ? "✓" : "2"}</span>Fe(OH)₃ (+) zolini NaCl, Na₂SO₄, K₃[Fe(CN)₆] bilan titrlang</li>
+        <li class="${QS[1].every(q => S.q[q.id] === q.a) ? "done" : s1Count() === 6 ? "cur" : ""}"><span class="b">${QS[1].every(q => S.q[q.id] === q.a) ? "✓" : "3"}</span>Nazorat savollariga javob bering</li>
+      </ul>
+
+      <div class="box">
+        <h4>1) Zol va elektrolitni tanlang</h4>
+        <div class="sol-pills">
+          <button class="sol-pill ${S.s1.sol === "As2S3" ? "act" : ""}" onclick="s1SelectSol('As2S3')">
+            <span class="sw" style="background:#f2c63d"></span><span>As₂S₃ (−)<br><small style="color:var(--muted)">${S1_SOLS.As2S3.ele.filter(e => S.s1.rec[e.id]).length}/3 qayd</small></span>
+          </button>
+          <button class="sol-pill ${S.s1.sol === "FeOH3" ? "act" : ""}" onclick="s1SelectSol('FeOH3')">
+            <span class="sw" style="background:#b83b24"></span><span>Fe(OH)₃ (+)<br><small style="color:var(--muted)">${S1_SOLS.FeOH3.ele.filter(e => S.s1.rec[e.id]).length}/3 qayd</small></span>
+          </button>
+        </div>
+        <div class="ele-grid">
+          ${sol.ele.map((e, i) => `
+            <button class="ele-btn ${S.s1.eleIdx === i ? "act" : ""} ${S.s1.rec[e.id] ? "done" : ""}" onclick="s1SelectEle(${i})">
+              ${S.s1.rec[e.id] ? "✓ " : ""}${e.f}
+              <small>${f1(e.cn, e.cn < 0.01 ? 3 : e.cn < 1 ? 2 : 1)} n · z=${e.z}</small>
+            </button>`).join("")}
+        </div>
+        <div class="row">
+          <button class="${S.s1.flaskFilled ? "on" : "pri"}" style="flex:1" onclick="s1PourSol()">${S.s1.flaskFilled ? "✓ 25 ml zol quyilgan" : "🧪 25 ml " + sol.name + " quyish"}</button>
+          <button class="ghost" onclick="s1ResetRun()" ${!S.s1.flaskFilled ? "disabled" : ""}>↺ Tozalash</button>
+        </div>
+      </div>
+
+      <div class="box">
+        <h4>2) Byuretkadan tomchilash (${ele.f})</h4>
+        <div class="kv"><span>Sarflangan hajm (Vₑ):</span><b>${f1(S.s1.vol, 2)} ml</b></div>
+        <div class="kv"><span>Optik loyqalik (τ):</span><b style="color:${ratio >= 1 ? "var(--warn)" : "var(--ok)"}">${turbPct}% ${ratio >= 1 ? "· Koagullanish!" : ""}</b></div>
+        <div class="meter-bar"><div class="meter-fill" style="width:${turbPct}%;background:${ratio >= 1 ? "var(--accent)" : "var(--ok)"}"></div></div>
+        <div class="grid4" style="margin-top:8px">
+          <button onclick="s1AddDrop(0.1)" ${!S.s1.flaskFilled ? "disabled" : ""}>+0,1 ml</button>
+          <button onclick="s1AddDrop(0.2)" ${!S.s1.flaskFilled ? "disabled" : ""}>+0,2 ml</button>
+          <button onclick="s1AddDrop(0.5)" ${!S.s1.flaskFilled ? "disabled" : ""}>+0,5 ml</button>
+          <button onclick="s1AddDrop(1.0)" ${!S.s1.flaskFilled ? "disabled" : ""}>+1,0 ml</button>
+        </div>
+        <button class="pri next" onclick="s1Record()" ${ratio < 0.94 ? "disabled" : ""}>📌 Natijani 3-jadvalga qayd etish</button>
+        <div class="eq" style="margin-top:8px">γ = (C · Vₑ) / (25 + Vₑ) · 1000 [mmol-ekv/L]</div>
+      </div>
+      ${chartHTML}
+      ${renderQBlock(1)}
+      ${s1Done() ? `<button class="pri next" onclick="goStage(2)">Keyingi bosqich: 2. Fe(OH)₃ ostonasi →</button>` : ""}
+    `;
+  } else if (S.stage === 2) {
+    const allEle = Object.values(S.s2.eleAdded).every(Boolean);
+    const thrDone = S2_SERIES.every(ser => S.s2.pickedThreshold[ser.id] === ser.firstTube);
+    P.innerHTML = `
+      <h2>2. Fe(OH)₃ koagullanish ostonasi (4-jadval)</h2>
+      <p class="sub">12 ta probirkaga 5 ml Fe(OH)₃, distillangan suv va 3 xil elektrolit qoʻshib, 1 soatdan soʻng loyqalanish boshlangan probirkani aniqlang.</p>
+      <ul class="tasks">
+        <li class="${S.s2.solAdded && S.s2.waterAdded ? "done" : "cur"}"><span class="b">${S.s2.solAdded && S.s2.waterAdded ? "✓" : "1"}</span>5 ml Fe(OH)₃ va distillangan suv (4,5 / 4 / 3 / 1 ml) quying</li>
+        <li class="${allEle ? "done" : S.s2.waterAdded ? "cur" : ""}"><span class="b">${allEle ? "✓" : "2"}</span>3 seriyaga elektrolitlar (0,5 / 1 / 2 / 4 ml) qoʻshing</li>
+        <li class="${S.s2.waited ? "done" : allEle ? "cur" : ""}"><span class="b">${S.s2.waited ? "✓" : "3"}</span>Chayqating va 1 soat tinch qoʻying</li>
+        <li class="${thrDone && S.s2.deducedCharge === "+" && S.s2.deducedIon === "anion" ? "done" : S.s2.waited ? "cur" : ""}"><span class="b">${thrDone && S.s2.deducedCharge === "+" ? "✓" : "4"}</span>Ostona probirkalarini va zol zaryadini aniqlang</li>
+      </ul>
+
+      <div class="box">
+        <h4>Tajriba bosqichlari (4-jadval)</h4>
+        <div class="grid2" style="margin-bottom:6px">
+          <button class="${S.s2.solAdded ? "on" : "pri"}" onclick="s2AddSol()">1. 5 ml Fe(OH)₃</button>
+          <button class="${S.s2.waterAdded ? "on" : S.s2.solAdded ? "pri" : ""}" onclick="s2AddWater()" ${!S.s2.solAdded ? "disabled" : ""}>2. H₂O (4,5..1 ml)</button>
+        </div>
+        <div class="grid3" style="margin-bottom:6px">
+          ${S2_SERIES.map(ser => `
+            <button class="${S.s2.eleAdded[ser.id] ? "on" : ""}" onclick="s2AddEle('${ser.id}')" ${!S.s2.waterAdded ? "disabled" : ""}>
+              ${S.s2.eleAdded[ser.id] ? "✓ " : "+ "}${ser.id === "K3FeCN" ? "K₃[Fe(CN)₆]" : ser.id}
+            </button>`).join("")}
+        </div>
+        <div class="grid2">
+          <button class="${S.s2.shaken ? "on" : allEle ? "pri" : ""}" onclick="s2Shake()" ${!allEle ? "disabled" : ""}>🫧 Chayqatish</button>
+          <button class="${S.s2.waited ? "on" : S.s2.shaken ? "pri" : ""}" onclick="s2WaitHour()" ${!S.s2.shaken || S.s2.waiting ? "disabled" : ""}>
+            ${S.s2.waited ? "✓ 1 soat oʻtdi" : S.s2.waiting ? `⏳ ${Math.round(S.s2.waitProg * 60)} min...` : "⏱ 1 soat kutish"}
+          </button>
+        </div>
+      </div>
+
+      ${S.s2.waited ? `
+      <div class="box">
+        <h4>1 soatdan keyingi kuzatish — ostona probirkasi</h4>
+        <p class="note" style="margin-bottom:8px">Har bir seriyada dastlabki loyqalanish boshlangan probirka raqamini belgilang:</p>
+        ${S2_SERIES.map(ser => `
+          <div class="kv" style="align-items:center;margin-bottom:5px">
+            <span style="font-size:12px;font-weight:700">${ser.short}</span>
+            <div class="row" style="gap:4px">
+              ${[1, 2, 3, 4].map(n => {
+                const pk = S.s2.pickedThreshold[ser.id] === n;
+                const cls = pk ? (n === ser.firstTube ? "ok" : "bad") : "";
+                return `<button class="tube-chip ${cls}" onclick="s2PickThr('${ser.id}',${n})">${n}</button>`;
+              }).join("")}
+            </div>
+          </div>`).join("")}
+      </div>
+      <div class="box">
+        <h4>Zol zaryadi xulosasi</h4>
+        <div class="kv" style="margin-bottom:6px"><span>Koagullovchi ion:</span>
+          <div class="row">
+            <button class="${S.s2.deducedIon === "kation" ? "bad" : ""}" onclick="s2PickDeduction('ion','kation')">Kation (+)</button>
+            <button class="${S.s2.deducedIon === "anion" ? "on" : ""}" onclick="s2PickDeduction('ion','anion')">Anion (−)</button>
+          </div>
+        </div>
+        <div class="kv"><span>Fe(OH)₃ zoli zaryadi:</span>
+          <div class="row">
+            <button class="${S.s2.deducedCharge === "+" ? "on" : ""}" onclick="s2PickDeduction('chg','+')">Musbat (+)</button>
+            <button class="${S.s2.deducedCharge === "-" ? "bad" : ""}" onclick="s2PickDeduction('chg','-')">Manfiy (−)</button>
+          </div>
+        </div>
+      </div>` : ""}
+
+      ${renderQBlock(2)}
+      ${s2Done() ? `<button class="pri next" onclick="goStage(3)">Keyingi bosqich: 3. Oʻzaro koagullanish →</button>` : ""}
+    `;
+  } else if (S.stage === 3) {
+    P.innerHTML = `
+      <h2>3. Ikki kolloidning oʻzaro koagullanishi</h2>
+      <p class="sub">Qarama-qarshi zaryadli ikki zolni turli nisbatlarda aralashtirib, ekvivalent koagullanish zonasini aniqlang.</p>
+      <div class="subtabs">
+        <button class="${S.s3.sub === "A" ? "act" : ""} ${s3ADone() ? "done" : ""}" onclick="s3Sub('A')">A: Fe(OH)₃ + As₂S₃</button>
+        <button class="${S.s3.sub === "B" ? "act" : ""} ${s3BDone() ? "done" : ""}" onclick="s3Sub('B')">B: AgI(−) + AgI(+)</button>
+      </div>
+
+      ${S.s3.sub === "A" ? `
+      <div class="box">
+        <h4>A-tajriba · 5-jadval (6 probirka)</h4>
+        <div class="grid2" style="margin-bottom:6px">
+          <button class="${S.s3.aFe ? "on" : "pri"}" onclick="s3AAdd('fe')">1. Fe(OH)₃ (9..1 ml)</button>
+          <button class="${S.s3.aAs ? "on" : S.s3.aFe ? "pri" : ""}" onclick="s3AAdd('as')" ${!S.s3.aFe ? "disabled" : ""}>2. As₂S₃ (1..9 ml)</button>
+          <button class="${S.s3.aShaken ? "on" : S.s3.aAs ? "pri" : ""}" onclick="s3AShake()" ${!S.s3.aAs ? "disabled" : ""}>3. Chayqatish</button>
+          <button class="${S.s3.aWaited ? "on" : S.s3.aShaken ? "pri" : ""}" onclick="s3AWait()" ${!S.s3.aShaken || S.s3.aWaiting ? "disabled" : ""}>
+            ${S.s3.aWaited ? "✓ 2 soat oʻtdi" : S.s3.aWaiting ? `⏳ ${Math.round(S.s3.aWaitProg * 120)} min` : "4. ⏱ 2 soat kutish"}
+          </button>
+        </div>
+        ${S.s3.aWaited ? `
+          <p class="note" style="margin:6px 0">Qaysi probirkada choʻkma ustidagi eritma <b>rangsiz va tiniq</b> (toʻliq oʻzaro koagullanish)?</p>
+          <div class="row" style="justify-content:space-between">
+            ${S3A_TUBES.map(t => `<button class="tube-chip ${S.s3.aPickedEq === t.n ? (t.eq ? "ok" : "bad") : ""}" onclick="s3APickEq(${t.n})">${t.n}</button>`).join("")}
+          </div>
+          <table class="j" style="margin-top:8px">
+            <tr><th>№</th><th>Fe(+)</th><th>As(−)</th><th>Ustki eritma</th></tr>
+            ${S3A_TUBES.map(t => `<tr class="${t.eq ? "hl" : ""}"><td>${t.n}</td><td>${t.fe}</td><td>${t.as}</td><td style="font-family:var(--sans);font-size:10.5px">${t.supTxt.split(" (")[0]}</td></tr>`).join("")}
+          </table>
+        ` : `<p class="note">Har bir probirkada umumiy hajm 10 ml. Chayqatib 2 soat tinch qoʻygach, ustki eritma rangi boʻyicha xulosa chiqaring.</p>`}
+      </div>` : `
+      <div class="box">
+        <h4>B-tajriba · AgI(−) + AgI(+) (11 probirka)</h4>
+        <div class="grid3" style="margin-bottom:6px">
+          <button class="${S.s3.bNeg ? "on" : "pri"}" onclick="s3BAdd('neg')">1. AgI(−)</button>
+          <button class="${S.s3.bPos ? "on" : S.s3.bNeg ? "pri" : ""}" onclick="s3BAdd('pos')" ${!S.s3.bNeg ? "disabled" : ""}>2. AgI(+)</button>
+          <button class="${S.s3.bDoneSettle ? "on" : S.s3.bPos ? "pri" : ""}" onclick="s3BShake()" ${!S.s3.bPos ? "disabled" : ""}>3. Chayqatish</button>
+        </div>
+        ${S.s3.bDoneSettle ? `
+          <p class="note" style="margin:6px 0">Dispers faza eng tez va toʻliq choʻkkan probirkani <b>ramkaga oling</b>:</p>
+          <div class="row" style="gap:4px;margin-bottom:8px">
+            ${S3B_TUBES.map(t => `<button class="tube-chip ${S.s3.bFramed === t.n ? (t.eq ? "ok" : "bad") : ""}" onclick="s3BFramed(${t.n})">${t.n}</button>`).join("")}
+          </div>
+          <div class="eq">nAgI·xI⁻ + nAgI·xAg⁺ → (2n + x)AgI↓</div>
+          <div class="eq">mAgI·xAg⁺ + nAgI·eI⁻ → (m+n+e)AgI·(x−e)Ag⁺</div>
+          <p class="note">1–4 probirkalarda zarrachalar <b>(+)</b>, 6–9 probirkalarda <b>(−)</b> zaryadli; 10 (−) va 11 (+) — nazorat probirkalari.</p>
+        ` : `<p class="note">1–10-probirkalarga 1..10 ml AgI(−), soʻng jami 10 ml boʻlguncha AgI(+) (11-probirkaga 10 ml) quyiladi.</p>`}
+      </div>`}
+
+      ${renderQBlock(3)}
+      ${s3Done() ? `<button class="pri next" onclick="goStage(4)">Yakuniy hisobot va testga oʻtish →</button>` : ""}
+    `;
+  } else {
+    // Stage 4: Report + Final 5-question quiz
+    const sc = total();
+    const quizAnswered = QUIZ.filter(q => S.quiz[q.id] !== undefined).length;
+    P.innerHTML = `<div class="rep">
+      <h2>4. Yakuniy hisobot va test</h2>
+      <div class="score">
+        <div class="n">${sc.tot}</div>
+        <div>
+          <div style="font-weight:800;font-size:15px">Umumiy ball (100 dan)</div>
+          <div style="font-size:12px;opacity:.85;margin-top:2px">1-bosqich: ${sc.p1}/28 · 2-bosqich: ${sc.p2}/24 · 3-bosqich: ${sc.p3}/28 · Test: ${sc.pq}/20</div>
+        </div>
+      </div>
+
+      <div class="box">
+        <h4>Yakuniy nazorat testi (${quizAnswered}/5)</h4>
+        ${QUIZ.map((q, qi) => {
+          const order = shuf(q.o.length, 700 + qi * 19);
+          const chosen = S.quiz[q.id];
+          const done = chosen !== undefined;
+          return `<div class="q"><p>${qi + 1}. ${q.q}</p>` + order.map(orig => {
+            let cls = "";
+            if (done) {
+              if (orig === q.a) cls = "right";
+              else if (chosen === orig) cls = "wrong";
+            }
+            return `<button class="${cls}" ${done ? "disabled" : ""} onclick="ansQuiz('${q.id}',${orig})">${q.o[orig]}</button>`;
+          }).join("") + `</div>`;
+        }).join("")}
+      </div>
+
+      <div class="box">
+        <h4>3-jadval · Shultse–Gardi natijalari</h4>
+        <table class="j">
+          <tr><th>Zol · Elektrolit</th><th>z</th><th>Vₑ, ml</th><th>γ, mgek/L</th></tr>
+          ${[...S1_SOLS.As2S3.ele.map(e => ({ s: "As₂S₃", ...e })), ...S1_SOLS.FeOH3.ele.map(e => ({ s: "Fe(OH)₃", ...e }))].map(e => {
+            const r = S.s1.rec[e.id];
+            return `<tr><td>${e.s} · ${e.f}</td><td>${e.z}</td><td>${r ? f1(r.v, 2) : "—"}</td><td>${r ? (r.gammaN >= 10 ? f1(r.gammaN, 1) : f1(r.gammaN, 3)) : "—"}</td></tr>`;
+          }).join("")}
+        </table>
+      </div>
+
+      <div class="row noprint" style="margin-top:8px">
+        <button class="pri" style="flex:1" onclick="window.print()">🖨️ Hisobotni chop etish</button>
+        <button class="ghost" onclick="location.reload()">↺ Qaytadan boshlash</button>
+      </div>
+    </div>`;
+  }
+}
+
+function renderAll() {
+  renderTabs();
+  renderScene();
+  renderPanel();
+}
+
+/* ============ ANIMATSIYA SIKLI (requestAnimationFrame) ============ */
+let lastT = performance.now();
+function tick(now) {
+  const dt = Math.min(0.05, (now - lastT) / 1000);
+  lastT = now;
+
+  // Stage 1 falling drops & gentle swirl
+  if (S.stage === 1 && (S.s1.drops.length || S.s1.swirl > 0)) {
+    const dg = el("s1Drops");
+    if (dg) {
+      S.s1.drops = S.s1.drops.filter(d => {
+        d.y += d.v * dt;
+        return d.y < 455;
+      });
+      dg.innerHTML = S.s1.drops.map(d =>
+        `<path d="M500 ${d.y} Q504 ${d.y + 6} 500 ${d.y + 10} Q496 ${d.y + 6} 500 ${d.y} Z" fill="#69bbe6"/>`
+      ).join("");
+    }
+    if (S.s1.swirl > 0) {
+      S.s1.swirl = Math.max(0, S.s1.swirl - dt * 2.2);
+      const fg = el("s1FlaskG");
+      if (fg) fg.setAttribute("transform", `rotate(${(Math.sin(S.s1.swirl * 20) * 1.8 * S.s1.swirl).toFixed(2)} 500 480)`);
+    }
+  }
+
+  // Stage 2 shake & 1-hour wait
+  if (S.stage === 2) {
+    let need = false;
+    if (S.s2.shakeT > 0) { S.s2.shakeT = Math.max(0, S.s2.shakeT - dt * 1.4); need = true; }
+    if (S.s2.waiting) {
+      S.s2.waitProg = Math.min(1, S.s2.waitProg + dt / 3.4);
+      need = true;
+      if (S.s2.waitProg >= 1) {
+        S.s2.waiting = false;
+        S.s2.waited = true;
+        SFX.play("bell");
+        okT("1 soat oʻtdi! Loyqalanish va choʻkishni kuzating hamda ostona probirkalarini belgilang.");
+        renderAll();
+      }
+    }
+    if (need) renderScene();
+  }
+
+  // Stage 3 animations
+  if (S.stage === 3) {
+    let need = false;
+    if (S.s3.aShakeT > 0) { S.s3.aShakeT = Math.max(0, S.s3.aShakeT - dt * 1.4); need = true; }
+    if (S.s3.aWaiting) {
+      S.s3.aWaitProg = Math.min(1, S.s3.aWaitProg + dt / 3.2);
+      need = true;
+      if (S.s3.aWaitProg >= 1) {
+        S.s3.aWaiting = false;
+        S.s3.aWaited = true;
+        SFX.play("bell");
+        okT("2 soat oʻtdi! Choʻkma ustidagi eritma rangini tekshiring.");
+        renderAll();
+      }
+    }
+    if (S.s3.bShakeT > 0) { S.s3.bShakeT = Math.max(0, S.s3.bShakeT - dt * 1.4); need = true; }
+    if (S.s3.bSettling) {
+      S.s3.bSettled = Math.min(1, S.s3.bSettled + dt / 2.2);
+      need = true;
+      if (S.s3.bSettled >= 1) {
+        S.s3.bSettling = false;
+        S.s3.bDoneSettle = true;
+        SFX.play("bell");
+        okT("5-probirkada tez va toʻliq choʻkish sodir boʻldi! Uni ramkaga oling.");
+        renderAll();
+      }
+    }
+    if (need) renderScene();
+  }
+
+  requestAnimationFrame(tick);
+}
+
+/* ============ MODALLAR (JURNAL, NAZARIYA, MASLAHAT, KIRISH) ============ */
+el("btnTable").addEventListener("click", () => {
+  SFX.play("paper");
+  LabUI.modal(`
+    <h1>📋 Laboratoriya jurnali (7-ish)</h1>
+    <h3>3-jadval · Shultse–Gardi koagullanish ostonasi (25 ml zol)</h3>
+    <table class="j">
+      <tr><th>Zol</th><th>Elektrolit</th><th>Kons.</th><th>Ion (z)</th><th>Vₑ, ml</th><th>γ, mgek/L</th></tr>
+      ${[...S1_SOLS.As2S3.ele.map(e => ({ s: "As₂S₃ (−)", ...e })), ...S1_SOLS.FeOH3.ele.map(e => ({ s: "Fe(OH)₃ (+)", ...e }))].map(e => {
+        const r = S.s1.rec[e.id];
+        return `<tr><td>${e.s}</td><td>${e.f}</td><td>${f1(e.cn, e.cn < 0.01 ? 3 : e.cn < 1 ? 2 : 1)} n</td><td>${e.ion} (${e.z})</td><td>${r ? f1(r.v, 2) : "—"}</td><td>${r ? (r.gammaN >= 10 ? f1(r.gammaN, 1) : f1(r.gammaN, 3)) : "—"}</td></tr>`;
+      }).join("")}
+    </table>
+    <h3>4-jadval · Fe(OH)₃ koagullanish ostonasi (1 soatdan soʻng)</h3>
+    <table class="j">
+      <tr><th>Seriya</th><th>1 (0,5 ml)</th><th>2 (1,0 ml)</th><th>3 (2,0 ml)</th><th>4 (4,0 ml)</th><th>Aniqlangan ostona</th></tr>
+      ${S2_SERIES.map(ser => `<tr>
+        <td>${ser.short}</td>
+        ${S2_VOLS.map(v => {
+          const c = ser.cn * 1000 * v.e / 10;
+          return `<td>${S.s2.waited ? (c >= ser.gammaTrueN ? "Loyqa/choʻkma" : "Tiniq") : "—"}</td>`;
+        }).join("")}
+        <td>${S.s2.pickedThreshold[ser.id] ? `${S.s2.pickedThreshold[ser.id]}-prob.` : "—"}</td>
+      </tr>`).join("")}
+    </table>
+    <h3>11-probirka · AgI(−) + AgI(+) oʻzaro koagullanishi</h3>
+    <table class="j">
+      <tr><th>Probirka №</th>${S3B_TUBES.map(t => `<th style="text-align:center">${t.n}</th>`).join("")}</tr>
+      <tr><td>AgI(−), ml</td>${S3B_TUBES.map(t => `<td style="text-align:center">${t.neg}</td>`).join("")}</tr>
+      <tr><td>AgI(+), ml</td>${S3B_TUBES.map(t => `<td style="text-align:center">${t.pos}</td>`).join("")}</tr>
+      <tr><td>Zaryad</td>${S3B_TUBES.map(t => `<td style="text-align:center" class="${S.s3.bFramed === t.n ? "frame-cell" : ""}">${S.s3.bDoneSettle ? t.chg : "—"}</td>`).join("")}</tr>
+    </table>
+    <div style="margin-top:16px;text-align:right"><button class="pri" onclick="LabUI.closeModal()">Yopish</button></div>
+  `);
+});
+
+el("btnTheory").addEventListener("click", () => {
+  SFX.play("click");
+  LabUI.modal(`
+    <h1>📘 Nazariy maʼlumotlar · Gidrofob zollarning koagullanishi</h1>
+    <p>Gidrofob (liofob) zollar termodinamik jihatdan beqaror boʻlib, ularning agregativ barqarorligi zarrachalar sirtidagi <b>qoʻsh elektr qavati</b> (ζ-potensial) hisobiga taʼminlanadi.</p>
+    <h3>1. Koagullanish ostonasi va Shultse–Gardi qoidasi</h3>
+    <div class="eq">γ = (C · Vₑ) / (V_zol + Vₑ) · 1000   [mmol-ekv/L]</div>
+    <div class="eq">γ ∝ 1 / z⁶     ⇒     γ₁ : γ₂ : γ₃ ≈ 1 : 1/64 : 1/729</div>
+    <p>Koagullanishni zol zarrachasi zaryadiga <b>qarama-qarshi ishorali ion</b> (koagullovchi ion) keltirib chiqaradi. Uning valentligi (z) ortishi bilan koagullanish ostonasi keskin kamayadi.</p>
+    <ul>
+      <li><b>As₂S₃ (manfiy zol)</b>: kationlar (Na⁺, Ca²⁺, Al³⁺) bilan koagullanadi.</li>
+      <li><b>Fe(OH)₃ (musbat zol)</b>: anionlar (Cl⁻, SO₄²⁻, [Fe(CN)₆]³⁻) bilan koagullanadi.</li>
+    </ul>
+    <h3>2. Ikki kolloidning oʻzaro koagullanishi</h3>
+    <p>Qarama-qarshi zaryadli kolloid eritmalar (masalan, Fe(OH)₃⁺ va As₂S₃⁻ yoki AgI⁺ va AgI⁻) ekvivalent miqdorda aralashtirilganda zarrachalar oʻzaro zaryadsizlanadi va choʻkmaga tushadi:</p>
+    <div class="eq">nAgI·xI⁻ + nAgI·xAg⁺ → 2nAgI + xAgI → (2n + x)AgI↓</div>
+    <p>Zollardan biri ortiqcha olinganda yangi zaryadli mitsellalar hosil boʻladi:</p>
+    <div class="eq">mAgI·xAg⁺ + nAgI·eI⁻ → (m + n + e)AgI · (x − e)Ag⁺</div>
+    ${LabUI.refsHTML()}
+    <div style="margin-top:16px;text-align:right"><button class="pri" onclick="LabUI.closeModal()">Tushunarli</button></div>
+  `);
+});
+
+el("btnHint").addEventListener("click", () => {
+  SFX.play("click");
+  let msg = "";
+  if (S.stage === 1) {
+    if (!S.s1.flaskFilled) msg = "Kolbaga 25 ml zol quyish uchun tugmani yoki kolbani bosing.";
+    else if (S.s1.vol / curEleObj().vCrit < 0.94) msg = "Byuretkadan +0,5 ml va keyin +0,1 ml dan tomchilab loyqalik 55% dan oshishini kuzating.";
+    else msg = "Koagullanish boshlandi! «Natijani 3-jadvalga qayd etish» tugmasini bosing.";
+  } else if (S.stage === 2) {
+    if (!S.s2.waited) msg = "Avval 5 ml Fe(OH)₃, keyin H₂O, soʻng 3 ta elektrolitni qoʻshing, chayqating va 1 soat kuting.";
+    else msg = "Har bir seriyada birinchi loyqalangan probirkani toping (KCl: 2-prob., K₂SO₄: 3-prob., K₃[Fe(CN)₆]: 3-prob.) va anionlar taʼsiridan Fe(OH)₃ (+) ekanini belgilang.";
+  } else if (S.stage === 3) {
+    msg = S.s3.sub === "A"
+      ? "Fe(OH)₃ va As₂S₃ ni quying, chayqating va 2 soat kuting. 3-probirkada (5+5 ml) ustki eritma rangsiz tiniq boʻladi. Soʻng B-tajribaga oʻting!"
+      : "AgI(−) va AgI(+) ni quying, chayqating. 5-probirka (5 ml + 5 ml) eng tez choʻkadi — uni bosib ramkaga oling!";
+  } else {
+    msg = "5 ta yakuniy test savoliga javob bering va hisobotni chop eting.";
+  }
+  LabUI.toast("💡 " + msg, "", 4800);
+});
+
+/* ============ ISHGA TUSHIRISH ============ */
+LabUI.initShell(LAB_ID);
+renderAll();
+requestAnimationFrame(tick);
+
+LabUI.modal(`
+  <h1>🧪 7-laboratoriya ishi</h1>
+  <p style="font-weight:700;color:var(--top);margin-bottom:8px">Gidrofob zollarning va ikki kolloidning oʻzaro koagullanishi</p>
+  <p>Ushbu virtual laboratoriyada siz 3 ta asosiy tajribani bajarasiz:</p>
+  <ul style="margin:8px 0 12px">
+    <li><b>1-bosqich (3-jadval):</b> As₂S₃ (−) va Fe(OH)₃ (+) zollarini elektrolitlar bilan titrlab <b>Shultse–Gardi qoidasi</b>ni (γ ∝ 1/z⁶) tekshirish.</li>
+    <li><b>2-bosqich (4-jadval):</b> 12 ta probirkada KCl, K₂SO₄, K₃[Fe(CN)₆] yordamida Fe(OH)₃ zolining koagullanish ostonasi va zaryad ishorasini aniqlash.</li>
+    <li><b>3-bosqich (5-jadval va 11 probirka):</b> Fe(OH)₃ + As₂S₃ hamda AgI(−) + AgI(+) zollarining oʻzaro koagullanishini kuzatish.</li>
+  </ul>
+  <div style="text-align:right"><button class="pri" onclick="LabUI.closeModal();SFX.play('ok')">Tajribani boshlash →</button></div>
+`);
+</script>
+</body>
+</html>

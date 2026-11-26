@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="author" content="Qayumov Hayitali">
+  <meta name="description" content="Kolloid kimyo fanidan 12 ta interaktiv virtual laboratoriya ishi: kondensatsion va disperslash usullari, dializ, elektroforez, koagullanish, sedimentatsion analiz, viskozimetriya, adsorbsiya va emulsiyalar.">
+  <title>Kolloid Kimyo — 12 ta Virtual Laboratoriya</title>
+  <link rel="stylesheet" href="assets/main.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap topbar-in">
+    <a class="brand-mark" href="#top">
+      <span class="brand-emblem" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 3h6"/>
+          <path d="M10 3v6.5L4.8 18.2A2 2 0 0 0 6.5 21h11a2 2 0 0 0 1.7-2.8L14 9.5V3"/>
+          <path d="M7.5 15h9"/>
+        </svg>
+      </span>
+      <span class="brand-text">
+        <strong>Kolloid Kimyo</strong>
+        <span>Virtual laboratoriya majmuasi</span>
+      </span>
+    </a>
+
+    <nav class="nav-links" aria-label="Boʻlimlar">
+      <a href="#labs">12 laboratoriya</a>
+      <a href="#qoidalar">Hisobot va xavfsizlik</a>
+    </nav>
+
+    <div class="nav-progress" title="Bajarilgan laboratoriyalar">
+      <span id="navProgTxt">0/12</span>
+      <span class="bar"><i id="navProgBar"></i></span>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <div class="eyebrow">Guliston davlat universiteti · «Kimyo» kafedrasi · 60530100</div>
+        <h1>Kolloid kimyo <em>virtual</em> laboratoriyasi</h1>
+        <p class="hero-lead">
+          «Kolloid kimyo» fanidan 3-kurs talabalari uchun barcha <strong>12 ta laboratoriya ishi</strong> yagona interaktiv platformada: jonli tajriba stoli, aniq fizik-kimyoviy modellar, jadvallar, grafiklar, nazorat savollari va chop etiladigan hisobot.
+        </p>
+
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="labs/01-kondensatsion.html">1-laboratoriyadan boshlash →</a>
+          <a class="btn btn-secondary" href="#labs">Barcha 12 ta ishni koʻrish</a>
+        </div>
+
+        <div class="hero-metrics">
+          <div class="metric">
+            <strong>12 ta</strong>
+            <span>Uslubiy koʻrsatma asosida toʻliq virtual ish</span>
+          </div>
+          <div class="metric">
+            <strong id="metricDone">0 / 12</strong>
+            <span>Yakunlangan laboratoriyalar</span>
+          </div>
+          <div class="metric">
+            <strong id="metricAvg">—</strong>
+            <span>Oʻrtacha toʻplangan ball</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-visual">
+        <div class="hero-frame">
+          <img src="assets/hero-lab.jpg" alt="Kolloid kimyo laboratoriyasi: Fe(OH)₃ zolida Tindal nuri, oltingugurt gidrozoli va Ostvald viskozimetri" loading="eager">
+          <div class="hero-caption">
+            <span><b>Tindal effekti</b> · Fe(OH)₃ zoli, oltingugurt zoli va Ostvald viskozimetri</span>
+            <code>1–100 nm</code>
+          </div>
+        </div>
+
+        <div class="tyndall-widget" aria-label="Disperslik darajasi va Tindal nuri namoyishi">
+          <div class="tw-top">
+            <span class="tw-title">Disperslik shkalasi · zarracha oʻlchamini oʻzgartirib koʻring</span>
+            <span class="tw-readout" id="twReadout">25 nm · Kolloid sistema</span>
+          </div>
+          <div class="tw-body">
+            <div class="tw-cuvette">
+              <svg id="twSvg" viewBox="0 0 150 54" aria-hidden="true"></svg>
+            </div>
+            <div class="tw-ctrl">
+              <input id="twSlider" type="range" min="0" max="100" value="44" aria-label="Zarracha oʻlchami">
+              <div class="tw-scale">
+                <span>&lt; 1 nm (chin)</span>
+                <span>1–100 nm (kolloid)</span>
+                <span>&gt; 100 nm (dagʻal)</span>
+              </div>
+              <p class="tw-desc" id="twDesc"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="catalog-section" id="labs">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <h2>Laboratoriya ishlari menyusi</h2>
+          <p>Uslubiy koʻrsatmadagi ketma-ketlik boʻyicha 12 ta amaliy ish — istalgan mavzuni tanlab tajriba oʻtkazing.</p>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <div class="filter-tabs" role="tablist" aria-label="Boʻlim boʻyicha saralash">
+          <button type="button" class="filter-btn active" data-group="all">Barchasi (12)</button>
+          <button type="button" class="filter-btn" data-group="olinish">Olinish va tozalash (1–3)</button>
+          <button type="button" class="filter-btn" data-group="elektr">Elektr va koagullanish (4–7)</button>
+          <button type="button" class="filter-btn" data-group="analiz">Analiz va struktura (8–9)</button>
+          <button type="button" class="filter-btn" data-group="sirt">Sirt hodisalari va emulsiyalar (10–12)</button>
+        </div>
+
+        <label class="search-box">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+          </svg>
+          <input id="labSearch" type="search" placeholder="Mavzu, reaktiv yoki usul…" autocomplete="off">
+        </label>
+      </div>
+
+      <div class="labs-grid" id="labsGrid"></div>
+    </div>
+  </section>
+
+  <section class="guide-section" id="qoidalar">
+    <div class="wrap">
+      <div class="section-head" style="margin-bottom:8px">
+        <div>
+          <h2>Laboratoriya hisoboti va xavfsizlik qoidalari</h2>
+          <p>Uslubiy koʻrsatmada belgilangan asosiy talablar va hisobot tarkibi.</p>
+        </div>
+      </div>
+
+      <div class="guide-grid">
+        <article class="guide-card">
+          <h3>Laboratoriya hisoboti tarkibi</h3>
+          <ul class="guide-list">
+            <li><span>1</span><div>Mashgʻulot sanasi, laboratoriya ishining tartib raqami va mavzusi.</div></li>
+            <li><span>2</span><div>Ishning maqsadi va mavzuga oid qisqacha nazariy maʼlumotlar.</div></li>
+            <li><span>3</span><div>Oʻlchash asboblari, jihozlar va reaktivlar roʻyxati hamda qurilma sxemasi.</div></li>
+            <li><span>4</span><div>Ishni bajarish tartibi, topiladigan fizik kattaliklarning hisoblash formulalari.</div></li>
+            <li><span>5</span><div>Eksperimental oʻlchov jadvallari, grafiklar va bajarilgan ish boʻyicha xulosalar.</div></li>
+          </ul>
+        </article>
+
+        <article class="guide-card">
+          <h3>Texnika xavfsizligi qoidalari</h3>
+          <ul class="guide-list">
+            <li><span>1</span><div>Laboratoriyada ozodalikka, saranjomlikka, tinchlikka va xavfsizlik qoidalariga qatʼiy rioya qiling.</div></li>
+            <li><span>2</span><div>Tajribani oʻqituvchining ijozati bilan boshlang; mashgʻulot paytida yakka holda tajriba oʻtkazmang.</div></li>
+            <li><span>3</span><div>Har bir ishga tegishli oʻlchagich, qurilma va elektr manbalari oldindan tekshirilishi zarur.</div></li>
+            <li><span>4</span><div>Elektr quvvati, qizdirgichlar va uchuvchan erituvchilar (benzol, spirt) bilan ishlashda ehtiyot boʻling.</div></li>
+            <li><span>5</span><div>Tajriba tugagach olingan natijalarni oʻqituvchiga koʻrsating va jihozlarni tartib bilan topshiring.</div></li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-in">
+    <div>«Kolloid kimyo» fanidan laboratoriya ishlari · Guliston davlat universiteti uslubiy koʻrsatmasi asosida</div>
+    <div class="footer-right">
+      <button type="button" class="reset-btn" id="resetProgress">Natijalarni tozalash</button>
+      <a class="ig-credit" href="https://instagram.com/hayitali1612" target="_blank" rel="noopener noreferrer" title="Instagram: @hayitali1612">hayitali1612</a>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/main.js"></script>
+</body>
+</html>

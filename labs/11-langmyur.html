@@ -1,0 +1,1588 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="author" content="Qayumov Hayitali">
+<meta name="description" content="11-laboratoriya ishi: Qattiq jism sirtidagi adsorbsiya. Faollashtirilgan koʻmirda KMnO₄ adsorbsiyasi, Langmyur izotermasi va adsorbentning solishtirma sirt yuzasini aniqlash.">
+<title>11-lab · Langmyur adsorbsiya izotermasi va solishtirma sirt yuzasi</title>
+<link rel="stylesheet" href="../assets/lab-core.css">
+<style>
+.tube-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px dashed var(--line);font-size:12.5px}
+.tube-row:last-child{border-bottom:none}
+.swatch{width:14px;height:14px;border-radius:4px;display:inline-block;vertical-align:middle;border:1px solid rgba(0,0,0,.18);margin-right:6px}
+.mini-bar{height:7px;background:#e4eeec;border-radius:99px;overflow:hidden;margin-top:6px}
+.mini-bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--top2),var(--accent));transition:width .25s}
+.kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin:8px 0}
+.kpi{background:#f1f7f6;border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.kpi small{display:block;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.kpi b{font-family:var(--mono);font-size:15px;color:var(--top)}
+</style>
+</head>
+<body>
+<header class="lab-head">
+  <a class="home-link" href="../index.html">← Bosh sahifa</a>
+  <div class="lab-switch-wrap" id="labSwitchWrap"></div>
+  <div class="brand">Langmyur izotermasi · Solishtirma sirt yuzasi<small>11-laboratoriya · qattiq jism sirtidagi adsorbsiya (KMnO₄ / faollashtirilgan koʻmir)</small></div>
+  <nav class="tabs" id="tabs"></nav>
+  <div class="scorechip" id="chip">0 / 100</div>
+</header>
+
+<main class="lab-main">
+  <div id="stageWrap">
+    <svg id="scene" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+  <aside id="panel"></aside>
+</main>
+
+<footer class="lab-foot">
+  <span class="lbl">VAQT TEZLIGI</span>
+  <button data-sp="1">×1</button>
+  <button data-sp="5">×5</button>
+  <button data-sp="10">×10</button>
+  <span class="sp"></span>
+  <button id="btnTable">📋 Jurnal</button>
+  <button id="btnHint">💡 Maslahat</button>
+  <button id="btnTheory">📘 Nazariya</button>
+  <button id="btnSnd">🔊 Ovoz</button>
+  <button id="btnFull">⛶</button>
+  <a class="ig-credit" href="https://instagram.com/hayitali1612" target="_blank" rel="noopener noreferrer" title="Instagram: @hayitali1612">hayitali1612</a>
+</footer>
+
+<div id="toasts"></div>
+<div id="modal"><div class="card" id="modalCard"></div></div>
+
+<script src="../assets/lab-core.js"></script>
+<script>
+"use strict";
+const LAB_ID = 11;
+const { $, el, clamp, lerp, f1, attr, shuf } = LabUI;
+
+/* ============ FIZIK-KIMYOVIY KONSTANTALAR ============ */
+const PHYS = {
+  V: 0.050,          // har bir probirkadagi eritma hajmi, L (50 ml)
+  m: 0.50,           // faollashtirilgan koʻmir massasi, g
+  M_KMnO4: 158.03,   // KMnO4 molyar massasi, g/mol
+  eps: 2200,         // molyar yutilish koeffitsiyenti, L/(mol·cm) λ=525 nm da
+  pathL: 0.1,        // kyuvet qalinligi, cm (1 mm)
+  AinfTrue: 0.520,   // haqiqiy chegaraviy adsorbsiya, mmol/g
+  Ktrue: 650,        // Langmyur adsorbsiya doimiysi, L/mol
+  NA: 6.02214e23,    // Avogadro soni, mol⁻¹
+  S0: 3.6e-19        // bitta MnO4⁻ ionining sirtdagi maydoni, m² (0.36 nm²)
+};
+
+const C0_LIST = [0.001, 0.002, 0.005, 0.010]; // mol/L
+
+// Har bir C0 uchun Langmyur tenglamasi va massa balansi orqali muvozanat konsentratsiyasini hisoblash
+function solveLangmuirEq(C0, noise = 1) {
+  const r = PHYS.V / PHYS.m; // 0.100 L/g
+  const Ainf = (PHYS.AinfTrue / 1000) * noise; // mol/g
+  const K = PHYS.Ktrue;
+  const a = r * K;
+  const b = r + Ainf * K - r * K * C0;
+  const c = -r * C0;
+  const Ceq = (-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a);
+  const A_mol = (C0 - Ceq) * r;
+  const A_mmol = A_mol * 1000;
+  const A_mg = A_mmol * PHYS.M_KMnO4;
+  return { Ceq, A_mmol, A_mg };
+}
+
+// KMnO4 eritmasining konsentratsiyasiga qarab haqiqiy binafsha-pushti rangi
+function kmno4Color(C, alpha = 0.88) {
+  const t = clamp(Math.log10(Math.max(C, 1e-5) / 0.00015) / Math.log10(0.010 / 0.00015), 0, 1);
+  const r = Math.round(lerp(245, 92, t));
+  const g = Math.round(lerp(185, 10, t));
+  const b = Math.round(lerp(225, 118, t));
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+function kmno4Hex(C) {
+  const t = clamp(Math.log10(Math.max(C, 1e-5) / 0.00015) / Math.log10(0.010 / 0.00015), 0, 1);
+  const r = Math.round(lerp(244, 90, t));
+  const g = Math.round(lerp(178, 12, t));
+  const b = Math.round(lerp(222, 118, t));
+  return `rgb(${r},${g},${b})`;
+}
+
+/* ============ SAVOLLAR ============ */
+const STAGE_QS = {
+  0: [
+    {
+      id: "s1q1",
+      q: "Buger–Lambert–Ber qonuniga (D = ε·l·C) koʻra, KMnO₄ konsentratsiyasi 2 baravar oshirilsa optik zichlik D qanday oʻzgaradi?",
+      opts: [
+        "Toʻgʻri proporsional ravishda 2 baravar ortadi",
+        "2 baravar kamayadi",
+        "Oʻzgarmaydi, faqat toʻlqin uzunligi siljiydi",
+        "4 baravar ortadi"
+      ],
+      ok: 0
+    },
+    {
+      id: "s1q2",
+      q: "Binafsha rangli KMnO₄ eritmasini spektrofotometrda oʻlchash uchun nima sababdan λ = 525 nm (yashil nur) tanlanadi?",
+      opts: [
+        "Binafsha eritma qoʻshimcha rang boʻlgan yashil nurni maksimal darajada yutadi",
+        "Yashil nur eng kichik energiyaga ega boʻlgani uchun",
+        "KMnO₄ faqat ultrabinafsha nurlarni oʻtkazgani uchun",
+        "Shisha kyuvet faqat 525 nm da shaffof boʻladi"
+      ],
+      ok: 0
+    }
+  ],
+  1: [
+    {
+      id: "s2q1",
+      q: "Nima uchun adsorbsiya jarayonida probirkalar 25 °C doimiy haroratli suv hammomida ushlab turiladi?",
+      opts: [
+        "Adsorbsiya izotermasi faqat oʻzgarmas haroratda (T = const) toʻgʻri quriladi, chunki adsorbsiya haroratga bogʻliq",
+        "25 °C da faollashtirilgan koʻmir erib ketadi",
+        "KMnO₄ faqat 25 °C da binafsha rangga kiradi",
+        "Suv hammomi eritma konsentratsiyasini ikki baravar oshiradi"
+      ],
+      ok: 0
+    },
+    {
+      id: "s2q2",
+      q: "Faollashtirilgan koʻmir qoʻshilgach probirkalarni yaxshilab chayqatish nimaga xizmat qiladi?",
+      opts: [
+        "MnO₄⁻ ionlarining koʻmir gʻovaklariga diffuziyasini tezlashtirib, adsorbsion muvozanatga tezroq yetishga",
+        "KMnO₄ ni kislorod gaziga parchalashga",
+        "Koʻmir massasini kamaytirishga",
+        "Eritma hajmini 50 ml dan 100 ml ga oshirishga"
+      ],
+      ok: 0
+    }
+  ],
+  2: [
+    {
+      id: "s3q1",
+      q: "Spektrofotometrik oʻlchashdan oldin faollashtirilgan koʻmirni filtrlash yoki sentrifugalash nega shart?",
+      opts: [
+        "Muallaq qora koʻmir zarralari nurni sochib va yutib, optik zichlik D ni sunʼiy ravishda oshirib yuboradi",
+        "Koʻmir kyuvet shishasini eritib yuboradi",
+        "Sentrifugalash KMnO₄ ning molyar massasini oʻzgartiradi",
+        "Filtrlashsiz eritma rangi yoʻqolib qoladi"
+      ],
+      ok: 0
+    },
+    {
+      id: "s3q2",
+      q: "Adsorbsiyalangan modda miqdori A (mmol/g) qaysi formula bilan hisoblanadi?",
+      opts: [
+        "A = (C₀ − C_eq) · V / m",
+        "A = (C₀ + C_eq) · m / V",
+        "A = C_eq · V · m",
+        "A = D₀ / D_qold"
+      ],
+      ok: 0
+    }
+  ],
+  3: [
+    {
+      id: "s4q1",
+      q: "Chiziqli Langmyur grafigi C/A = 1/(A_∞·K) + (1/A_∞)·C ning ogʻish burchagi tangensi (tg α) nimaga teng?",
+      opts: [
+        "1 / A_∞ (chegaraviy adsorbsiyaning teskari qiymatiga)",
+        "K (adsorbsiya doimiysiga)",
+        "S_sol (solishtirma sirt yuzasiga)",
+        "ε · l (optik koeffitsiyentga)"
+      ],
+      ok: 0
+    },
+    {
+      id: "s4q2",
+      q: "Adsorbentning solishtirma sirt yuzasi S_sol (m²/g) qaysi bogʻlanish orqali aniqlanadi?",
+      opts: [
+        "S_sol = A_∞ · N_A · S₀",
+        "S_sol = K / (A_∞ · N_A)",
+        "S_sol = C₀ · V / S₀",
+        "S_sol = A_∞ / (N_A · S₀)"
+      ],
+      ok: 0
+    }
+  ]
+};
+
+const FINAL_QUIZ = [
+  {
+    id: "fq1",
+    q: "Langmyur monomolekulyar adsorbsiya nazariyasining asosiy farazlaridan biri qaysi?",
+    opts: [
+      "Adsorbsiya bir jinsli faol markazlarda faqat monomolekulyar qavat hosil qilib boradi va zarralar oʻzaro taʼsirlashmaydi",
+      "Adsorbent sirtida cheksiz koʻp polimolekulyar qavatlar hosil boʻladi",
+      "Adsorbsiya faqat qaytmas kimyoviy reaksiya koʻrinishida kechadi",
+      "Konsentratsiya ortgan sari adsorbsiya cheksiz chiziqli oʻsadi"
+    ],
+    ok: 0
+  },
+  {
+    id: "fq2",
+    q: "KMnO₄ eritmasida C₀ = 0,005 M, C_eq = 0,002 M, V = 50 ml (0,05 L) va m = 0,50 g boʻlsa, adsorbsiya A (mmol/g) nechaga teng?",
+    opts: [
+      "0,30 mmol/g",
+      "0,03 mmol/g",
+      "3,00 mmol/g",
+      "0,15 mmol/g"
+    ],
+    ok: 0
+  },
+  {
+    id: "fq3",
+    q: "Muvozanat konsentratsiya C juda katta boʻlganda (K·C ≫ 1) Langmyur tenglamasi A = A_∞·K·C / (1 + K·C) qanday koʻrinish oladi?",
+    opts: [
+      "A ≈ A_∞ (sirt toʻyinadi, izoterma gorizontal platoga chiqadi)",
+      "A ≈ 0 (adsorbsiya toʻxtaydi)",
+      "A ≈ A_∞ · K · C (chiziqli oʻsish)",
+      "A ≈ 1 / K"
+    ],
+    ok: 0
+  },
+  {
+    id: "fq4",
+    q: "Nima uchun faollashtirilgan koʻmir suvli eritmalardan KMnO₄ ni kuchli adsorbsiyalaydi?",
+    opts: [
+      "Uning juda rivojlangan gʻovak strukturasi va katta solishtirma sirt yuzasi (yuzlab m²/g) mavjud",
+      "Uning zichligi suvnikidan 10 baravar katta",
+      "U KMnO₄ bilan eruvchan tuz hosil qiladi",
+      "Uning sirti mutlaqo silliq va gʻovaksiz"
+    ],
+    ok: 0
+  },
+  {
+    id: "fq5",
+    q: "Agar chegaraviy adsorbsiya A_∞ = 0,50 mmol/g (5,0·10⁻⁴ mol/g), N_A = 6,02·10²³ mol⁻¹ va S₀ = 3,6·10⁻¹⁹ m² boʻlsa, S_sol taxminan nechaga teng?",
+    opts: [
+      "≈ 108 m²/g",
+      "≈ 10,8 m²/g",
+      "≈ 1080 m²/g",
+      "≈ 1,08 m²/g"
+    ],
+    ok: 0
+  }
+];
+
+/* ============ HOLAT (STATE) ============ */
+function createInitialState() {
+  // Kichik real laboratoriya tarqoqligi (±1.2%)
+  const noises = [0.992, 1.008, 0.996, 1.004];
+  const samples = C0_LIST.map((C0, i) => {
+    const D0 = +(PHYS.eps * PHYS.pathL * C0).toFixed(3);
+    const eq = solveLangmuirEq(C0, noises[i]);
+    const Dq = +(PHYS.eps * PHYS.pathL * eq.Ceq).toFixed(3);
+    const CeqMeas = +(Dq / (PHYS.eps * PHYS.pathL)).toFixed(6);
+    const A_mmol = +((C0 - CeqMeas) * PHYS.V / PHYS.m * 1000).toFixed(3);
+    const A_mg = +(A_mmol * PHYS.M_KMnO4).toFixed(2);
+    return {
+      idx: i,
+      label: `#${i + 1}`,
+      C0,
+      D0,
+      Dq,
+      Ceq: CeqMeas,
+      A_mmol,
+      A_mg,
+      prepared: false,
+      calDone: false,
+      charcoalAdded: false,
+      separated: false,
+      specDone: false
+    };
+  });
+  return {
+    stage: 0,
+    speed: 5,
+    samples,
+    // 1-bosqich
+    activeTube: -1,
+    pouring: null,       // {idx, prog}
+    specActive: null,    // {idx, mode:'base'|'eq', prog, val}
+    // 2-bosqich
+    weighedMass: 0,
+    weighing: false,
+    shaken: false,
+    shakeT: 0,
+    inBath: false,
+    bathTime: 0,         // 0..20 daqiqa
+    bathRunning: false,
+    bathDone: false,
+    // 3-bosqich
+    sepMethod: "centrifuge", // 'centrifuge' | 'filter'
+    sepRunning: false,
+    sepProg: 0,
+    // 4-bosqich
+    plottedIso: false,
+    plottedLin: false,
+    calcSurface: false,
+    inspectIdx: 3,
+    // Savollar
+    ans: {},
+    seed: 1142,
+    t: 0
+  };
+}
+
+let S = createInitialState();
+
+/* ============ CHIZIQLI REGRESSIYA (LANGMYUR) ============ */
+function computeLangmuirFit() {
+  const ready = S.samples.filter(s => s.specDone);
+  if (ready.length < 2) return null;
+  // x = C_eq (mmol/L), y = C_eq / A (g/L)
+  const pts = ready.map(s => {
+    const x = s.Ceq * 1000; // mmol/L
+    const y = x / Math.max(s.A_mmol, 1e-6); // g/L
+    return { x, y, Ceq: s.Ceq, A: s.A_mmol, idx: s.idx };
+  });
+  const n = pts.length;
+  const sx = pts.reduce((a, p) => a + p.x, 0);
+  const sy = pts.reduce((a, p) => a + p.y, 0);
+  const sxy = pts.reduce((a, p) => a + p.x * p.y, 0);
+  const sxx = pts.reduce((a, p) => a + p.x * p.x, 0);
+  const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx || 1); // 1 / A_inf (g/mmol)
+  const intercept = (sy - slope * sx) / n; // 1 / (A_inf * K_mM) (g/L)
+  const A_inf = 1 / slope; // mmol/g
+  const K_mM = slope / Math.max(intercept, 1e-6); // L/mmol
+  const K_M = K_mM * 1000; // L/mol
+  // R^2
+  const yMean = sy / n;
+  let ssTot = 0, ssRes = 0;
+  pts.forEach(p => {
+    const yh = slope * p.x + intercept;
+    ssTot += (p.y - yMean) ** 2;
+    ssRes += (p.y - yh) ** 2;
+  });
+  const R2 = 1 - ssRes / (ssTot || 1);
+  const S_sol = (A_inf / 1000) * PHYS.NA * PHYS.S0; // m^2/g
+  return { pts, slope, intercept, A_inf, K_M, K_mM, R2, S_sol };
+}
+
+/* ============ BALL HISOBLASH (100 BALL) ============ */
+function total() {
+  const prepCount = S.samples.filter(s => s.prepared).length;
+  const calCount = S.samples.filter(s => s.calDone).length;
+  const p1 = Math.round(prepCount * 1.5 + calCount * 1.5); // 12
+
+  const chCount = S.samples.filter(s => s.charcoalAdded).length;
+  const p2 = Math.round(chCount * 1.5) + (S.shaken ? 2 : 0) + (S.bathDone ? 4 : 0); // 12
+
+  const sepCount = S.samples.filter(s => s.separated).length;
+  const specCount = S.samples.filter(s => s.specDone).length;
+  const p3 = (sepCount === 4 ? 4 : 0) + specCount * 2; // 12
+
+  const p4 = (S.plottedIso ? 3 : 0) + (S.plottedLin ? 3 : 0) + (S.calcSurface ? 4 : 0); // 10
+
+  const prac = p1 + p2 + p3 + p4; // 46
+
+  let sq = 0;
+  Object.values(STAGE_QS).flat().forEach(q => { if (S.ans[q.id] === q.ok) sq += 3; }); // 8*3 = 24
+
+  let fq = 0;
+  FINAL_QUIZ.forEach(q => { if (S.ans[q.id] === q.ok) fq += 6; }); // 5*6 = 30
+
+  const tot = prac + sq + fq;
+  return { p1, p2, p3, p4, prac, sq, fq, tot };
+}
+
+function stageDone(i) {
+  if (i === 0) return S.samples.every(s => s.prepared && s.calDone);
+  if (i === 1) return S.samples.every(s => s.charcoalAdded) && S.shaken && S.bathDone;
+  if (i === 2) return S.samples.every(s => s.separated && s.specDone);
+  if (i === 3) return S.plottedIso && S.plottedLin && S.calcSurface;
+  if (i === 4) return FINAL_QUIZ.every(q => S.ans[q.id] !== undefined);
+  return false;
+}
+
+/* ============ TABLAR VA PROGRESS ============ */
+const TABS = [
+  "1. Tayyorlash",
+  "2. Adsorbsiya (25 °C)",
+  "3. Spektrofotometriya",
+  "4. Langmyur va S_sol",
+  "5. Hisobot"
+];
+
+function renderTabs() {
+  const sc = total();
+  el("chip").textContent = `${sc.tot} / 100`;
+  const isDone = stageDone(0) && stageDone(1) && stageDone(2) && stageDone(3);
+  LabProgress.save(LAB_ID, sc.tot, isDone);
+
+  el("tabs").innerHTML = TABS.map((t, i) => {
+    const cls = (i === S.stage ? "cur " : "") + (stageDone(i) ? "done" : "");
+    return `<button class="${cls}" data-st="${i}">${stageDone(i) ? "✓ " : ""}${t}</button>`;
+  }).join("");
+  el("tabs").querySelectorAll("button").forEach(b => {
+    b.onclick = () => {
+      const idx = +b.dataset.st;
+      if (idx === 1 && !stageDone(0)) {
+        LabUI.toast("Avval 1-bosqichda barcha 4 ta KMnO₄ eritmasini tayyorlab, kalibrlang!", "warn");
+        SFX.play("warn");
+        return;
+      }
+      if (idx === 2 && !stageDone(1)) {
+        LabUI.toast("Avval 2-bosqichda koʻmir qoʻshib, 25 °C suv hammomida 20 daqiqa ushlab turing!", "warn");
+        SFX.play("warn");
+        return;
+      }
+      if (idx === 3 && !stageDone(2)) {
+        LabUI.toast("Avval 3-bosqichda koʻmirni ajratib, 4 ta qoldiq eritmani oʻlchang!", "warn");
+        SFX.play("warn");
+        return;
+      }
+      SFX.play("click");
+      S.stage = idx;
+      renderAll();
+    };
+  });
+}
+
+/* ============ HARAKATLAR ============ */
+function prepareSample(i) {
+  const s = S.samples[i];
+  if (s.prepared || S.pouring) return;
+  SFX.play("pour");
+  S.pouring = { idx: i, prog: 0 };
+  LabUI.toast(`Probirka ${s.label} ga 50 ml ${f1(s.C0, 3)} M KMnO₄ tayyorlanmoqda...`, "");
+  renderPanel();
+}
+
+function prepareAll() {
+  const next = S.samples.findIndex(s => !s.prepared);
+  if (next === -1) return;
+  prepareSample(next);
+  S._autoPrep = true;
+}
+
+function measureBaseline(i) {
+  const s = S.samples[i];
+  if (!s.prepared) { LabUI.toast("Avval bu eritmani tayyorlang!", "warn"); SFX.play("warn"); return; }
+  if (S.specActive) return;
+  SFX.play("pipette");
+  S.specActive = { idx: i, mode: "base", prog: 0, val: s.D0 };
+  renderPanel();
+}
+
+function weighAndAddCharcoal(i) {
+  const s = S.samples[i];
+  if (s.charcoalAdded || S.weighing) return;
+  SFX.play("weigh");
+  S.weighing = true;
+  S.weighedMass = 0;
+  const start = performance.now();
+  const dur = 650;
+  function step(now) {
+    const k = clamp((now - start) / dur, 0, 1);
+    S.weighedMass = +(0.500 * k).toFixed(3);
+    if (k < 1) {
+      requestAnimationFrame(step);
+    } else {
+      S.weighing = false;
+      s.charcoalAdded = true;
+      SFX.play("drip");
+      LabUI.toast(`${s.label} probirkaga 0,500 g faollashtirilgan koʻmir qoʻshildi.`, "ok");
+      renderAll();
+      if (S._autoCharcoal) {
+        const nxt = S.samples.findIndex(x => !x.charcoalAdded);
+        if (nxt !== -1) setTimeout(() => weighAndAddCharcoal(nxt), 180);
+        else S._autoCharcoal = false;
+      }
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+function addAllCharcoal() {
+  const nxt = S.samples.findIndex(x => !x.charcoalAdded);
+  if (nxt === -1) return;
+  S._autoCharcoal = true;
+  weighAndAddCharcoal(nxt);
+}
+
+function shakeTubes() {
+  if (!S.samples.every(s => s.charcoalAdded)) {
+    LabUI.toast("Avval barcha 4 ta probirkaga 0,50 g dan koʻmir qoʻshing!", "warn");
+    SFX.play("warn");
+    return;
+  }
+  SFX.play("shake");
+  S.shakeT = 1.2;
+  S.shaken = true;
+  LabUI.toast("Probirkalar kuchli chayqatildi — koʻmir zarralari bir tekis taqsimlandi!", "ok");
+  renderAll();
+}
+
+function toggleWaterBath() {
+  if (!S.shaken) {
+    LabUI.toast("Avval probirkalarni kuchli chayqating!", "warn");
+    SFX.play("warn");
+    return;
+  }
+  if (S.bathDone) return;
+  S.inBath = true;
+  S.bathRunning = !S.bathRunning;
+  SFX.play(S.bathRunning ? "heat" : "click");
+  if (S.bathRunning) {
+    LabUI.toast("25,0 °C suv hammomi ishga tushdi. KMnO₄ rangi asta-sekin ochlashmoqda!", "");
+  }
+  renderAll();
+}
+
+function runSeparation() {
+  if (S.samples.every(s => s.separated) || S.sepRunning) return;
+  S.sepRunning = true;
+  S.sepProg = 0;
+  SFX.play(S.sepMethod === "centrifuge" ? "vacuum" : "pour");
+  LabUI.toast(S.sepMethod === "centrifuge"
+    ? "Sentrifuga 4000 ayl/min tezlikda ishlamoqda..."
+    : "Eritmalar qogʻoz filtr orqali tozalanmoqda...", "");
+  renderPanel();
+}
+
+function measureResidual(i) {
+  const s = S.samples[i];
+  if (!s.separated) { LabUI.toast("Avval koʻmirni eritmadan ajrating!", "warn"); SFX.play("warn"); return; }
+  if (S.specActive) return;
+  SFX.play("pipette");
+  S.specActive = { idx: i, mode: "eq", prog: 0, val: s.Dq };
+  renderPanel();
+}
+
+function answerQ(qid, chosen, correct) {
+  if (S.ans[qid] !== undefined) return;
+  S.ans[qid] = chosen;
+  if (chosen === correct) {
+    SFX.play("ok");
+    LabUI.toast("Toʻgʻri javob!", "ok", 2200);
+  } else {
+    SFX.play("err");
+    LabUI.toast("Notoʻgʻri. Nazariya boʻlimini koʻzdan kechiring.", "err", 2800);
+  }
+  renderAll();
+}
+
+/* ============ SVG SAHNA CHIZISH ============ */
+function tubeColorNow(s) {
+  if (!s.prepared) return "rgba(210,225,224,0.18)";
+  if (S.stage === 0) return kmno4Color(s.C0, 0.9);
+  const f = clamp(S.bathTime / 20, 0, 1);
+  // Eksponensial yaqinlashish C(t) = Ceq + (C0 - Ceq) * exp(-3.2 * f)
+  const Cnow = s.Ceq + (s.C0 - s.Ceq) * Math.exp(-3.4 * f);
+  return kmno4Color(Cnow, 0.88);
+}
+
+function renderSVG() {
+  const svg = el("scene");
+  const st = S.stage;
+  let defs = `<defs>
+    <linearGradient id="bgWall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#dfecea"/><stop offset="100%" stop-color="#c3d7d4"/>
+    </linearGradient>
+    <linearGradient id="benchTop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4e696d"/><stop offset="18%" stop-color="#375155"/><stop offset="100%" stop-color="#22383b"/>
+    </linearGradient>
+    <linearGradient id="glassShine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#fff" stop-opacity=".55"/>
+      <stop offset="22%" stop-color="#fff" stop-opacity=".08"/>
+      <stop offset="82%" stop-color="#0f2e33" stop-opacity=".06"/>
+      <stop offset="100%" stop-color="#fff" stop-opacity=".35"/>
+    </linearGradient>
+    <linearGradient id="specBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f6faf9"/><stop offset="100%" stop-color="#d4e2e0"/>
+    </linearGradient>
+    <linearGradient id="waterBath" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#76d2e8" stop-opacity=".55"/><stop offset="100%" stop-color="#298da8" stop-opacity=".68"/>
+    </linearGradient>
+    <filter id="shd" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#0d2326" flood-opacity=".22"/>
+    </filter>
+  </defs>`;
+
+  // Laboratoriya foni va stoli
+  let body = `
+    <rect width="1000" height="600" fill="url(#bgWall)"/>
+    <g opacity=".22" stroke="#6c8b8f" stroke-width="1">
+      ${[100,200,300,400,500,600,700,800,900].map(x=>`<line x1="${x}" y1="0" x2="${x}" y2="455"/>`).join("")}
+      ${[90,180,270,360].map(y=>`<line x1="0" y1="${y}" x2="1000" y2="${y}"/>`).join("")}
+    </g>
+    <rect x="0" y="455" width="1000" height="145" fill="url(#benchTop)"/>
+    <rect x="0" y="455" width="1000" height="6" fill="#6f9094"/>
+  `;
+
+  if (st === 0) body += drawStage1();
+  else if (st === 1) body += drawStage2();
+  else if (st === 2) body += drawStage3();
+  else if (st === 3) body += drawStage4();
+  else body += drawStage5();
+
+  svg.innerHTML = defs + body;
+  bindStageClicks();
+}
+
+function drawSpectrophotometer(x, y, mode) {
+  const sp = S.specActive;
+  const active = sp && sp.mode === mode;
+  const beamOn = active && sp.prog > 0.25 && sp.prog < 0.96;
+  const sample = active ? S.samples[sp.idx] : null;
+  const dispVal = active
+    ? (sp.prog > 0.65 ? f1(sp.val, 3) : f1(sp.val * (0.4 + 0.6 * sp.prog), 3))
+    : (mode === "base"
+        ? (S.samples.filter(s=>s.calDone).slice(-1)[0] ? f1(S.samples.filter(s=>s.calDone).slice(-1)[0].D0, 3) : "0,000")
+        : (S.samples.filter(s=>s.specDone).slice(-1)[0] ? f1(S.samples.filter(s=>s.specDone).slice(-1)[0].Dq, 3) : "0,000"));
+  const subTxt = active ? `${sample.label} · oʻlchanmoqda` : `λ = 525 nm · l = 0,1 cm`;
+
+  let s = `<g transform="translate(${x},${y})" filter="url(#shd)">
+    <rect x="0" y="36" width="285" height="196" rx="16" fill="url(#specBody)" stroke="#88a3a0" stroke-width="2"/>
+    <rect x="0" y="202" width="285" height="30" rx="8" fill="#17383d"/>
+    <text x="16" y="222" fill="#cde3e0" font-size="11.5" font-weight="700" font-family="var(--mono)">UV-VIS SF-26 · λ = 525 nm</text>
+
+    <!-- Raqamli LCD ekran -->
+    <rect x="18" y="54" width="152" height="68" rx="9" fill="#0d2529" stroke="#2c595f" stroke-width="2"/>
+    <text x="28" y="72" fill="#77bdb4" font-size="10" font-family="var(--mono)">OPTIK ZICHLIK (D)</text>
+    <text x="94" y="106" text-anchor="middle" fill="#6ff7c2" font-size="29" font-weight="700" font-family="var(--mono)">${dispVal}</text>
+    <text x="28" y="117" fill="#9bc9c3" font-size="9.2" font-family="var(--mono)">${subTxt}</text>
+
+    <!-- Optik yoʻl koʻrsatkichi -->
+    <rect x="18" y="132" width="248" height="58" rx="8" fill="#132d31"/>
+    <circle cx="38" cy="161" r="10" fill="${beamOn ? "#5bf57a" : "#2e5446"}" stroke="#87e8be" stroke-width="1.5"/>
+    <text x="38" y="183" text-anchor="middle" fill="#a2c4bf" font-size="8.5">Manba</text>
+    <rect x="234" y="148" width="18" height="26" rx="3" fill="#2c595f" stroke="#9be2d8"/>
+    <text x="243" y="183" text-anchor="middle" fill="#a2c4bf" font-size="8.5">Detektor</text>
+
+    <!-- Kyuvet kamerasi -->
+    <rect x="118" y="142" width="38" height="38" rx="4" fill="#091a1d" stroke="#5c8a85" stroke-dasharray="3 2"/>
+    ${beamOn ? `
+      <line x1="48" y1="161" x2="122" y2="161" stroke="#4cff6e" stroke-width="4" opacity=".9"/>
+      <line x1="152" y1="161" x2="234" y2="161" stroke="#4cff6e" stroke-width="3" opacity="${clamp(Math.pow(10, -(sp.val||0)*0.45), 0.12, 0.85)}"/>
+    ` : `<line x1="48" y1="161" x2="234" y2="161" stroke="#2c5357" stroke-width="1.5" stroke-dasharray="4 4"/>`}
+
+    <!-- Kyuvet ichida eritma -->
+    ${active ? `
+      <g transform="translate(125, ${lerp(95, 146, clamp(sp.prog * 3, 0, 1))})">
+        <rect x="0" y="0" width="24" height="30" rx="2" fill="rgba(255,255,255,.35)" stroke="#cce3e0" stroke-width="1.4"/>
+        <rect x="2" y="6" width="20" height="22" rx="1" fill="${mode === 'base' ? kmno4Color(sample.C0, .92) : kmno4Color(sample.Ceq, .92)}"/>
+      </g>` : `
+      <rect x="125" y="146" width="24" height="30" rx="2" fill="rgba(255,255,255,.08)" stroke="#4c7478" stroke-dasharray="2 2"/>`}
+
+    <!-- Tugmachalar -->
+    <rect x="184" y="56" width="82" height="28" rx="6" fill="#e89b3c"/>
+    <text x="225" y="74" text-anchor="middle" fill="#1b1204" font-size="11" font-weight="700">525 nm</text>
+    <rect x="184" y="92" width="82" height="28" rx="6" fill="#1b484f"/>
+    <text x="225" y="110" text-anchor="middle" fill="#dcf2ef" font-size="10.5" font-weight="600">ZERO / CAL</text>
+  </g>`;
+  return s;
+}
+
+function drawStage1() {
+  let s = `<text x="36" y="42" fill="#132629" font-size="19" font-weight="800">1-BOSQICH: KMnO₄ eritmalarini tayyorlash va UV-Vis kalibrlash</text>
+    <text x="36" y="63" fill="#476366" font-size="13">Har bir probirkani bosib 50 ml eritma quying, soʻng spektrofotometrda boshlangʻich optik zichlik D₀ ni oʻlchang</text>`;
+
+  // Stock KMnO4 shishasi va distillangan suv
+  s += `<g transform="translate(36, 175)" filter="url(#shd)">
+    <path d="M36 30 L58 30 L64 78 L86 245 Q88 265 68 265 L26 265 Q6 265 8 245 L30 78 Z" fill="rgba(255,255,255,.45)" stroke="#3e5e62" stroke-width="2"/>
+    <path d="M22 140 L72 140 L84 245 Q86 262 68 262 L26 262 Q8 262 10 245 Z" fill="rgba(90,10,115,.92)"/>
+    <rect x="18" y="168" width="58" height="52" rx="5" fill="#fffdf8" opacity=".92"/>
+    <text x="47" y="186" text-anchor="middle" font-size="11" font-weight="800" fill="#4f0a69">KMnO₄</text>
+    <text x="47" y="201" text-anchor="middle" font-size="10" font-family="var(--mono)" fill="#132629">0,020 M</text>
+    <text x="47" y="214" text-anchor="middle" font-size="8.5" fill="#587276">Asosiy eritma</text>
+    <rect x="33" y="16" width="28" height="16" rx="3" fill="#3a2347"/>
+  </g>`;
+
+  // Pipetka / dozator (yuqorida)
+  if (S.pouring) {
+    const px = 248 + S.pouring.idx * 102;
+    const col = kmno4Color(S.samples[S.pouring.idx].C0, .92);
+    s += `<g transform="translate(${px}, 92)">
+      <rect x="-5" y="0" width="10" height="72" rx="3" fill="#e9f4f2" stroke="#3c5b5f" stroke-width="1.5"/>
+      <rect x="-3" y="${20 + S.pouring.prog * 44}" width="6" height="${48 * (1 - S.pouring.prog)}" fill="${col}"/>
+      <path d="M-3 72 L3 72 L1 86 L-1 86 Z" fill="#9fb9b7"/>
+      <line x1="0" y1="86" x2="0" y2="${225 - S.pouring.prog * 70}" stroke="${col}" stroke-width="4" stroke-dasharray="7 4" stroke-dashoffset="${-S.t * 140}"/>
+    </g>`;
+  }
+
+  // Shtativ va 4 ta probirka
+  s += `<g transform="translate(188, 175)">
+    <rect x="0" y="242" width="435" height="22" rx="6" fill="#7c5636" stroke="#4a311c" stroke-width="2" filter="url(#shd)"/>
+    <rect x="14" y="112" width="407" height="14" rx="4" fill="#996d47" stroke="#4a311c" stroke-width="1.6"/>
+    <rect x="18" y="126" width="14" height="116" fill="#7c5636"/>
+    <rect x="403" y="126" width="14" height="116" fill="#7c5636"/>`;
+
+  S.samples.forEach((sm, i) => {
+    const tx = 60 + i * 102;
+    const isPour = S.pouring && S.pouring.idx === i;
+    const fillH = sm.prepared ? 148 : (isPour ? 148 * S.pouring.prog : 0);
+    const needPrep = !sm.prepared && !S.pouring;
+    const needCal = sm.prepared && !sm.calDone && !S.specActive;
+    const glow = (needPrep && i === S.samples.findIndex(x=>!x.prepared)) || (S.samples.every(x=>x.prepared) && needCal && i === S.samples.findIndex(x=>!x.calDone));
+    s += `<g class="clk ${glow ? "glow" : ""}" data-act="tube1" data-i="${i}" transform="translate(${tx}, 42)">
+      <rect x="-24" y="0" width="48" height="212" rx="22" fill="rgba(255,255,255,.32)" stroke="#3e5e62" stroke-width="2"/>
+      ${fillH > 1 ? `
+        <path d="M-21 ${209 - fillH} L21 ${209 - fillH} L21 190 Q21 209 0 209 Q-21 209 -21 190 Z" fill="${kmno4Color(sm.C0, .92)}"/>
+        <ellipse cx="0" cy="${209 - fillH}" rx="21" ry="4.5" fill="${kmno4Color(sm.C0, .65)}"/>
+      ` : ""}
+      <rect x="-24" y="0" width="48" height="212" rx="22" fill="url(#glassShine)"/>
+      <rect x="-27" y="-5" width="54" height="9" rx="4" fill="#e6f2f0" stroke="#3e5e62" stroke-width="1.6"/>
+      <text x="0" y="238" text-anchor="middle" font-size="13" font-weight="800" fill="#132629">${sm.label}</text>
+      <text x="0" y="254" text-anchor="middle" font-size="11" font-family="var(--mono)" fill="#3b5659">${f1(sm.C0, 3)} M</text>
+      ${sm.calDone ? `<rect x="-32" y="-32" width="64" height="20" rx="6" fill="#1f9d6b"/><text x="0" y="-18" text-anchor="middle" fill="#fff" font-size="10.5" font-weight="700" font-family="var(--mono)">D₀=${f1(sm.D0,3)}</text>`
+      : sm.prepared ? `<rect x="-30" y="-32" width="60" height="20" rx="6" fill="#e89b3c"/><text x="0" y="-18" text-anchor="middle" fill="#1b1204" font-size="10" font-weight="700">Oʻlchash</text>` : ""}
+    </g>`;
+  });
+  s += `</g>`;
+
+  // Spektrofotometr oʻngda
+  s += drawSpectrophotometer(680, 224, "base");
+
+  // Pastki stol ustida eslatma
+  s += `<text x="500" y="545" text-anchor="middle" fill="#cbe0dd" font-size="13" font-family="var(--mono)">Buger–Lambert–Ber qonuni: D₀ = ε · l · C₀   |   ε(525 nm) = 2200 L/(mol·cm), l = 0,1 cm</text>`;
+  return s;
+}
+
+function drawStage2() {
+  const f = clamp(S.bathTime / 20, 0, 1);
+  const shakeDx = S.shakeT > 0 ? Math.sin(S.t * 48) * 9 * S.shakeT : 0;
+  let s = `<text x="36" y="42" fill="#132629" font-size="19" font-weight="800">2-BOSQICH: Faollashtirilgan koʻmir (0,50 g) va 25 °C suv hammomida adsorbsiya</text>
+    <text x="36" y="63" fill="#476366" font-size="13">Har bir probirkaga 0,50 g koʻmir tortib soling, chayqating va 25,0 °C suv hammomida 20 daqiqa ushlang</text>`;
+
+  // Analitik tarozi chapda
+  const needCharcoal = !S.samples.every(x => x.charcoalAdded);
+  s += `<g transform="translate(36, 210)" filter="url(#shd)">
+    <rect x="0" y="138" width="210" height="106" rx="12" fill="#eef5f4" stroke="#7d9895" stroke-width="2"/>
+    <rect x="20" y="156" width="170" height="44" rx="7" fill="#0d2529"/>
+    <text x="105" y="185" text-anchor="middle" fill="#77f5be" font-size="24" font-weight="700" font-family="var(--mono)">${f1(S.weighedMass, 3)} g</text>
+    <text x="105" y="218" text-anchor="middle" fill="#3a595c" font-size="11" font-weight="700">ANALITIK TAROZI (±0,001 g)</text>
+    <!-- Shisha qopqoq va tarozi pallasi -->
+    <rect x="20" y="16" width="170" height="122" rx="6" fill="rgba(255,255,255,.32)" stroke="#85a29f" stroke-width="1.6"/>
+    <rect x="52" y="114" width="106" height="8" rx="4" fill="#9fb6b4"/>
+    <rect x="98" y="122" width="14" height="16" fill="#6d8684"/>
+    ${S.weighedMass > 0.02 ? `<path d="M72 114 Q105 ${114 - 38 * (S.weighedMass/0.5)} 138 114 Z" fill="#1e2224"/>` : ""}
+    <!-- Faollashtirilgan koʻmir bankasi -->
+    <g class="clk ${needCharcoal ? "glow" : ""}" data-act="addNextCharcoal" transform="translate(222, 118)">
+      <rect x="0" y="16" width="76" height="110" rx="10" fill="#2c3336" stroke="#14181a" stroke-width="2"/>
+      <rect x="12" y="0" width="52" height="18" rx="4" fill="#525d61"/>
+      <rect x="6" y="42" width="64" height="54" rx="5" fill="#fffaf0"/>
+      <text x="38" y="61" text-anchor="middle" font-size="10.5" font-weight="800" fill="#132629">KOʻMIR</text>
+      <text x="38" y="75" text-anchor="middle" font-size="9" fill="#587276">faollashgan</text>
+      <text x="38" y="88" text-anchor="middle" font-size="9.5" font-family="var(--mono)" font-weight="700" fill="#d18224">0,50 g</text>
+    </g>
+  </g>`;
+
+  // 25°C Suv hammomi (oʻng tomonda, 4 ta probirka unga joylashadi)
+  const bathX = 390, bathY = 148;
+  const waveShift = Math.sin(S.t * 3.5) * 4;
+  s += `<g transform="translate(${bathX}, ${bathY})" filter="url(#shd)">
+    <!-- Suv hammomi korpusi -->
+    <rect x="0" y="110" width="560" height="196" rx="14" fill="#d8e6e4" stroke="#6c8986" stroke-width="2.5"/>
+    <rect x="14" y="122" width="424" height="168" rx="8" fill="#eaf5f6" stroke="#89a8a6" stroke-width="1.5"/>
+    <!-- Suv sathi -->
+    <path d="M16 ${175 + waveShift*0.4} Q120 ${168 - waveShift} 226 ${175 + waveShift*0.4} T436 ${175 - waveShift*0.3} L436 288 L16 288 Z" fill="url(#waterBath)"/>
+    <!-- Isitgich spirali -->
+    <path d="M40 274 Q60 264 80 274 T120 274 T160 274 T200 274 T240 274 T280 274 T320 274 T360 274 T400 274" fill="none" stroke="${S.bathRunning ? "#ff7d3b" : "#7e9496"}" stroke-width="4.5" stroke-linecap="round"/>
+
+    <!-- Termostat boshqaruv paneli -->
+    <rect x="448" y="122" width="100" height="168" rx="9" fill="#143338"/>
+    <text x="498" y="142" text-anchor="middle" fill="#9bc9c3" font-size="9.5" font-weight="700">TERMOSTAT</text>
+    <rect x="458" y="150" width="80" height="34" rx="5" fill="#091a1d"/>
+    <text x="498" y="173" text-anchor="middle" fill="#ff9f43" font-size="18" font-weight="700" font-family="var(--mono)">25,0°C</text>
+    <text x="498" y="204" text-anchor="middle" fill="#9bc9c3" font-size="9.5" font-weight="700">VAQT (daq)</text>
+    <rect x="458" y="212" width="80" height="36" rx="5" fill="#091a1d"/>
+    <text x="498" y="236" text-anchor="middle" fill="#77f5be" font-size="19" font-weight="700" font-family="var(--mono)">${f1(S.bathTime, 1)}</text>
+    <text x="498" y="266" text-anchor="middle" fill="${S.bathDone ? "#77f5be" : (S.bathRunning ? "#ffd166" : "#88aaa5")}" font-size="10" font-weight="700">${S.bathDone ? "✓ TAYYOR" : (S.bathRunning ? "● ISHLAMOQDA" : "KUTMOQDA")}</text>
+    <circle cx="498" cy="279" r="5" fill="${S.bathRunning ? "#4cff6e" : (S.bathDone ? "#1f9d6b" : "#556e70")}"/>
+
+    <!-- 4 ta probirka (hammom ichida yoki tepasida) -->
+    <g transform="translate(${shakeDx}, ${S.inBath ? 28 : -44})">
+      ${S.samples.map((sm, i) => {
+        const tx = 72 + i * 100;
+        const col = tubeColorNow(sm);
+        const swirl = S.shakeT > 0 || S.bathRunning;
+        let grains = "";
+        if (sm.charcoalAdded) {
+          for (let g = 0; g < 18; g++) {
+            const gx = -14 + ((g * 19 + i * 7) % 28);
+            const gy = swirl
+              ? 130 + ((g * 37 + Math.floor(S.t * 40)) % 76)
+              : 196 + ((g * 11) % 14);
+            grains += `<circle cx="${gx}" cy="${gy}" r="${1.7 + (g % 3) * 0.55}" fill="#1b1f21" opacity=".88"/>`;
+          }
+        }
+        return `<g class="clk" data-act="tube2" data-i="${i}" transform="translate(${tx}, 26)">
+          <rect x="-22" y="0" width="44" height="214" rx="20" fill="rgba(255,255,255,.35)" stroke="#3e5e62" stroke-width="2"/>
+          <path d="M-19 72 L19 72 L19 193 Q19 211 0 211 Q-19 211 -19 193 Z" fill="${col}"/>
+          <ellipse cx="0" cy="72" rx="19" ry="4" fill="${col}"/>
+          ${grains}
+          <rect x="-22" y="0" width="44" height="214" rx="20" fill="url(#glassShine)"/>
+          <rect x="-24" y="-8" width="48" height="12" rx="4" fill="#c97d3c" stroke="#663d18" stroke-width="1.4"/>
+          <text x="0" y="-16" text-anchor="middle" font-size="11.5" font-weight="800" fill="#132629">${sm.label} (${f1(sm.C0,3)}M)</text>
+          ${sm.charcoalAdded ? `<text x="0" y="232" text-anchor="middle" font-size="10" font-weight="700" fill="#0d2529">+0,5g C</text>` : ""}
+        </g>`;
+      }).join("")}
+    </g>
+  </g>`;
+
+  // Pastki progress indikatori
+  const pct = Math.round(f * 100);
+  s += `<g transform="translate(80, 505)">
+    <text x="0" y="-8" fill="#dcebe9" font-size="12.5" font-weight="700">Adsorbsiya muvozanati (25,0 °C, 20 daqiqa): ${pct}%</text>
+    <rect x="0" y="0" width="840" height="14" rx="7" fill="#132c30"/>
+    <rect x="0" y="0" width="${8.4 * pct}" height="14" rx="7" fill="#e89b3c"/>
+    <text x="0" y="34" fill="#9bc2bd" font-size="11.5">Kuzatuv: faollashtirilgan koʻmir sirtiga MnO₄⁻ ionlari yutilishi natijasida binafsha rang sezilarli ochlashadi (ayniqsa #1 va #2 da).</text>
+  </g>`;
+  return s;
+}
+
+function drawStage3() {
+  const allSep = S.samples.every(s => s.separated);
+  let s = `<text x="36" y="42" fill="#132629" font-size="19" font-weight="800">3-BOSQICH: Koʻmirni ajratish va qoldiq eritmani spektrofotometriya qilish</text>
+    <text x="36" y="63" fill="#476366" font-size="13">Sentrifuga yoki filtrlash orqali koʻmirni ajrating, soʻng har bir tiniq eritmaning D_qold qiymatini oʻlchang</text>`;
+
+  // Chapda: Sentrifuga yoki Filtrlash voronkasi
+  if (S.sepMethod === "centrifuge") {
+    const ang = S.sepRunning ? (S.t * 900) % 360 : 0;
+    s += `<g transform="translate(46, 175)" filter="url(#shd)">
+      <path d="M22 122 L238 122 L254 276 Q254 286 242 286 L18 286 Q6 286 6 276 Z" fill="#e6f0ee" stroke="#6f8c89" stroke-width="2.2"/>
+      <ellipse cx="130" cy="122" rx="108" ry="26" fill="#bfd3d0" stroke="#6f8c89" stroke-width="2"/>
+      <!-- Rotor ichi -->
+      <ellipse cx="130" cy="122" rx="84" ry="18" fill="#183a3f"/>
+      <g transform="translate(130, 122) scale(1, 0.25) rotate(${ang})">
+        <circle cx="0" cy="0" r="68" fill="#325e64" stroke="#85b5b0" stroke-width="4"/>
+        ${[0,90,180,270].map(a => `<circle cx="${Math.cos(a*Math.PI/180)*46}" cy="${Math.sin(a*Math.PI/180)*46}" r="14" fill="#9c27b0" stroke="#fff" stroke-width="3"/>`).join("")}
+      </g>
+      <!-- Qopqoq -->
+      <path d="M22 118 Q130 ${S.sepRunning ? 74 : 20} 238 118" fill="rgba(220,240,238,.65)" stroke="#6f8c89" stroke-width="2"/>
+      <!-- Panel -->
+      <rect x="44" y="180" width="172" height="72" rx="10" fill="#143338"/>
+      <text x="130" y="203" text-anchor="middle" fill="#8dc4bd" font-size="10.5" font-weight="700">SENTRIFUGA · 4000 AYL/MIN</text>
+      <text x="130" y="232" text-anchor="middle" fill="#77f5be" font-size="22" font-weight="700" font-family="var(--mono)">${S.sepRunning ? Math.round(S.sepProg*4000) + " rpm" : (allSep ? "AJRATILDI ✓" : "TAYYOR")}</text>
+      <g class="clk ${!allSep && !S.sepRunning ? "glow" : ""}" data-act="runSep">
+        <rect x="64" y="294" width="132" height="32" rx="9" fill="${allSep ? "#1f9d6b" : "#e89b3c"}"/>
+        <text x="130" y="314" text-anchor="middle" fill="${allSep ? "#fff" : "#1b1204"}" font-size="12" font-weight="700">${allSep ? "✓ Ajratildi" : "▶ Sentrifugalash"}</text>
+      </g>
+    </g>`;
+  } else {
+    const dropY = S.sepRunning ? ((S.t * 160) % 72) : 0;
+    s += `<g transform="translate(56, 150)" filter="url(#shd)">
+      <!-- Shtativ -->
+      <rect x="18" y="290" width="204" height="14" rx="4" fill="#2c484c"/>
+      <rect x="34" y="34" width="10" height="258" fill="#5b7a7d"/>
+      <rect x="34" y="110" width="96" height="8" rx="3" fill="#5b7a7d"/>
+      <!-- Voronka va qogʻoz filtr -->
+      <polygon points="82,74 178,74 137,154 123,154" fill="rgba(255,255,255,.55)" stroke="#3e5e62" stroke-width="2"/>
+      <polygon points="90,74 170,74 133,144 127,144" fill="#fbfaf5" stroke="#c5bfb0" stroke-width="1.4"/>
+      <!-- Qora koʻmir choʻkmasi filtrda -->
+      <polygon points="104,102 156,102 134,142 126,142" fill="#24292b" opacity="${allSep || S.sepRunning ? 0.85 : 0.25}"/>
+      <rect x="125" y="154" width="10" height="44" fill="rgba(255,255,255,.55)" stroke="#3e5e62" stroke-width="1.6"/>
+      ${S.sepRunning ? `<circle cx="130" cy="${198 + dropY}" r="4.5" fill="rgba(165,42,165,.85)"/>` : ""}
+      <!-- Qabul qiluvchi kolba -->
+      <path d="M112 204 L148 204 L178 286 L82 286 Z" fill="rgba(255,255,255,.4)" stroke="#3e5e62" stroke-width="2"/>
+      ${(S.sepRunning || allSep) ? `<path d="M96 ${lerp(284, 240, allSep ? 1 : S.sepProg)} L164 ${lerp(284, 240, allSep ? 1 : S.sepProg)} L176 284 L84 284 Z" fill="rgba(175,55,175,.65)"/>` : ""}
+      <g class="clk ${!allSep && !S.sepRunning ? "glow" : ""}" data-act="runSep">
+        <rect x="64" y="314" width="132" height="32" rx="9" fill="${allSep ? "#1f9d6b" : "#e89b3c"}"/>
+        <text x="130" y="334" text-anchor="middle" fill="${allSep ? "#fff" : "#1b1204"}" font-size="12" font-weight="700">${allSep ? "✓ Filtrlandi" : "▶ Filtrlash"}</text>
+      </g>
+    </g>`;
+  }
+
+  // Oʻrtada: 4 ta ajratilgan probirka (bosib spektrofotometrga uzatiladi)
+  s += `<g transform="translate(322, 185)">
+    <rect x="0" y="232" width="328" height="20" rx="5" fill="#7c5636" stroke="#4a311c" stroke-width="1.8" filter="url(#shd)"/>`;
+  S.samples.forEach((sm, i) => {
+    const tx = 44 + i * 80;
+    const nxt = allSep && !sm.specDone && i === S.samples.findIndex(x => !x.specDone);
+    s += `<g class="clk ${nxt ? "glow" : ""}" data-act="tube3" data-i="${i}" transform="translate(${tx}, 36)">
+      <rect x="-20" y="0" width="40" height="204" rx="18" fill="rgba(255,255,255,.35)" stroke="#3e5e62" stroke-width="2"/>
+      <path d="M-17 66 L17 66 L17 185 Q17 201 0 201 Q-17 201 -17 185 Z" fill="${kmno4Color(sm.Ceq, .88)}"/>
+      ${!sm.separated ? `<circle cx="-5" cy="140" r="3" fill="#1e2224"/><circle cx="7" cy="155" r="2.5" fill="#1e2224"/><circle cx="0" cy="175" r="3.2" fill="#1e2224"/><circle cx="-7" cy="184" r="2.8" fill="#1e2224"/>`
+      : (S.sepMethod === "centrifuge" ? `<path d="M-15 186 Q0 182 15 186 Q14 200 0 200 Q-14 200 -15 186 Z" fill="#1b1f21"/>` : "")}
+      <rect x="-20" y="0" width="40" height="204" rx="18" fill="url(#glassShine)"/>
+      <text x="0" y="232" text-anchor="middle" font-size="12.5" font-weight="800" fill="#132629">${sm.label}</text>
+      ${sm.specDone ? `<rect x="-32" y="-32" width="64" height="22" rx="6" fill="#1f9d6b"/><text x="0" y="-17" text-anchor="middle" fill="#fff" font-size="10" font-weight="700" font-family="var(--mono)">D=${f1(sm.Dq,3)}</text>`
+      : allSep ? `<rect x="-28" y="-32" width="56" height="20" rx="6" fill="#e89b3c"/><text x="0" y="-18" text-anchor="middle" fill="#1b1204" font-size="9.5" font-weight="700">Oʻlchash</text>` : ""}
+    </g>`;
+  });
+  s += `</g>`;
+
+  // Oʻngda: Spektrofotometr
+  s += drawSpectrophotometer(680, 224, "eq");
+
+  s += `<text x="500" y="545" text-anchor="middle" fill="#cbe0dd" font-size="13" font-family="var(--mono)">C_eq = D_qold / (ε·l)   |   A = (C₀ − C_eq)·V / m   |   M(KMnO₄) = 158,03 g/mol</text>`;
+  return s;
+}
+
+function drawStage4() {
+  const fit = computeLangmuirFit();
+  let s = `<text x="36" y="40" fill="#132629" font-size="19" font-weight="800">4-BOSQICH: Langmyur izotermasi va solishtirma sirt yuzasi S_sol</text>
+    <text x="36" y="61" fill="#476366" font-size="13">Adsorbsiya izotermasi A = f(C_eq) va chiziqli shakl C_eq/A = f(C_eq) orqali A_∞, K va S_sol ni aniqlang</text>`;
+
+  // Chap grafik paneli: A = f(C_eq)
+  s += `<g transform="translate(36, 82)" filter="url(#shd)">
+    <rect x="0" y="0" width="445" height="270" rx="14" fill="#ffffff" stroke="#b9cecb" stroke-width="1.6"/>
+    <text x="222" y="25" text-anchor="middle" font-size="13" font-weight="800" fill="#132629">Langmyur adsorbsiya izotermasi: A = f(C_eq)</text>`;
+  if (S.plottedIso && fit) {
+    const padL = 56, padT = 40, w = 365, h = 186;
+    const xm = 7.0, ym = 0.60;
+    const X = v => padL + (v / xm) * w;
+    const Y = v => padT + h - (v / ym) * h;
+    s += `<rect x="${padL}" y="${padT}" width="${w}" height="${h}" fill="#f8fbfa"/>`;
+    for (let v = 0; v <= 7; v += 1) {
+      s += `<line x1="${X(v)}" y1="${padT}" x2="${X(v)}" y2="${padT+h}" stroke="#e5efed"/>
+            <text x="${X(v)}" y="${padT+h+15}" text-anchor="middle" font-size="10" fill="#587276">${v}</text>`;
+    }
+    for (let v = 0; v <= 0.601; v += 0.1) {
+      s += `<line x1="${padL}" y1="${Y(v)}" x2="${padL+w}" y2="${Y(v)}" stroke="#e5efed"/>
+            <text x="${padL-7}" y="${Y(v)+3}" text-anchor="end" font-size="10" fill="#587276">${v.toFixed(1)}</text>`;
+    }
+    // Asimptota A_inf
+    s += `<line x1="${padL}" y1="${Y(fit.A_inf)}" x2="${padL+w}" y2="${Y(fit.A_inf)}" stroke="#d64545" stroke-width="1.6" stroke-dasharray="6 4"/>
+          <text x="${padL+w-4}" y="${Y(fit.A_inf)-5}" text-anchor="end" font-size="10.5" font-weight="700" fill="#d64545">A_∞ = ${f1(fit.A_inf,3)} mmol/g</text>`;
+    // Egri chiziq
+    let d = "";
+    for (let k = 0; k <= 70; k++) {
+      const c = (k / 70) * xm;
+      const a = (fit.A_inf * fit.K_mM * c) / (1 + fit.K_mM * c);
+      d += (k ? "L" : "M") + X(c).toFixed(1) + " " + Y(a).toFixed(1);
+    }
+    s += `<path d="${d}" fill="none" stroke="#1b484f" stroke-width="2.6"/>`;
+    // Tajriba nuqtalari
+    S.samples.forEach((sm, i) => {
+      const cx = X(sm.Ceq * 1000), cy = Y(sm.A_mmol);
+      const sel = S.inspectIdx === i;
+      s += `<circle class="clk" data-act="inspect" data-i="${i}" cx="${cx}" cy="${cy}" r="${sel ? 7 : 5.2}" fill="${sel ? "#e89b3c" : "#8b1ca6"}" stroke="#132629" stroke-width="1.5"/>`;
+      s += `<text x="${cx + 8}" y="${cy + 4}" font-size="10" font-weight="700" fill="#132629">${sm.label}</text>`;
+    });
+    s += `<text x="${padL+w}" y="${padT+h+32}" text-anchor="end" font-size="10.5" font-weight="700" fill="#132629">C_eq, mmol/L</text>
+          <text x="16" y="${padT+h/2}" transform="rotate(-90 16 ${padT+h/2})" text-anchor="middle" font-size="10.5" font-weight="700" fill="#132629">A, mmol/g</text>`;
+  } else {
+    s += `<text x="222" y="145" text-anchor="middle" fill="#6f888b" font-size="13">Oʻng panelda «Izotermani chizish» tugmasini bosing</text>`;
+  }
+  s += `</g>`;
+
+  // Oʻng grafik paneli: Chiziqli Langmyur C/A = f(C)
+  s += `<g transform="translate(505, 82)" filter="url(#shd)">
+    <rect x="0" y="0" width="458" height="270" rx="14" fill="#ffffff" stroke="#b9cecb" stroke-width="1.6"/>
+    <text x="229" y="25" text-anchor="middle" font-size="13" font-weight="800" fill="#132629">Chiziqli Langmyur grafigi: C_eq / A = f(C_eq)</text>`;
+  if (S.plottedLin && fit) {
+    const padL = 56, padT = 40, w = 378, h = 186;
+    const xm = 7.0, ym = 18;
+    const X = v => padL + (v / xm) * w;
+    const Y = v => padT + h - (v / ym) * h;
+    s += `<rect x="${padL}" y="${padT}" width="${w}" height="${h}" fill="#f8fbfa"/>`;
+    for (let v = 0; v <= 7; v += 1) {
+      s += `<line x1="${X(v)}" y1="${padT}" x2="${X(v)}" y2="${padT+h}" stroke="#e5efed"/>
+            <text x="${X(v)}" y="${padT+h+15}" text-anchor="middle" font-size="10" fill="#587276">${v}</text>`;
+    }
+    for (let v = 0; v <= 18; v += 3) {
+      s += `<line x1="${padL}" y1="${Y(v)}" x2="${padL+w}" y2="${Y(v)}" stroke="#e5efed"/>
+            <text x="${padL-7}" y="${Y(v)+3}" text-anchor="end" font-size="10" fill="#587276">${v}</text>`;
+    }
+    const y0 = fit.intercept, yEnd = fit.intercept + fit.slope * xm;
+    s += `<line x1="${X(0)}" y1="${Y(y0)}" x2="${X(xm)}" y2="${Y(yEnd)}" stroke="#d64545" stroke-width="2.4"/>`;
+    s += `<circle cx="${X(0)}" cy="${Y(y0)}" r="4.5" fill="#d64545"/>
+          <text x="${X(0)+8}" y="${Y(y0)-4}" font-size="9.5" font-weight="700" fill="#d64545">b = ${f1(y0,2)}</text>`;
+    fit.pts.forEach(p => {
+      s += `<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="5" fill="#1b484f" stroke="#fff" stroke-width="1.5"/>`;
+    });
+    s += `<rect x="${padL+10}" y="${padT+8}" width="185" height="44" rx="7" fill="#fff7e8" stroke="#e89b3c"/>
+          <text x="${padL+18}" y="${padT+25}" font-size="10" font-family="var(--mono)" font-weight="700" fill="#5b4114">tg α = 1/A_∞ = ${f1(fit.slope,3)}</text>
+          <text x="${padL+18}" y="${padT+42}" font-size="10" font-family="var(--mono)" font-weight="700" fill="#1f9d6b">R² = ${f1(fit.R2,4)}</text>
+          <text x="${padL+w}" y="${padT+h+32}" text-anchor="end" font-size="10.5" font-weight="700" fill="#132629">C_eq, mmol/L</text>
+          <text x="16" y="${padT+h/2}" transform="rotate(-90 16 ${padT+h/2})" text-anchor="middle" font-size="10.5" font-weight="700" fill="#132629">C_eq/A, g/L</text>`;
+  } else {
+    s += `<text x="229" y="145" text-anchor="middle" fill="#6f888b" font-size="13">Avval «Chiziqli shaklga keltirish» tugmasini bosing</text>`;
+  }
+  s += `</g>`;
+
+  // Pastki panel: Monomolekulyar qavat va S_sol vizualizatsiyasi
+  const sm = S.samples[S.inspectIdx];
+  const theta = fit ? clamp((fit.K_mM * sm.Ceq * 1000) / (1 + fit.K_mM * sm.Ceq * 1000), 0, 1) : 0;
+  const totalSites = 20;
+  const filledSites = Math.round(theta * totalSites);
+  s += `<g transform="translate(36, 376)" filter="url(#shd)">
+    <rect x="0" y="0" width="927" height="190" rx="14" fill="#133136" stroke="#2c5960" stroke-width="2"/>
+    <text x="22" y="28" fill="#edf6f5" font-size="13.5" font-weight="700">Faollashtirilgan koʻmir sirtida MnO₄⁻ monomolekulyar qavati (${sm.label}: C_eq = ${f1(sm.Ceq*1000,2)} mmol/L)</text>
+    <text x="22" y="48" fill="#8dc4bd" font-size="11.5">Sirt bandlik darajasi θ = K·C / (1 + K·C) = ${Math.round(theta*100)}%   |   Har bir faol markazga 1 ta MnO₄⁻ ioni (S₀ = 3,6·10⁻¹⁹ m²)</text>
+
+    <!-- Gʻovak uglerod sirti -->
+    <rect x="22" y="116" width="540" height="52" rx="10" fill="#272e31" stroke="#475358" stroke-width="1.5"/>
+    <text x="292" y="147" text-anchor="middle" fill="#9fb0b5" font-size="12" font-weight="700" letter-spacing="2">FAOLLASHTIRILGAN KOʻMIR SIRTI (20 TA FAOL MARKAZ)</text>
+
+    <!-- 20 ta faol markaz va yutilgan MnO4- ionlari -->
+    ${Array.from({length: totalSites}, (_, k) => {
+      const mx = 42 + k * 26;
+      const occ = k < filledSites;
+      const bob = occ ? Math.sin(S.t * 3 + k) * 1.5 : 0;
+      return `<rect x="${mx-7}" y="111" width="14" height="6" rx="2" fill="${occ ? "#e89b3c" : "#56676c"}"/>`
+        + (occ ? `<circle cx="${mx}" cy="${96 + bob}" r="9.5" fill="#b434d6" stroke="#f0b6ff" stroke-width="1.5"/>
+                  <text x="${mx}" y="${99.5 + bob}" text-anchor="middle" fill="#fff" font-size="7" font-weight="700">MnO₄⁻</text>`
+               : `<circle cx="${mx}" cy="96" r="8" fill="none" stroke="#48686c" stroke-dasharray="2 2"/>`);
+    }).join("")}
+
+    <!-- Natija qutisi oʻngda -->
+    <rect x="590" y="24" width="316" height="144" rx="10" fill="#0b2024" stroke="#2c5960"/>
+    ${S.calcSurface && fit ? `
+      <text x="610" y="50" fill="#8dc4bd" font-size="11" font-family="var(--mono)">A_∞ = ${f1(fit.A_inf, 3)} mmol/g (${f1(fit.A_inf*PHYS.M_KMnO4, 1)} mg/g)</text>
+      <text x="610" y="74" fill="#8dc4bd" font-size="11" font-family="var(--mono)">K   = ${Math.round(fit.K_M)} L/mol</text>
+      <line x1="608" y1="88" x2="888" y2="88" stroke="#244b52"/>
+      <text x="610" y="112" fill="#e89b3c" font-size="11" font-weight="700">SOLISHTIRMA SIRT YUZASI:</text>
+      <text x="610" y="148" fill="#77f5be" font-size="28" font-weight="800" font-family="var(--mono)">S_sol = ${f1(fit.S_sol, 1)} m²/g</text>
+    ` : `
+      <text x="748" y="88" text-anchor="middle" fill="#7ba6a1" font-size="12.5">S_sol = A_∞ · N_A · S₀</text>
+      <text x="748" y="112" text-anchor="middle" fill="#e89b3c" font-size="11.5">«S_sol ni hisoblash» tugmasini bosing</text>
+    `}
+  </g>`;
+  return s;
+}
+
+function drawStage5() {
+  const sc = total();
+  const fit = computeLangmuirFit();
+  return `<g transform="translate(80, 75)" filter="url(#shd)">
+    <rect x="0" y="0" width="840" height="440" rx="18" fill="#ffffff" stroke="#b9cecb" stroke-width="2"/>
+    <rect x="0" y="0" width="840" height="72" rx="18" fill="#0f2e33"/>
+    <rect x="0" y="50" width="840" height="22" fill="#0f2e33"/>
+    <text x="420" y="34" text-anchor="middle" fill="#fff" font-size="20" font-weight="800">11-LABORATORIYA ISHI · YAKUNIY NATIJALAR</text>
+    <text x="420" y="56" text-anchor="middle" fill="#9bc9c3" font-size="12.5">Faollashtirilgan koʻmir sirtida KMnO₄ adsorbsiyasi (Langmyur modeli, 25 °C)</text>
+
+    <g transform="translate(36, 98)">
+      <rect x="0" y="0" width="240" height="120" rx="12" fill="#f1f7f6" stroke="#d4e1df"/>
+      <text x="120" y="30" text-anchor="middle" fill="#587276" font-size="12" font-weight="700">UMUMIY BALL</text>
+      <text x="120" y="82" text-anchor="middle" fill="#0f2e33" font-size="44" font-weight="800" font-family="var(--mono)">${sc.tot}</text>
+      <text x="120" y="106" text-anchor="middle" fill="#1f9d6b" font-size="12" font-weight="700">100 balldan</text>
+    </g>
+    <g transform="translate(300, 98)">
+      <rect x="0" y="0" width="240" height="120" rx="12" fill="#f1f7f6" stroke="#d4e1df"/>
+      <text x="120" y="30" text-anchor="middle" fill="#587276" font-size="12" font-weight="700">CHEGARAVIY ADSORBSIYA</text>
+      <text x="120" y="78" text-anchor="middle" fill="#8b1ca6" font-size="32" font-weight="800" font-family="var(--mono)">${fit ? f1(fit.A_inf,3) : "—"}</text>
+      <text x="120" y="104" text-anchor="middle" fill="#587276" font-size="12">mmol/g · K = ${fit ? Math.round(fit.K_M) : "—"} L/mol</text>
+    </g>
+    <g transform="translate(564, 98)">
+      <rect x="0" y="0" width="240" height="120" rx="12" fill="#f1f7f6" stroke="#d4e1df"/>
+      <text x="120" y="30" text-anchor="middle" fill="#587276" font-size="12" font-weight="700">SOLISHTIRMA SIRT YUZASI</text>
+      <text x="120" y="78" text-anchor="middle" fill="#1f9d6b" font-size="32" font-weight="800" font-family="var(--mono)">${fit ? f1(fit.S_sol,1) : "—"}</text>
+      <text x="120" y="104" text-anchor="middle" fill="#587276" font-size="12">m²/g (R² = ${fit ? f1(fit.R2,4) : "—"})</text>
+    </g>
+
+    <g transform="translate(36, 245)">
+      <text x="0" y="0" font-size="13" font-weight="800" fill="#132629">Tajriba xulosasi:</text>
+      <text x="0" y="24" font-size="12.5" fill="#3a595c">1. KMnO₄ eritmalari λ = 525 nm da Buger–Lambert–Ber qonuniga qatʼiy boʻysunadi.</text>
+      <text x="0" y="48" font-size="12.5" fill="#3a595c">2. 25 °C da faollashtirilgan koʻmir sirtidagi adsorbsiya Langmyur tenglamasi bilan yuqori aniqlikda tavsiflanadi.</text>
+      <text x="0" y="72" font-size="12.5" fill="#3a595c">3. C_eq/A = f(C_eq) chiziqli bogʻlanishdan A_∞ va K topilib, adsorbentning solishtirma sirt yuzasi S_sol aniqlandi.</text>
+      <text x="0" y="106" font-size="12.5" font-weight="700" fill="#d18224">Oʻng panelda 5 savoldan iborat yakuniy testni topshiring va hisobotni chop eting!</text>
+    </g>
+  </g>`;
+}
+
+function bindStageClicks() {
+  el("scene").querySelectorAll(".clk").forEach(n => {
+    n.onclick = () => {
+      const act = n.dataset.act, i = +n.dataset.i;
+      if (act === "tube1") {
+        if (!S.samples[i].prepared) prepareSample(i);
+        else measureBaseline(i);
+      } else if (act === "addNextCharcoal") {
+        const nxt = S.samples.findIndex(x => !x.charcoalAdded);
+        if (nxt !== -1) weighAndAddCharcoal(nxt);
+        else LabUI.toast("Barcha 4 ta probirkaga 0,50 g koʻmir qoʻshib boʻlingan!", "ok");
+      } else if (act === "tube2") {
+        if (!S.samples[i].charcoalAdded) weighAndAddCharcoal(i);
+        else if (!S.shaken) shakeTubes();
+      } else if (act === "runSep") {
+        runSeparation();
+      } else if (act === "tube3") {
+        measureResidual(i);
+      } else if (act === "inspect") {
+        SFX.play("click");
+        S.inspectIdx = i;
+        renderAll();
+      }
+    };
+  });
+}
+
+/* ============ OʻNG PANEL ============ */
+function renderQuestionsHTML(list) {
+  return list.map((q, qi) => {
+    const order = shuf(q.opts.length, S.seed + qi * 17 + q.id.charCodeAt(q.id.length - 1));
+    const chosen = S.ans[q.id];
+    return `<div class="q">
+      <p>${qi + 1}. ${q.q}</p>
+      ${order.map(oi => {
+        let cls = "";
+        if (chosen !== undefined) {
+          if (oi === q.ok) cls = "right";
+          else if (oi === chosen) cls = "wrong";
+        }
+        return `<button class="${cls}" data-qid="${q.id}" data-oi="${oi}" data-ok="${q.ok}" ${chosen !== undefined ? "disabled" : ""}>${q.opts[oi]}</button>`;
+      }).join("")}
+    </div>`;
+  }).join("");
+}
+
+function bindQuestions(root) {
+  root.querySelectorAll("button[data-qid]").forEach(b => {
+    b.onclick = () => answerQ(b.dataset.qid, +b.dataset.oi, +b.dataset.ok);
+  });
+}
+
+function renderPanel() {
+  const p = el("panel");
+  const st = S.stage;
+  let h = "";
+
+  if (st === 0) {
+    const prepAll = S.samples.every(s => s.prepared);
+    const calAll = S.samples.every(s => s.calDone);
+    h = `<h2>1-bosqich: Eritmalar va kalibrlash</h2>
+      <p class="sub">Turli konsentratsiyadagi 4 ta KMnO₄ eritmasini (50 ml dan) tayyorlang va λ = 525 nm da boshlangʻich optik zichlik D₀ ni oʻlchang.</p>
+      <ul class="tasks">
+        <li class="${prepAll ? "done" : "cur"}"><span class="b">${prepAll ? "✓" : "1"}</span>4 ta KMnO₄ eritmasini (0,001–0,010 M) tayyorlash</li>
+        <li class="${calAll ? "done" : (prepAll ? "cur" : "")}"><span class="b">${calAll ? "✓" : "2"}</span>Spektrofotometrda D₀ qiymatlarini oʻlchash</li>
+      </ul>
+      <div class="box">
+        <h4>Eritmalarni tayyorlash va D₀ oʻlchash</h4>
+        ${S.samples.map((sm, i) => `
+          <div class="tube-row">
+            <div><span class="swatch" style="background:${kmno4Hex(sm.C0)}"></span><b>${sm.label}</b> · ${f1(sm.C0, 3)} M (50 ml)</div>
+            <div class="row">
+              <button class="${sm.prepared ? "on" : "pri"}" data-p1="${i}" ${sm.prepared || S.pouring ? "disabled" : ""}>${sm.prepared ? "✓ Tayyor" : "Quyish"}</button>
+              <button class="${sm.calDone ? "on" : "dark"}" data-c1="${i}" ${!sm.prepared || sm.calDone || S.specActive ? "disabled" : ""}>${sm.calDone ? "D₀=" + f1(sm.D0, 3) : "Oʻlchash"}</button>
+            </div>
+          </div>`).join("")}
+        <div class="row" style="margin-top:9px">
+          <button class="pri" id="btnPrepAll" ${prepAll || S.pouring ? "disabled" : ""}>Barchasini tayyorlash</button>
+          <button class="dark" id="btnCalAll" ${!prepAll || calAll || S.specActive ? "disabled" : ""}>Barchasini oʻlchash</button>
+        </div>
+      </div>
+      <div class="box">
+        <h4>Kalibrlash grafigi (D₀ = ε·l·C₀)</h4>
+        ${LabUI.svgChart({
+          x0: 0, xm: 11, y0: 0, ym: 2.5,
+          xl: "C₀, mmol/L", yl: "D₀",
+          line: [{ x: 0, y: 0 }, { x: 10.5, y: 2.31 }],
+          lineColor: "#8b1ca6",
+          series: [{
+            pts: S.samples.filter(s => s.calDone).map(s => ({ x: s.C0 * 1000, y: s.D0 })),
+            color: "#8b1ca6", dot: "#e89b3c", scatterOnly: true
+          }]
+        })}
+      </div>
+      <div class="box"><h4>Nazorat savollari (1-bosqich)</h4>${renderQuestionsHTML(STAGE_QS[0])}</div>
+      <button class="pri next" id="btnNext" ${!stageDone(0) ? "disabled" : ""}>2-bosqichga oʻtish: Adsorbsiya (25 °C) →</button>`;
+  } else if (st === 1) {
+    const chAll = S.samples.every(s => s.charcoalAdded);
+    h = `<h2>2-bosqich: Koʻmir qoʻshish va 25 °C hammom</h2>
+      <p class="sub">Analitik tarozida 0,500 g faollashtirilgan koʻmir tortib har bir probirkaga soling, kuchli chayqating va 25,0 °C suv hammomida 20 daqiqa ushlang.</p>
+      <ul class="tasks">
+        <li class="${chAll ? "done" : "cur"}"><span class="b">${chAll ? "✓" : "1"}</span>Har bir probirkaga 0,500 g koʻmir qoʻshish</li>
+        <li class="${S.shaken ? "done" : (chAll ? "cur" : "")}"><span class="b">${S.shaken ? "✓" : "2"}</span>Probirkalarni kuchli chayqatish</li>
+        <li class="${S.bathDone ? "done" : (S.shaken ? "cur" : "")}"><span class="b">${S.bathDone ? "✓" : "3"}</span>25,0 °C suv hammomida 20 daqiqa adsorbsiya</li>
+      </ul>
+      <div class="box">
+        <h4>1. Analitik tarozida koʻmir qoʻshish</h4>
+        <div class="grid4" style="margin-bottom:8px">
+          ${S.samples.map((sm, i) => `<button class="${sm.charcoalAdded ? "on" : ""}" data-ch="${i}" ${sm.charcoalAdded || S.weighing ? "disabled" : ""}>${sm.label}<br>${sm.charcoalAdded ? "✓ 0,5g" : "+0,5g"}</button>`).join("")}
+        </div>
+        <button class="pri" id="btnChAll" style="width:100%" ${chAll || S.weighing ? "disabled" : ""}>Barcha probirkalarga 0,50 g dan qoʻshish</button>
+      </div>
+      <div class="box">
+        <h4>2. Chayqatish va 25,0 °C suv hammomi</h4>
+        <div class="big">${f1(S.bathTime, 1)} / 20,0 daq<small>Harorat: 25,0 °C · Tezlik: ×${S.speed}</small></div>
+        <div class="mini-bar"><i style="width:${clamp(S.bathTime/20*100,0,100)}%"></i></div>
+        <div class="row" style="margin-top:9px">
+          <button class="${S.shaken ? "on" : "pri"}" id="btnShake" ${!chAll ? "disabled" : ""}>${S.shaken ? "✓ Chayqatildi" : "🫧 Chayqatish"}</button>
+          <button class="${S.bathDone ? "on" : "dark"}" id="btnBath" ${!S.shaken || S.bathDone ? "disabled" : ""}>${S.bathDone ? "✓ 20 daq tugadi" : (S.bathRunning ? "⏸ Pauza" : "▶ Suv hammomini yoqish")}</button>
+        </div>
+        <p class="note" style="margin-top:7px">Pastdagi <b>×1 / ×5 / ×10</b> tugmalari bilan vaqtni tezlashtirishingiz mumkin.</p>
+      </div>
+      <div class="box"><h4>Nazorat savollari (2-bosqich)</h4>${renderQuestionsHTML(STAGE_QS[1])}</div>
+      <button class="pri next" id="btnNext" ${!stageDone(1) ? "disabled" : ""}>3-bosqichga oʻtish: Ajratish va tahlil →</button>`;
+  } else if (st === 2) {
+    const allSep = S.samples.every(s => s.separated);
+    const allSpec = S.samples.every(s => s.specDone);
+    h = `<h2>3-bosqich: Ajratish va spektrofotometriya</h2>
+      <p class="sub">Adsorbentni eritmadan ajrating va qoldiq KMnO₄ konsentratsiyasi C_eq hamda adsorbsiya miqdori A ni aniqlang.</p>
+      <ul class="tasks">
+        <li class="${allSep ? "done" : "cur"}"><span class="b">${allSep ? "✓" : "1"}</span>Koʻmirni sentrifuga yoki filtr orqali ajratish</li>
+        <li class="${allSpec ? "done" : (allSep ? "cur" : "")}"><span class="b">${allSpec ? "✓" : "2"}</span>4 ta qoldiq eritmaning D_qold qiymatini oʻlchash</li>
+      </ul>
+      <div class="box">
+        <h4>1. Ajratish usulini tanlang</h4>
+        <div class="grid2" style="margin-bottom:8px">
+          <button class="${S.sepMethod === "centrifuge" ? "on" : ""}" id="btnUseCent" ${S.sepRunning ? "disabled" : ""}>⚙ Sentrifuga</button>
+          <button class="${S.sepMethod === "filter" ? "on" : ""}" id="btnUseFilt" ${S.sepRunning ? "disabled" : ""}>🔻 Qogʻoz filtr</button>
+        </div>
+        <button class="pri" id="btnRunSep" style="width:100%" ${allSep || S.sepRunning ? "disabled" : ""}>${allSep ? "✓ Koʻmir ajratildi" : (S.sepRunning ? "Ajratilmoqda..." : "▶ Ajratishni boshlash")}</button>
+      </div>
+      <div class="box">
+        <h4>2. Spektrofotometrda qoldiq D_qold ni oʻlchash (λ = 525 nm)</h4>
+        <div class="grid4" style="margin-bottom:8px">
+          ${S.samples.map((sm, i) => `<button class="${sm.specDone ? "on" : ""}" data-sp3="${i}" ${!allSep || sm.specDone || S.specActive ? "disabled" : ""}>${sm.label}<br>${sm.specDone ? "✓ " + f1(sm.Dq, 3) : "Oʻlchash"}</button>`).join("")}
+        </div>
+        <button class="dark" id="btnSpecAll3" style="width:100%" ${!allSep || allSpec || S.specActive ? "disabled" : ""}>Barcha qoldiqlarni ketma-ket oʻlchash</button>
+      </div>
+      <div class="box">
+        <h4>Tajriba jadvali (V = 50 ml, m = 0,50 g)</h4>
+        <table class="j">
+          <thead><tr><th>#</th><th>C₀, mM</th><th>D_qold</th><th>C_eq, mM</th><th>A, mmol/g</th><th>A, mg/g</th></tr></thead>
+          <tbody>
+            ${S.samples.map(sm => `<tr>
+              <td>${sm.label}</td>
+              <td>${f1(sm.C0*1000, 1)}</td>
+              <td>${sm.specDone ? f1(sm.Dq, 3) : "—"}</td>
+              <td>${sm.specDone ? f1(sm.Ceq*1000, 2) : "—"}</td>
+              <td><b>${sm.specDone ? f1(sm.A_mmol, 3) : "—"}</b></td>
+              <td>${sm.specDone ? f1(sm.A_mg, 1) : "—"}</td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+      <div class="box"><h4>Nazorat savollari (3-bosqich)</h4>${renderQuestionsHTML(STAGE_QS[2])}</div>
+      <button class="pri next" id="btnNext" ${!stageDone(2) ? "disabled" : ""}>4-bosqichga oʻtish: Langmyur izotermasi →</button>`;
+  } else if (st === 3) {
+    const fit = computeLangmuirFit();
+    h = `<h2>4-bosqich: Langmyur izotermasi va S_sol</h2>
+      <p class="sub">Tajriba maʼlumotlarini Langmyur tenglamasi boʻyicha qayta ishlang, A_∞ va K konstantalarini hamda solishtirma sirt yuzasini toping.</p>
+      <ul class="tasks">
+        <li class="${S.plottedIso ? "done" : "cur"}"><span class="b">${S.plottedIso ? "✓" : "1"}</span>Langmyur izotermasi A = f(C_eq) ni chizish</li>
+        <li class="${S.plottedLin ? "done" : (S.plottedIso ? "cur" : "")}"><span class="b">${S.plottedLin ? "✓" : "2"}</span>Chiziqli shakl C_eq/A = f(C_eq) dan A_∞ va K ni topish</li>
+        <li class="${S.calcSurface ? "done" : (S.plottedLin ? "cur" : "")}"><span class="b">${S.calcSurface ? "✓" : "3"}</span>Solishtirma sirt yuzasi S_sol ni hisoblash</li>
+      </ul>
+      <div class="box">
+        <h4>Grafik tahlil va hisoblash</h4>
+        <div class="row" style="margin-bottom:8px">
+          <button class="${S.plottedIso ? "on" : "pri"}" id="btnPlotIso">${S.plottedIso ? "✓ Izoterma chizildi" : "📈 Izotermani chizish"}</button>
+          <button class="${S.plottedLin ? "on" : "dark"}" id="btnPlotLin" ${!S.plottedIso ? "disabled" : ""}>${S.plottedLin ? "✓ Chiziqli shakl" : "📐 Chiziqli shaklga keltirish"}</button>
+        </div>
+        <button class="${S.calcSurface ? "on" : "pri"}" id="btnCalcSurf" style="width:100%" ${!S.plottedLin ? "disabled" : ""}>${S.calcSurface ? "✓ S_sol hisoblandi" : "🧮 S_sol ni hisoblash (A_∞ · N_A · S₀)"}</button>
+        ${S.plottedLin && fit ? `
+          <div class="kpi-grid">
+            <div class="kpi"><small>A_∞ (chegaraviy)</small><b>${f1(fit.A_inf, 3)} mmol/g</b></div>
+            <div class="kpi"><small>K (Langmyur)</small><b>${Math.round(fit.K_M)} L/mol</b></div>
+            <div class="kpi"><small>Korrelyatsiya R²</small><b>${f1(fit.R2, 4)}</b></div>
+            <div class="kpi"><small>S_sol (sirt yuzasi)</small><b>${S.calcSurface ? f1(fit.S_sol, 1) + " m²/g" : "—"}</b></div>
+          </div>` : ""}
+      </div>
+      <div class="box">
+        <h4>Monomolekulyar qavat bandligi θ ni koʻrish</h4>
+        <div class="grid4">
+          ${S.samples.map((sm, i) => `<button class="${S.inspectIdx === i ? "on" : ""}" data-ins="${i}">${sm.label}<br>${f1(sm.C0*1000,0)} mM</button>`).join("")}
+        </div>
+        <div class="eq">A = A_∞ · K·C / (1 + K·C)  ⇒  C/A = 1/(A_∞·K) + C/A_∞</div>
+      </div>
+      <div class="box"><h4>Nazorat savollari (4-bosqich)</h4>${renderQuestionsHTML(STAGE_QS[3])}</div>
+      <button class="pri next" id="btnNext" ${!stageDone(3) ? "disabled" : ""}>Yakuniy hisobotga oʻtish →</button>`;
+  } else {
+    const sc = total();
+    const fit = computeLangmuirFit();
+    h = `<div class="rep">
+      <h2>11-laboratoriya · Yakuniy hisobot</h2>
+      <div class="score">
+        <div class="n">${sc.tot}</div>
+        <div>
+          <b>Umumiy ball (100 dan)</b>
+          <div style="font-size:12px;opacity:.82">Amaliyot: ${sc.prac}/46 · Bosqich savollari: ${sc.sq}/24 · Test: ${sc.fq}/30</div>
+        </div>
+      </div>
+      <div class="box">
+        <h4>Oʻlchash va hisoblash natijalari</h4>
+        <table class="j">
+          <thead><tr><th>#</th><th>C₀, mM</th><th>D₀</th><th>D_q</th><th>C_eq, mM</th><th>A, mmol/g</th><th>C/A</th></tr></thead>
+          <tbody>
+            ${S.samples.map(sm => `<tr>
+              <td>${sm.label}</td>
+              <td>${f1(sm.C0*1000,1)}</td>
+              <td>${f1(sm.D0,3)}</td>
+              <td>${sm.specDone ? f1(sm.Dq,3) : "—"}</td>
+              <td>${sm.specDone ? f1(sm.Ceq*1000,2) : "—"}</td>
+              <td><b>${sm.specDone ? f1(sm.A_mmol,3) : "—"}</b></td>
+              <td>${sm.specDone ? f1((sm.Ceq*1000)/sm.A_mmol, 2) : "—"}</td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+        ${fit ? `<div class="kv" style="margin-top:8px"><span>Chegaraviy adsorbsiya A_∞:</span><b>${f1(fit.A_inf,3)} mmol/g (${f1(fit.A_inf*PHYS.M_KMnO4,1)} mg/g)</b></div>
+          <div class="kv"><span>Langmyur konstantasi K:</span><b>${Math.round(fit.K_M)} L/mol</b></div>
+          <div class="kv"><span>Solishtirma sirt yuzasi S_sol:</span><b>${f1(fit.S_sol,1)} m²/g</b></div>` : ""}
+      </div>
+      ${fit ? `<div class="box">
+        <h4>Langmyur izotermasi va chiziqli regressiya</h4>
+        ${LabUI.svgChart({
+          H: 185, x0: 0, xm: 7, y0: 0, ym: 0.6,
+          title: "A = f(C_eq)", xl: "C_eq, mmol/L", yl: "A, mmol/g",
+          series: [{
+            pts: Array.from({length: 30}, (_, k) => {
+              const c = (k / 29) * 6.6;
+              return { x: c, y: (fit.A_inf * fit.K_mM * c) / (1 + fit.K_mM * c) };
+            }),
+            color: "#1b484f", dot: "transparent"
+          }, {
+            pts: S.samples.map(sm => ({ x: sm.Ceq * 1000, y: sm.A_mmol })),
+            color: "#8b1ca6", dot: "#e89b3c", scatterOnly: true
+          }]
+        })}
+        <div style="height:8px"></div>
+        ${LabUI.svgChart({
+          H: 185, x0: 0, xm: 7, y0: 0, ym: 18,
+          title: "C_eq / A = f(C_eq)", xl: "C_eq, mmol/L", yl: "C_eq/A, g/L",
+          line: [{ x: 0, y: fit.intercept }, { x: 6.8, y: fit.intercept + fit.slope * 6.8 }],
+          series: [{ pts: fit.pts, color: "#1b484f", dot: "#e89b3c", scatterOnly: true }]
+        })}
+      </div>` : ""}
+      <div class="box">
+        <h4>Yakuniy test (5 savol × 6 ball = 30 ball)</h4>
+        ${renderQuestionsHTML(FINAL_QUIZ)}
+      </div>
+      <div class="row noprint">
+        <button class="pri" id="btnPrint" style="flex:1">🖨 Hisobotni chop etish</button>
+        <button class="ghost" id="btnReset">🔄 Qaytadan boshlash</button>
+      </div>
+    </div>`;
+  }
+
+  p.innerHTML = h;
+  bindQuestions(p);
+
+  // Panel tugmalari
+  p.querySelectorAll("button[data-p1]").forEach(b => b.onclick = () => prepareSample(+b.dataset.p1));
+  p.querySelectorAll("button[data-c1]").forEach(b => b.onclick = () => measureBaseline(+b.dataset.c1));
+  p.querySelectorAll("button[data-ch]").forEach(b => b.onclick = () => weighAndAddCharcoal(+b.dataset.ch));
+  p.querySelectorAll("button[data-sp3]").forEach(b => b.onclick = () => measureResidual(+b.dataset.sp3));
+  p.querySelectorAll("button[data-ins]").forEach(b => b.onclick = () => { SFX.play("click"); S.inspectIdx = +b.dataset.ins; renderAll(); });
+
+  const bPrepAll = el("btnPrepAll"); if (bPrepAll) bPrepAll.onclick = prepareAll;
+  const bCalAll = el("btnCalAll"); if (bCalAll) bCalAll.onclick = () => {
+    const nxt = S.samples.findIndex(x => !x.calDone);
+    if (nxt !== -1) { S._autoCal = true; measureBaseline(nxt); }
+  };
+  const bChAll = el("btnChAll"); if (bChAll) bChAll.onclick = addAllCharcoal;
+  const bShake = el("btnShake"); if (bShake) bShake.onclick = shakeTubes;
+  const bBath = el("btnBath"); if (bBath) bBath.onclick = toggleWaterBath;
+  const bUseCent = el("btnUseCent"); if (bUseCent) bUseCent.onclick = () => { SFX.play("click"); S.sepMethod = "centrifuge"; renderAll(); };
+  const bUseFilt = el("btnUseFilt"); if (bUseFilt) bUseFilt.onclick = () => { SFX.play("click"); S.sepMethod = "filter"; renderAll(); };
+  const bRunSep = el("btnRunSep"); if (bRunSep) bRunSep.onclick = runSeparation;
+  const bSpecAll3 = el("btnSpecAll3"); if (bSpecAll3) bSpecAll3.onclick = () => {
+    const nxt = S.samples.findIndex(x => !x.specDone);
+    if (nxt !== -1) { S._autoSpec3 = true; measureResidual(nxt); }
+  };
+  const bPlotIso = el("btnPlotIso"); if (bPlotIso) bPlotIso.onclick = () => {
+    SFX.play("ok"); S.plottedIso = true; LabUI.toast("Langmyur adsorbsiya izotermasi qurildi!", "ok"); renderAll();
+  };
+  const bPlotLin = el("btnPlotLin"); if (bPlotLin) bPlotLin.onclick = () => {
+    SFX.play("ok"); S.plottedLin = true; LabUI.toast("Chiziqli regressiya (C/A vs C) bajarildi!", "ok"); renderAll();
+  };
+  const bCalcSurf = el("btnCalcSurf"); if (bCalcSurf) bCalcSurf.onclick = () => {
+    SFX.play("fanfare"); S.calcSurface = true;
+    const fit = computeLangmuirFit();
+    LabUI.toast(`Solishtirma sirt yuzasi topildi: S_sol = ${f1(fit.S_sol, 1)} m²/g!`, "ok");
+    renderAll();
+  };
+  const bNext = el("btnNext"); if (bNext) bNext.onclick = () => { SFX.play("whoosh"); S.stage++; renderAll(); };
+  const bPrint = el("btnPrint"); if (bPrint) bPrint.onclick = () => window.print();
+  const bReset = el("btnReset"); if (bReset) bReset.onclick = () => { SFX.play("click"); S = createInitialState(); renderAll(); LabUI.toast("Laboratoriya qaytadan boshlandi.", ""); };
+}
+
+function renderAll() {
+  renderTabs();
+  renderPanel();
+  renderSVG();
+}
+
+/* ============ MODALLAR (NAZARIYA, JURNAL, KIRISH, MASLAHAT) ============ */
+function showIntro() {
+  LabUI.modal(`
+    <h1>11-laboratoriya ishi: Langmyur izotermasi</h1>
+    <p style="color:var(--muted);margin-bottom:10px">Qattiq jism sirtidagi adsorbsiya va adsorbentning solishtirma sirt yuzasini aniqlash</p>
+    <p>Ushbu virtual laboratoriyada siz <b>faollashtirilgan koʻmir</b> sirtida <b>kaliy permanganat (KMnO₄)</b> adsorbsiyasini spektrofotometrik usulda oʻrganasiz va Langmyur tenglamasi asosida koʻmirning solishtirma sirt yuzasini (m²/g) hisoblaysiz.</p>
+    <h3>Ish bosqichlari:</h3>
+    <ul>
+      <li><b>1-bosqich:</b> 0,001 M; 0,002 M; 0,005 M va 0,010 M KMnO₄ eritmalarini (50 ml) tayyorlash va λ = 525 nm da kalibrlash.</li>
+      <li><b>2-bosqich:</b> Analitik tarozida 0,500 g faollashtirilgan koʻmir qoʻshish, chayqatish va 25,0 °C suv hammomida 20 daqiqa adsorbsiya oʻtkazish.</li>
+      <li><b>3-bosqich:</b> Koʻmirni sentrifuga yoki filtrda ajratish va qoldiq konsentratsiyani spektrofotometrda oʻlchash.</li>
+      <li><b>4-bosqich:</b> Langmyur izotermasi A = f(C_eq) va chiziqli shakl C_eq/A = f(C_eq) orqali A_∞, K va S_sol ni aniqlash.</li>
+    </ul>
+    <div style="margin-top:16px;text-align:right">
+      <button class="pri" onclick="LabUI.closeModal();SFX.play('click')">Tajribani boshlash ▶</button>
+    </div>
+  `);
+}
+
+function showTheory() {
+  LabUI.modal(`
+    <h1>Nazariy maʼlumotlar (11-lab)</h1>
+    <h3>1. Qattiq jism sirtidagi adsorbsiya</h3>
+    <p>Adsorbsiya — erigan modda (adsorbat — KMnO₄) zarralarining qattiq jism (adsorbent — faollashtirilgan koʻmir) sirtida toʻplanish jarayonidir. Adsorbsiya qiymati massa balansi orqali topiladi:</p>
+    <div class="eq">A = (C₀ − C_eq) · V / m   [mmol/g]     |     A_mg = A · M(KMnO₄)   [mg/g]</div>
+    <h3>2. Buger–Lambert–Ber qonuni</h3>
+    <p>Binafsha KMnO₄ eritmasining optik zichligi λ = 525 nm (yashil nur) toʻlqin uzunligida konsentratsiyaga toʻgʻri proporsional:</p>
+    <div class="eq">D = ε · l · C   (ε = 2200 L/(mol·cm), l = 0,1 cm)</div>
+    <h3>3. Langmyur monomolekulyar adsorbsiya tenglamasi</h3>
+    <p>Sirtdagi bir jinsli faol markazlarda monomolekulyar qavat hosil boʻlishini tavsiflaydi:</p>
+    <div class="eq">A = A_∞ · K·C / (1 + K·C)   ⇒   C / A = 1 / (A_∞·K) + (1 / A_∞) · C</div>
+    <p>Chiziqli grafikning burchak koeffitsiyentidan <b>A_∞ = 1 / tg α</b>, ordinata oʻqidan kesilgan kesmadan esa <b>K = tg α / b</b> topiladi.</p>
+    <h3>4. Adsorbentning solishtirma sirt yuzasi</h3>
+    <div class="eq">S_sol = A_∞ · N_A · S₀   [m²/g]   (N_A = 6,022·10²³ mol⁻¹, S₀ = 3,6·10⁻¹⁹ m²)</div>
+    ${LabUI.refsHTML()}
+    <div style="margin-top:14px;text-align:right"><button class="dark" onclick="LabUI.closeModal()">Yopish</button></div>
+  `);
+}
+
+function showJournal() {
+  const fit = computeLangmuirFit();
+  LabUI.modal(`
+    <h1>Laboratoriya jurnali (11-lab)</h1>
+    <p style="color:var(--muted);margin-bottom:10px">V = 50 ml (0,050 L) · m(koʻmir) = 0,500 g · T = 25,0 °C · λ = 525 nm · M(KMnO₄) = 158,03 g/mol</p>
+    <table class="j">
+      <thead><tr><th>Probirka</th><th>C₀, M</th><th>D₀</th><th>D_qold</th><th>C_eq, M</th><th>A, mmol/g</th><th>A, mg/g</th><th>C_eq/A, g/L</th></tr></thead>
+      <tbody>
+        ${S.samples.map(sm => `<tr>
+          <td><b>${sm.label}</b></td>
+          <td>${f1(sm.C0, 3)}</td>
+          <td>${sm.calDone ? f1(sm.D0, 3) : "—"}</td>
+          <td>${sm.specDone ? f1(sm.Dq, 3) : "—"}</td>
+          <td>${sm.specDone ? f1(sm.Ceq, 5) : "—"}</td>
+          <td><b>${sm.specDone ? f1(sm.A_mmol, 3) : "—"}</b></td>
+          <td>${sm.specDone ? f1(sm.A_mg, 2) : "—"}</td>
+          <td>${sm.specDone ? f1((sm.Ceq*1000)/sm.A_mmol, 2) : "—"}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>
+    ${fit ? `<div class="eq" style="margin-top:12px">A_∞ = ${f1(fit.A_inf,3)} mmol/g  |  K = ${Math.round(fit.K_M)} L/mol  |  R² = ${f1(fit.R2,4)}  |  S_sol = ${f1(fit.S_sol,1)} m²/g</div>` : ""}
+    <div style="margin-top:14px;text-align:right"><button class="dark" onclick="LabUI.closeModal()">Yopish</button></div>
+  `);
+}
+
+function showSmartHint() {
+  SFX.play("beep");
+  let msg = "";
+  if (S.stage === 0) {
+    if (!S.samples.every(s => s.prepared)) msg = "1-qadam: Sahna ustidagi probirkalarni yoki oʻng paneldagi «Quyish» / «Barchasini tayyorlash» tugmasini bosing.";
+    else if (!S.samples.every(s => s.calDone)) msg = "2-qadam: Har bir tayyor eritmani spektrofotometrda oʻlchang (D₀ qiymatlari kalibrlash chizigʻiga tushadi).";
+    else msg = "1-bosqich tayyor! Nazorat savollariga javob berib, 2-bosqichga oʻting.";
+  } else if (S.stage === 1) {
+    if (!S.samples.every(s => s.charcoalAdded)) msg = "Koʻmir bankasini yoki «+0,5g» tugmalarini bosib, barcha 4 probirkaga 0,500 g dan koʻmir soling.";
+    else if (!S.shaken) msg = "Endi «🫧 Chayqatish» tugmasini bosing — koʻmir eritma boʻylab bir tekis taqsimlanadi.";
+    else if (!S.bathDone) msg = "«▶ Suv hammomini yoqish» tugmasini bosing va 20 daqiqa (×10 tezlikda atigi 6 soniya) kuting.";
+    else msg = "Adsorbsiya muvozanati oʻrnatildi! 3-bosqichga oʻting.";
+  } else if (S.stage === 2) {
+    if (!S.samples.every(s => s.separated)) msg = "Sentrifuga yoki qogʻoz filtrni tanlab, «▶ Ajratishni boshlash» tugmasini bosing.";
+    else if (!S.samples.every(s => s.specDone)) msg = "Tiniq eritmalarni ketma-ket spektrofotometrda oʻlchab, qoldiq D_qold va A qiymatlarini oling.";
+    else msg = "Barcha oʻlchashlar yakunlandi! 4-bosqichda Langmyur grafigini quring.";
+  } else if (S.stage === 3) {
+    if (!S.plottedIso) msg = "«📈 Izotermani chizish» tugmasini bosing.";
+    else if (!S.plottedLin) msg = "«📐 Chiziqli shaklga keltirish» tugmasini bosib A_∞ va K ni aniqlang.";
+    else if (!S.calcSurface) msg = "«🧮 S_sol ni hisoblash» tugmasini bosib solishtirma sirt yuzasini toping.";
+    else msg = "Ajoyib! Endi yakuniy hisobotga oʻtib 5 savolli testni topshiring.";
+  } else {
+    msg = "5 ta yakuniy test savoliga javob bering va hisobotni chop eting!";
+  }
+  LabUI.toast("💡 " + msg, "warn", 4600);
+}
+
+/* ============ ANIMATSIYA SIKLI ============ */
+let lastTs = performance.now();
+function loop(now) {
+  const dt = Math.min((now - lastTs) / 1000, 0.08);
+  lastTs = now;
+  S.t += dt;
+  let dirty = false;
+
+  // 1-bosqich: eritma quyish
+  if (S.pouring) {
+    S.pouring.prog += dt * 1.45;
+    if (S.pouring.prog >= 1) {
+      const idx = S.pouring.idx;
+      S.samples[idx].prepared = true;
+      S.pouring = null;
+      dirty = true;
+      if (S._autoPrep) {
+        const nxt = S.samples.findIndex(x => !x.prepared);
+        if (nxt !== -1) prepareSample(nxt);
+        else { S._autoPrep = false; LabUI.toast("Barcha 4 ta KMnO₄ eritmasi tayyorlandi!", "ok"); }
+      }
+    }
+  }
+
+  // Spektrofotometr oʻlchashi
+  if (S.specActive) {
+    S.specActive.prog += dt * 1.25;
+    if (S.specActive.prog >= 1) {
+      const { idx, mode } = S.specActive;
+      S.specActive = null;
+      SFX.play("beep");
+      if (mode === "base") {
+        S.samples[idx].calDone = true;
+        if (S._autoCal) {
+          const nxt = S.samples.findIndex(x => !x.calDone);
+          if (nxt !== -1) measureBaseline(nxt);
+          else { S._autoCal = false; LabUI.toast("Kalibrlash yakunlandi (R² = 1,000)!", "ok"); }
+        }
+      } else {
+        S.samples[idx].specDone = true;
+        if (S._autoSpec3) {
+          const nxt = S.samples.findIndex(x => !x.specDone);
+          if (nxt !== -1) measureResidual(nxt);
+          else { S._autoSpec3 = false; LabUI.toast("Barcha 4 ta qoldiq konsentratsiya aniqlandi!", "ok"); }
+        }
+      }
+      dirty = true;
+    }
+  }
+
+  // 2-bosqich: chayqatish va suv hammomi
+  if (S.shakeT > 0) S.shakeT = Math.max(0, S.shakeT - dt);
+  if (S.bathRunning && !S.bathDone) {
+    // x1 = 0.35 daq/s, x5 = 1.75 daq/s, x10 = 3.5 daq/s
+    S.bathTime = Math.min(20, S.bathTime + dt * 0.35 * S.speed);
+    if (S.bathTime >= 20) {
+      S.bathRunning = false;
+      S.bathDone = true;
+      SFX.play("bell");
+      LabUI.toast("20 daqiqa yakunlandi! Adsorbsion muvozanat 25,0 °C da oʻrnatildi.", "ok");
+      dirty = true;
+    } else if (Math.floor((S.bathTime - dt * 0.35 * S.speed) * 2) !== Math.floor(S.bathTime * 2)) {
+      dirty = true;
+    }
+  }
+
+  // 3-bosqich: ajratish
+  if (S.sepRunning) {
+    S.sepProg += dt * 0.52;
+    if (S.sepProg >= 1) {
+      S.sepRunning = false;
+      S.sepProg = 1;
+      S.samples.forEach(s => s.separated = true);
+      SFX.play("ok");
+      LabUI.toast("Faollashtirilgan koʻmir barcha eritmalardan toʻliq ajratildi!", "ok");
+      dirty = true;
+    }
+  }
+
+  if (dirty) renderAll();
+  else renderSVG();
+  requestAnimationFrame(loop);
+}
+
+/* ============ INITSIALIZATSIYA ============ */
+function init() {
+  LabUI.initShell(LAB_ID);
+  document.querySelectorAll("footer.lab-foot button[data-sp]").forEach(b => {
+    const sp = +b.dataset.sp;
+    if (sp === S.speed) b.classList.add("on");
+    b.onclick = () => {
+      SFX.play("click");
+      S.speed = sp;
+      document.querySelectorAll("footer.lab-foot button[data-sp]").forEach(x => x.classList.toggle("on", +x.dataset.sp === sp));
+      if (S.stage === 1) renderPanel();
+    };
+  });
+  el("btnTable").onclick = () => { SFX.play("paper"); showJournal(); };
+  el("btnHint").onclick = showSmartHint;
+  el("btnTheory").onclick = () => { SFX.play("paper"); showTheory(); };
+  renderAll();
+  showIntro();
+  requestAnimationFrame(loop);
+}
+
+init();
+</script>
+</body>
+</html>

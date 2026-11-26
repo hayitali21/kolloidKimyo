@@ -1,0 +1,1321 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="author" content="Qayumov Hayitali">
+<meta name="description" content="12-laboratoriya ishi: Benzol va paxta moyi emulsiyalarini olish, tiplarini aniqlash (M/S va S/M), 8-rasm asbobida 0,2% Nekal va 0,2% Agar-agar koʻpiklarining barqarorligi va karraliligini oʻrganish.">
+<title>12-lab · Emulsiyalar va koʻpiklarning xossalari</title>
+<link rel="stylesheet" href="../assets/lab-core.css">
+<style>
+.step-card{background:#f3f8f7;border:1px solid var(--line);border-radius:10px;padding:9px 10px;margin-bottom:8px}
+.step-card h5{font-size:12px;color:var(--top);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:8px 0}
+.kpi{background:#f1f7f6;border:1px solid var(--line);border-radius:9px;padding:7px 9px}
+.kpi small{display:block;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.kpi b{font-family:var(--mono);font-size:14.5px;color:var(--top)}
+.legend-row{display:flex;gap:12px;font-size:11.5px;color:var(--muted);margin:4px 0 8px;flex-wrap:wrap}
+.legend-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:middle}
+</style>
+</head>
+<body>
+<header class="lab-head">
+  <a class="home-link" href="../index.html">← Bosh sahifa</a>
+  <div class="lab-switch-wrap" id="labSwitchWrap"></div>
+  <div class="brand">Emulsiyalar va koʻpiklar<small>12-laboratoriya · emulsiyalar olinishi, M/S tiplari va koʻpik barqarorligi (8-rasm)</small></div>
+  <nav class="tabs" id="tabs"></nav>
+  <div class="scorechip" id="chip">0 / 100</div>
+</header>
+
+<main class="lab-main">
+  <div id="stageWrap">
+    <svg id="scene" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+  <aside id="panel"></aside>
+</main>
+
+<footer class="lab-foot">
+  <span class="lbl">VAQT TEZLIGI</span>
+  <button data-sp="1">×1</button>
+  <button data-sp="5">×5</button>
+  <button data-sp="10">×10</button>
+  <button data-sp="20">×20</button>
+  <span class="sp"></span>
+  <button id="btnTable">📋 Jurnal</button>
+  <button id="btnHint">💡 Maslahat</button>
+  <button id="btnTheory">📘 Nazariya</button>
+  <button id="btnSnd">🔊 Ovoz</button>
+  <button id="btnFull">⛶</button>
+  <a class="ig-credit" href="https://instagram.com/hayitali1612" target="_blank" rel="noopener noreferrer" title="Instagram: @hayitali1612">hayitali1612</a>
+</footer>
+
+<div id="toasts"></div>
+<div id="modal"><div class="card" id="modalCard"></div></div>
+
+<script src="../assets/lab-core.js"></script>
+<script>
+"use strict";
+const LAB_ID = 12;
+const { el, clamp, lerp, f1, shuf } = LabUI;
+
+/* ============ KOʻPIK MODELLARI (8-rasm asbobi) ============ */
+const FOAM_SPEC = {
+  nekal: {
+    name: "0,2% Nekal eritmasi",
+    V0: 100,        // boshlangʻich koʻpik hajmi, ml
+    H0: 20.0,       // boshlangʻich koʻpik ustuni balandligi, cm
+    Vmax: 12.5,     // koʻpik ichidagi jami suyuqlik, ml => K0 = 100/12.5 = 8,0
+    tauDrain: 32,   // drenaj xarakteristik vaqti, s
+    tauLife: 120,   // "oyna" qurish vaqti (yashash davri), s
+    logTimes: [0, 10, 20, 30, 40, 60, 80, 100, 120],
+    color: "#d9534f"
+  },
+  agar: {
+    name: "0,2% Agar-agar + 0,2% Nekal",
+    V0: 100,
+    H0: 20.0,
+    Vmax: 16.0,     // qalinroq gel pardalar => K0 = 100/16.0 = 6,25
+    tauDrain: 135,  // ~4x sekin drenaj
+    tauLife: 360,   // 3x uzoq yashash davri
+    logTimes: [0, 10, 20, 30, 40, 60, 90, 120, 180, 240, 300, 360],
+    color: "#1f9d6b"
+  }
+};
+
+function foamStateAt(kind, t) {
+  const sp = FOAM_SPEC[kind];
+  const tc = clamp(t, 0, sp.tauLife);
+  const f = tc / sp.tauLife;
+  // Ajralib chiqqan suyuqlik V_suy(t): boshida tez, keyin sekinlashadi
+  const rawDrain = 1 - Math.exp(-tc / sp.tauDrain);
+  const norm = 1 - Math.exp(-sp.tauLife / sp.tauDrain);
+  const Vsuy = +(sp.Vmax * (rawDrain / norm)).toFixed(2);
+  // Koʻpik balandligi H(t): barqarorlikka mos egri chiziq
+  const H = +(sp.H0 * Math.max(0, 1 - Math.pow(f, kind === "agar" ? 1.45 : 1.25))).toFixed(1);
+  const Vkopik = +(sp.V0 * (H / sp.H0)).toFixed(1);
+  const VinFoam = Math.max(0, sp.Vmax - Vsuy);
+  const K = VinFoam > 0.25 && Vkopik > 0.5 ? +(Vkopik / VinFoam).toFixed(1) : 0;
+  return { t: Math.round(tc), Vsuy, H, Vkopik, VinFoam: +VinFoam.toFixed(2), K };
+}
+
+/* ============ SAVOLLAR ============ */
+const STAGE_QS = {
+  0: [
+    {
+      id: "s1q1",
+      q: "Nima uchun 50 ml suv va 10 ml benzol chayqatilganda tezda ikki qavatga ajralib ketadi, 10 ml 2% sovun qoʻshilgach esa barqaror emulsiya hosil boʻladi?",
+      opts: [
+        "Sovun (sirt-faol emulgator) faza chegarasida sirt taranglikni pasaytirib, tomchilar atrofida himoya adsorbsion qavat hosil qiladi",
+        "Sovun benzolni kimyoviy parchalab suvga aylantiradi",
+        "Sovun suvning zichligini benzolnikidan kichik qilib qoʻyadi",
+        "Benzol faqat spirt ishtirokida bugʻlanib ketadi"
+      ],
+      ok: 0
+    },
+    {
+      id: "s1q2",
+      q: "Emulsiya tomchisi suvda darhol tarqalib ketib, metilen koʻki bilan tashqi (uzluksiz) faza koʻk rangga boʻyalsa, bu emulsiya qaysi tipga mansub?",
+      opts: [
+        "1-turdagi toʻgʻri emulsiya — M/S (moy/suv)",
+        "2-turdagi teskari emulsiya — S/M (suv/moy)",
+        "Aerozol (gazdagi suyuqlik)",
+        "Qattiq suspenziya"
+      ],
+      ok: 0
+    }
+  ],
+  1: [
+    {
+      id: "s2q1",
+      q: "8-rasmdagi koʻpik hosil qilish asbobida suvli silindr ichiga tushirilgan shisha nayning vazifasi nimadan iborat?",
+      opts: [
+        "Nayning suvga botish chuqurligi orqali sistemadagi havo bosimini doimiy qiymatda tartibga solib turish",
+        "Koʻpikni sovutish va muzlatish",
+        "Nekal konsentratsiyasini oʻlchash",
+        "Yigʻgichdagi suyuqlikni bugʻlatish"
+      ],
+      ok: 0
+    },
+    {
+      id: "s2q2",
+      q: "Koʻpik karraliligi (K) va koʻpikning yashash davri (τ) qanday aniqlanadi?",
+      opts: [
+        "K = V_koʻpik / V_suy (koʻpik hajmining undagi suyuqlik hajmiga nisbati); τ — tajriba boshidan «oyna» quriguncha oʻtgan vaqt",
+        "K = V_suy / V_koʻpik; τ — joʻmrak ochiq turgan vaqt",
+        "K = H · P; τ — havo bosimi maksimal boʻlgan lahza",
+        "K = m / V; τ — har 10 sekunddagi harorat farqi"
+      ],
+      ok: 0
+    }
+  ],
+  2: [
+    {
+      id: "s3q1",
+      q: "0,2% Nekal eritmasiga 0,2% Agar-agar qoʻshilganda koʻpikning yashash davri (τ) nega keskin ortadi?",
+      opts: [
+        "Agar-agar koʻpik pardalarida elastik gel strukturasi hosil qilib, suyuqlik drenajini (oqib tushishini) keskin sekinlashtiradi",
+        "Agar-agar havo bosimini 3 baravar pasaytiradi",
+        "Agar-agar nekal bilan gaz hosil qilib reaksiyaga kirishadi",
+        "Agar-agar koʻpik pufakchalarini ogʻirlashtirib darhol choʻktiradi"
+      ],
+      ok: 0
+    },
+    {
+      id: "s3q2",
+      q: "0,2% Nekal va 0,2% Nekal + 0,2% Agar-agar koʻpiklarini solishtirganda qaysi xulosa toʻgʻri?",
+      opts: [
+        "Agar-agarli koʻpikda drenaj ancha sekin, pardalar qalinroq (K₀ biroz kichikroq) va «oyna» qurish vaqti τ bir necha baravar uzun",
+        "Sof nekal koʻpigi agar-agarli koʻpikdan 3 marta barqarorroq",
+        "Ikkala sistemada ham suyuqlik drenaji bir xil tezlikda boradi",
+        "Agar-agar qoʻshilganda umuman koʻpik hosil boʻlmaydi"
+      ],
+      ok: 0
+    }
+  ]
+};
+
+const FINAL_QUIZ = [
+  {
+    id: "fq1",
+    q: "Paxta moyi emulsiyasini olishda 4–5 g bura (Na₂B₄O₇·10H₂O) issiq suvda eritilganda nima sababdan barqaror emulsiya hosil boʻladi?",
+    opts: [
+      "Bura gidrolizlanib ishqoriy muhit hosil qiladi va paxta moyidagi erkin yogʻ kislotalari bilan tabiiy sovun (emulgator) beradi",
+      "Bura paxta moyini suvda toʻliq eritib chin eritmaga aylantiradi",
+      "Bura suvni kislotali qilib moy tomchilarini birlashtiradi",
+      "Bura zichligi past boʻlgani uchun moy yuzasida suzib yuradi"
+    ],
+    ok: 0
+  },
+  {
+    id: "fq2",
+    q: "Bankroft qoidasiga koʻra, qaysi faza emulsiyaning dispers muhiti (tashqi fazasi) boʻladi?",
+    opts: [
+      "Emulgator qaysi fazada yaxshiroq erisa, oʻsha faza dispers muhit boʻladi (gidrofil sovun → M/S)",
+      "Hajmi kichikroq boʻlgan faza doimo tashqi faza boʻladi",
+      "Zichligi kichikroq suyuqlik doimo tashqi faza boʻladi",
+      "Emulgator erimaydigan faza tashqi faza boʻladi"
+    ],
+    ok: 0
+  },
+  {
+    id: "fq3",
+    q: "Nekal kimyoviy tarkibiga koʻra qanday modda hisoblanadi?",
+    opts: [
+      "Butilsulfonaftalinning natriyli tuzi — anion sirt-faol koʻpik hosil qiluvchi",
+      "Yuqori molekulyar polisaxarid (gel hosil qiluvchi)",
+      "Anorganik elektrolit (natriy tetraborat)",
+      "Qutbsiz uglevodorod erituvchi"
+    ],
+    ok: 0
+  },
+  {
+    id: "fq4",
+    q: "100 ml koʻpik ichida 12,5 ml suyuqlik mavjud boʻlsa, bu koʻpikning karraliligi K nechaga teng?",
+    opts: [
+      "K = 8,0",
+      "K = 0,125",
+      "K = 12,5",
+      "K = 87,5"
+    ],
+    ok: 0
+  },
+  {
+    id: "fq5",
+    q: "Koʻpik yemirilishining (sinerezis) ikki asosiy mexanizmi qaysilar?",
+    opts: [
+      "Pardalardan suyuqlikning gravitatsion/kapillyar oqib tushishi (drenaj) va gazning kichik pufakchalardan kattalariga diffuziyasi + pardalar uzilishi",
+      "Faqat atmosfera bosimining oʻzgarishi va quyosh nuri",
+      "Koʻpikning kristallanishi va choʻkma tushishi",
+      "Elektroforez va dializ jarayonlari"
+    ],
+    ok: 0
+  }
+];
+
+/* ============ HOLAT (STATE) ============ */
+function createInitialState() {
+  return {
+    stage: 0,
+    speed: 10,
+    // 1-bosqich: Emulsiyalar
+    bzStep: 0,      // 0: boʻsh, 1: H2O+benzol quyildi, 2: chayqatildi (2 qavat), 3: +2% sovun, 4: barqaror emulsiya
+    bzShakeT: 0,
+    bzSepProg: 1,   // 0 (aralash) -> 1 (2 qavatga ajraldi)
+    oilStep: 0,     // 0: boʻsh, 1: 4.5g bura tortildi, 2: 95ml issiq suvda eritildi, 3: +2.5ml paxta moyi, 4: barqaror emulsiya
+    oilShakeT: 0,
+    buraMass: 0,
+    testDilute: false,
+    testDye: false,
+    typePicked: null, // 'MS' | 'SM'
+    // 2-bosqich: 0,2% Nekal (8-rasm)
+    nekal: {
+      depth: 20,      // botirish chuqurligi cm H2O (12..28)
+      pumpOn: false,
+      valveOpen: false,
+      flushed: false,
+      fillProg: 0,    // 0..1 yigʻgich toʻlishi
+      filled: false,
+      measuring: false,
+      done: false,
+      time: 0,
+      logs: []
+    },
+    // 3-bosqich: 0,2% Agar-agar + 0,2% Nekal
+    agar: {
+      dosed: false,
+      depth: 20,
+      pumpOn: false,
+      valveOpen: false,
+      flushed: false,
+      fillProg: 0,
+      filled: false,
+      measuring: false,
+      done: false,
+      time: 0,
+      logs: [],
+      compared: false
+    },
+    ans: {},
+    seed: 1268,
+    t: 0
+  };
+}
+
+let S = createInitialState();
+
+/* ============ BALL HISOBLASH (100 BALL) ============ */
+function total() {
+  const bzPt = S.bzStep >= 4 ? 6 : (S.bzStep >= 2 ? 3 : 0);
+  const oilPt = S.oilStep >= 4 ? 6 : (S.oilStep >= 2 ? 3 : 0);
+  const tpPt = (S.testDilute ? 2 : 0) + (S.testDye ? 2 : 0) + (S.typePicked === "MS" ? 2 : 0);
+  const p1 = bzPt + oilPt + tpPt; // 18
+
+  const n = S.nekal;
+  const p2 = (n.pumpOn || n.filled ? 2 : 0) + (n.valveOpen || n.filled ? 2 : 0) + (n.filled ? 4 : 0) + (n.done ? 8 : Math.min(6, Math.floor(n.logs.length * 0.7))); // 16
+
+  const a = S.agar;
+  const p3 = (a.dosed ? 3 : 0) + (a.filled ? 3 : 0) + (a.done ? 8 : Math.min(6, Math.floor(a.logs.length * 0.55))) + (a.compared ? 4 : 0); // 18
+
+  const prac = p1 + p2 + p3; // 52
+  let sq = 0;
+  Object.values(STAGE_QS).flat().forEach(q => { if (S.ans[q.id] === q.ok) sq += 3; }); // 6*3 = 18
+  let fq = 0;
+  FINAL_QUIZ.forEach(q => { if (S.ans[q.id] === q.ok) fq += 6; }); // 5*6 = 30
+  return { p1, p2, p3, prac, sq, fq, tot: prac + sq + fq };
+}
+
+function stageDone(i) {
+  if (i === 0) return S.bzStep >= 4 && S.oilStep >= 4 && S.testDilute && S.testDye && S.typePicked === "MS";
+  if (i === 1) return S.nekal.done;
+  if (i === 2) return S.agar.done && S.agar.compared;
+  if (i === 3) return FINAL_QUIZ.every(q => S.ans[q.id] !== undefined);
+  return false;
+}
+
+const TABS = [
+  "1. Emulsiyalar va tiplar",
+  "2. Koʻpik: 0,2% Nekal",
+  "3. Gel: Agar + Nekal",
+  "4. Hisobot"
+];
+
+function renderTabs() {
+  const sc = total();
+  el("chip").textContent = `${sc.tot} / 100`;
+  const isDone = stageDone(0) && stageDone(1) && stageDone(2);
+  LabProgress.save(LAB_ID, sc.tot, isDone);
+
+  el("tabs").innerHTML = TABS.map((t, i) => {
+    const cls = (i === S.stage ? "cur " : "") + (stageDone(i) ? "done" : "");
+    return `<button class="${cls}" data-st="${i}">${stageDone(i) ? "✓ " : ""}${t}</button>`;
+  }).join("");
+  el("tabs").querySelectorAll("button").forEach(b => {
+    b.onclick = () => {
+      const idx = +b.dataset.st;
+      if (idx === 2 && !S.nekal.done) {
+        LabUI.toast("Avval 2-bosqichda 0,2% Nekal koʻpigi tajribasini yakunlang (taqqoslash uchun kerak)!", "warn");
+        SFX.play("warn");
+        return;
+      }
+      SFX.play("click");
+      S.stage = idx;
+      renderAll();
+    };
+  });
+}
+
+/* ============ 1-BOSQICH HARAKATLARI ============ */
+function bzAction() {
+  if (S.bzStep === 0) {
+    S.bzStep = 1; S.bzSepProg = 1;
+    SFX.play("pour");
+    LabUI.toast("Silindrga 50 ml H₂O va 10 ml benzol quyildi. Endi qattiq chayqating!", "");
+  } else if (S.bzStep === 1) {
+    S.bzStep = 2; S.bzShakeT = 1.25; S.bzSepProg = 0;
+    SFX.play("shake");
+    LabUI.toast("Chayqatildi — lekin emulgatorsiz benzol tezda yana 2 qavatga ajralib ketadi!", "warn");
+  } else if (S.bzStep === 2) {
+    S.bzStep = 3;
+    SFX.play("pipette");
+    LabUI.toast("10 ml 2% sovun eritmasi (emulgator) qoʻshildi. Endi yana qattiq chayqating!", "");
+  } else if (S.bzStep === 3) {
+    S.bzStep = 4; S.bzShakeT = 1.3;
+    SFX.play("shake");
+    setTimeout(() => SFX.play("ok"), 600);
+    LabUI.toast("Sutdek barqaror benzol emulsiyasi (M/S) hosil boʻldi!", "ok");
+  }
+  renderAll();
+}
+
+function oilAction() {
+  if (S.oilStep === 0) {
+    SFX.play("weigh");
+    S.oilStep = 1;
+    S.buraMass = 4.50;
+    LabUI.toast("Analitik tarozida 4,50 g kristallik bura (Na₂B₄O₇·10H₂O) tortib olindi.", "ok");
+  } else if (S.oilStep === 1) {
+    SFX.play("heat");
+    S.oilStep = 2;
+    LabUI.toast("4,50 g bura 95 ml isitilgan distillangan suvda toʻliq eritildi va silindrga quyildi.", "");
+  } else if (S.oilStep === 2) {
+    SFX.play("pipette");
+    S.oilStep = 3;
+    LabUI.toast("5 ml li pipetka bilan 2,5 ml paxta moyi qoʻshildi. Endi qattiq chayqating!", "");
+  } else if (S.oilStep === 3) {
+    SFX.play("shake");
+    S.oilStep = 4; S.oilShakeT = 1.3;
+    setTimeout(() => SFX.play("ok"), 600);
+    LabUI.toast("Paxta moyining barqaror emulsiyasi hosil boʻldi!", "ok");
+  }
+  renderAll();
+}
+
+function runDiluteTest() {
+  if (S.bzStep < 4 && S.oilStep < 4) {
+    LabUI.toast("Avval kamida bitta barqaror emulsiya hosil qiling!", "warn"); SFX.play("warn"); return;
+  }
+  SFX.play("drip");
+  S.testDilute = true;
+  LabUI.toast("Suyultirish testi: tomchi suvda darhol tarqaldi, moyda esa dumaloq tomchi boʻlib qoldi!", "ok");
+  renderAll();
+}
+
+function runDyeTest() {
+  if (S.bzStep < 4 && S.oilStep < 4) {
+    LabUI.toast("Avval kamida bitta barqaror emulsiya hosil qiling!", "warn"); SFX.play("warn"); return;
+  }
+  SFX.play("drip");
+  S.testDye = true;
+  LabUI.toast("Metilen koʻki testi: suvda eruvchan boʻyoq tashqi (uzluksiz) fazani koʻk rangga boʻyadi!", "ok");
+  renderAll();
+}
+
+function pickType(tp) {
+  if (!S.testDilute && !S.testDye) {
+    LabUI.toast("Avval suyultirish yoki metilen koʻki testini oʻtkazing!", "warn"); SFX.play("warn"); return;
+  }
+  S.typePicked = tp;
+  if (tp === "MS") {
+    SFX.play("ok");
+    LabUI.toast("Toʻgʻri! Ikkala emulsiya ham M/S (moy/suv) — 1-turdagi toʻgʻri emulsiya!", "ok");
+  } else {
+    SFX.play("err");
+    LabUI.toast("Notoʻgʻri! Tomchi suvda tarqaldi va tashqi faza metilen koʻki bilan boʻyaldi — demak tashqi faza SUV (M/S)!", "err");
+  }
+  renderAll();
+}
+
+/* ============ 2- VA 3-BOSQICH (KOʻPIK ASBOBI) HARAKATLARI ============ */
+function activeFoamObj() { return S.stage === 1 ? S.nekal : S.agar; }
+function activeFoamKind() { return S.stage === 1 ? "nekal" : "agar"; }
+
+function doseAgarMixture() {
+  if (S.agar.dosed) return;
+  SFX.play("pour");
+  S.agar.dosed = true;
+  LabUI.toast("Oʻlchov dozator yordamida 0,2% agar-agar + 0,2% nekal aralashmasi tayyorlanib silindrga quyildi.", "ok");
+  renderAll();
+}
+
+function togglePump() {
+  const f = activeFoamObj();
+  if (S.stage === 2 && !f.dosed) {
+    LabUI.toast("Avval oʻlchov dozatorda 0,2% agar-agar + 0,2% nekal eritmasini silindrga quying!", "warn");
+    SFX.play("warn"); return;
+  }
+  if (f.filled) return;
+  f.pumpOn = !f.pumpOn;
+  SFX.play(f.pumpOn ? "vacuum" : "click");
+  if (f.pumpOn) LabUI.toast(`Havo puflagich yoqildi! Bosim ${f.depth} cm H₂O darajasida barqarorlashdi.`, "");
+  renderAll();
+}
+
+function openValveAndFill() {
+  const f = activeFoamObj();
+  if (!f.pumpOn) { LabUI.toast("Avval havo puflagichni yoqib, doimiy bosim hosil qiling!", "warn"); SFX.play("warn"); return; }
+  if (f.filled) return;
+  f.valveOpen = true;
+  f.flushed = true;
+  SFX.play("bubble");
+  LabUI.toast("Joʻmrak ochildi: dastlabki notekis koʻpik chiqarib yuborilib, yigʻgich 100 ml belgisigacha toʻldirilmoqda!", "");
+  renderAll();
+}
+
+function startFoamDrainage() {
+  const f = activeFoamObj();
+  const kind = activeFoamKind();
+  if (!f.filled) { LabUI.toast("Avval yigʻgichni 100 ml belgisigacha koʻpik bilan toʻldiring!", "warn"); SFX.play("warn"); return; }
+  if (f.done) return;
+  f.pumpOn = false;
+  f.valveOpen = false;
+  f.measuring = !f.measuring;
+  if (f.measuring && f.logs.length === 0) {
+    f.logs.push(foamStateAt(kind, 0));
+    SFX.play("beep");
+    LabUI.toast("Havo berish toʻxtatildi! Har 10 sekundda V_suy va H oʻlchanmoqda («oyna» quriguncha).", "");
+  } else {
+    SFX.play("click");
+  }
+  renderAll();
+}
+
+function answerQ(qid, chosen, correct) {
+  if (S.ans[qid] !== undefined) return;
+  S.ans[qid] = chosen;
+  if (chosen === correct) { SFX.play("ok"); LabUI.toast("Toʻgʻri javob!", "ok", 2200); }
+  else { SFX.play("err"); LabUI.toast("Notoʻgʻri. Nazariya boʻlimini koʻring.", "err", 2800); }
+  renderAll();
+}
+
+/* ============ SVG SAHNA CHIZISH ============ */
+function renderSVG() {
+  const svg = el("scene");
+  let defs = `<defs>
+    <linearGradient id="bgW" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#dfecea"/><stop offset="100%" stop-color="#c4d8d5"/>
+    </linearGradient>
+    <linearGradient id="bench" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4e696d"/><stop offset="18%" stop-color="#375155"/><stop offset="100%" stop-color="#22383b"/>
+    </linearGradient>
+    <linearGradient id="gShine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#fff" stop-opacity=".55"/>
+      <stop offset="24%" stop-color="#fff" stop-opacity=".06"/>
+      <stop offset="84%" stop-color="#0f2e33" stop-opacity=".07"/>
+      <stop offset="100%" stop-color="#fff" stop-opacity=".35"/>
+    </linearGradient>
+    <linearGradient id="waterGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#87d8ee" stop-opacity=".62"/><stop offset="100%" stop-color="#3da0c2" stop-opacity=".75"/>
+    </linearGradient>
+    <linearGradient id="agarGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9fe0c3" stop-opacity=".72"/><stop offset="100%" stop-color="#47a885" stop-opacity=".82"/>
+    </linearGradient>
+    <filter id="sh" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4.5" flood-color="#0d2326" flood-opacity=".22"/>
+    </filter>
+  </defs>`;
+
+  let body = `
+    <rect width="1000" height="600" fill="url(#bgW)"/>
+    <g opacity=".2" stroke="#6c8b8f" stroke-width="1">
+      ${[100,200,300,400,500,600,700,800,900].map(x=>`<line x1="${x}" y1="0" x2="${x}" y2="462"/>`).join("")}
+      ${[90,180,270,360].map(y=>`<line x1="0" y1="${y}" x2="1000" y2="${y}"/>`).join("")}
+    </g>
+    <rect x="0" y="462" width="1000" height="138" fill="url(#bench)"/>
+    <rect x="0" y="462" width="1000" height="6" fill="#6f9094"/>
+  `;
+
+  if (S.stage === 0) body += drawStage1();
+  else if (S.stage === 1) body += drawFoamApparatus("nekal");
+  else if (S.stage === 2) body += drawFoamApparatus("agar");
+  else body += drawStage4();
+
+  svg.innerHTML = defs + body;
+  bindStageClicks();
+}
+
+function drawStage1() {
+  const bzDx = S.bzShakeT > 0 ? Math.sin(S.t * 46) * 10 * S.bzShakeT : 0;
+  const oilDx = S.oilShakeT > 0 ? Math.sin(S.t * 46) * 10 * S.oilShakeT : 0;
+
+  let s = `<text x="32" y="38" fill="#132629" font-size="19" font-weight="800">1-BOSQICH: Emulsiyalarni olish va tiplarini aniqlash (M/S vs S/M)</text>
+    <text x="32" y="59" fill="#476366" font-size="13">Chapda benzol, oʻrtada paxta moyi emulsiyasini oling, oʻngda suyultirish va metilen koʻki bilan tipini aniqlang</text>`;
+
+  /* --- ZONA A: BENZOL EMULSIYASI --- */
+  s += `<g transform="translate(30, 82)" filter="url(#sh)">
+    <rect x="0" y="0" width="286" height="392" rx="14" fill="rgba(255,255,255,.58)" stroke="#b3cac7" stroke-width="1.5"/>
+    <text x="143" y="25" text-anchor="middle" font-size="13" font-weight="800" fill="#132629">A. Benzol emulsiyasi (100 ml)</text>
+
+    <!-- Reagent shishachalari -->
+    <g transform="translate(18, 250)">
+      <rect x="0" y="18" width="46" height="84" rx="7" fill="#fff7d6" stroke="#857444" stroke-width="1.5"/>
+      <rect x="11" y="6" width="24" height="14" rx="3" fill="#5b4d2a"/>
+      <text x="23" y="54" text-anchor="middle" font-size="9" font-weight="800" fill="#3a2e10">Benzol</text>
+      <text x="23" y="68" text-anchor="middle" font-size="8.5" font-family="var(--mono)" fill="#587276">10 ml</text>
+    </g>
+    <g transform="translate(222, 250)">
+      <rect x="0" y="18" width="48" height="84" rx="7" fill="#eef9f5" stroke="#4c8c78" stroke-width="1.5"/>
+      <rect x="12" y="6" width="24" height="14" rx="3" fill="#2c6352"/>
+      <text x="24" y="54" text-anchor="middle" font-size="8.8" font-weight="800" fill="#114032">Sovun</text>
+      <text x="24" y="68" text-anchor="middle" font-size="8.5" font-family="var(--mono)" fill="#1f9d6b">2% 10ml</text>
+    </g>
+
+    <!-- 100 ml tiqinli oʻlchov silindri -->
+    <g class="clk ${S.bzStep < 4 ? "glow" : ""}" data-act="bzCyl" transform="translate(${143 + bzDx}, 66)">
+      <!-- Silliqlangan shisha tiqin -->
+      <path d="M-18 -14 L18 -14 L15 8 L-15 8 Z" fill="#e6f2f0" stroke="#456569" stroke-width="1.8"/>
+      <ellipse cx="0" cy="-16" rx="18" ry="6" fill="#d3e6e3" stroke="#456569" stroke-width="1.5"/>
+      <!-- Silindr tanasi -->
+      <rect x="-32" y="8" width="64" height="264" rx="5" fill="rgba(255,255,255,.35)" stroke="#3c5c60" stroke-width="2"/>
+      <rect x="-46" y="272" width="92" height="12" rx="4" fill="#9eb8b6" stroke="#3c5c60" stroke-width="1.6"/>
+      <!-- Suyuqlik holatlari -->
+      ${S.bzStep === 1 || S.bzStep === 2 || S.bzStep === 3 ? (() => {
+        const sep = S.bzSepProg;
+        if (sep < 0.35) {
+          return `<rect x="-29" y="122" width="58" height="148" fill="rgba(235,238,220,.88)"/>
+            ${Array.from({length:16},(_,k)=>`<circle cx="${-20+(k*17)%40}" cy="${135+(k*29)%125}" r="3.5" fill="#f7e38b" opacity=".8"/>`).join("")}`;
+        }
+        return `
+          <rect x="-29" y="148" width="58" height="122" fill="url(#waterGrad)"/>
+          <rect x="-29" y="122" width="58" height="26" fill="rgba(246,226,132,.85)"/>
+          <line x1="-29" y1="148" x2="29" y2="148" stroke="#9e8528" stroke-width="1.6"/>
+          <text x="0" y="139" text-anchor="middle" font-size="8.5" font-weight="700" fill="#5e4b08">Benzol</text>
+          <text x="0" y="216" text-anchor="middle" font-size="9" font-weight="700" fill="#0d3b4d">H₂O (50 ml)</text>
+          ${S.bzStep === 3 ? `<rect x="-29" y="100" width="58" height="22" fill="rgba(166,232,208,.75)"/><text x="0" y="114" text-anchor="middle" font-size="8" font-weight="700" fill="#0f4c38">+Sovun</text>` : ""}
+        `;
+      })() : ""}
+      ${S.bzStep >= 4 ? `
+        <rect x="-29" y="100" width="58" height="170" fill="#f9fbf8"/>
+        ${Array.from({length:24},(_,k)=>`<circle cx="${-22+(k*19)%44}" cy="${110+(k*31)%150}" r="${2.2+(k%3)*0.7}" fill="#e6ebd5" stroke="#c8d4be" stroke-width=".6"/>`).join("")}
+        <text x="0" y="190" text-anchor="middle" font-size="9.5" font-weight="800" fill="#1b484f">BARQAROR</text>
+        <text x="0" y="203" text-anchor="middle" font-size="8.8" fill="#1f9d6b">EMULSIYA</text>
+      ` : ""}
+      <!-- Shkala belgilari -->
+      ${[20,40,60,80,100].map(v => {
+        const yy = 270 - v * 2.4;
+        return `<line x1="-32" y1="${yy}" x2="-20" y2="${yy}" stroke="#355256" stroke-width="1.2"/>
+                <text x="-17" y="${yy+3}" font-size="7.5" font-family="var(--mono)" fill="#355256">${v}</text>`;
+      }).join("")}
+      <rect x="-32" y="8" width="64" height="264" rx="5" fill="url(#gShine)"/>
+    </g>
+    <text x="143" y="376" text-anchor="middle" font-size="11" font-weight="700" fill="${S.bzStep>=4?"#1f9d6b":"#587276"}">${
+      S.bzStep===0 ? "1) 50ml H₂O + 10ml benzol quying"
+      : S.bzStep===1 ? "2) Qattiq chayqating"
+      : S.bzStep===2 ? "2 qavatga ajraldi! +10ml sovun qoʻshing"
+      : S.bzStep===3 ? "4) Qayta chayqating"
+      : "✓ Barqaror sutdek benzol emulsiyasi"
+    }</text>
+  </g>`;
+
+  /* --- ZONA B: PAXTA MOYI EMULSIYASI --- */
+  s += `<g transform="translate(338, 82)" filter="url(#sh)">
+    <rect x="0" y="0" width="320" height="392" rx="14" fill="rgba(255,255,255,.58)" stroke="#b3cac7" stroke-width="1.5"/>
+    <text x="160" y="25" text-anchor="middle" font-size="13" font-weight="800" fill="#132629">B. Paxta moyi emulsiyasi (Bura + 95 ml H₂O)</text>
+
+    <!-- Kichik analitik tarozi + isitgich chapda -->
+    <g transform="translate(16, 70)">
+      <rect x="0" y="54" width="118" height="62" rx="8" fill="#eef5f4" stroke="#7d9895" stroke-width="1.6"/>
+      <rect x="12" y="65" width="94" height="28" rx="5" fill="#0d2529"/>
+      <text x="59" y="85" text-anchor="middle" fill="#77f5be" font-size="15" font-weight="700" font-family="var(--mono)">${f1(S.buraMass,2)} g</text>
+      <text x="59" y="108" text-anchor="middle" fill="#4b686b" font-size="9" font-weight="700">BURA (4–5 g)</text>
+      <rect x="26" y="44" width="66" height="8" rx="3" fill="#9fb6b4"/>
+      ${S.oilStep >= 1 ? `<path d="M36 44 Q59 24 82 44 Z" fill="#ffffff" stroke="#c7d6d4"/>` : ""}
+    </g>
+
+    <!-- Isitgich va 95 ml kolba -->
+    <g transform="translate(18, 218)">
+      <rect x="4" y="102" width="112" height="26" rx="6" fill="#2c4448"/>
+      <rect x="18" y="96" width="84" height="7" rx="3" fill="${S.oilStep===2 ? "#ff7d3b" : "#6b8588"}"/>
+      <path d="M44 26 L76 26 L98 94 Q100 98 92 98 L28 98 Q20 98 22 94 Z" fill="rgba(255,255,255,.45)" stroke="#3c5c60" stroke-width="1.8"/>
+      <path d="M33 56 L87 56 L96 94 L24 94 Z" fill="${S.oilStep>=2 ? "rgba(180,235,245,.82)" : "rgba(135,216,238,.55)"}"/>
+      <text x="60" y="82" text-anchor="middle" font-size="9" font-weight="700" fill="#132629">95 ml H₂O</text>
+      ${S.oilStep===2 ? `<text x="60" y="18" text-anchor="middle" font-size="9.5" font-weight="700" fill="#d15b24">🔥 Isitilmoqda</text>` : ""}
+    </g>
+
+    <!-- 100 ml oʻlchov silindri oʻngda -->
+    <g class="clk ${S.oilStep < 4 ? "glow" : ""}" data-act="oilCyl" transform="translate(${224 + oilDx}, 66)">
+      <path d="M-18 -14 L18 -14 L15 8 L-15 8 Z" fill="#e6f2f0" stroke="#456569" stroke-width="1.8"/>
+      <ellipse cx="0" cy="-16" rx="18" ry="6" fill="#d3e6e3" stroke="#456569" stroke-width="1.5"/>
+      <rect x="-32" y="8" width="64" height="264" rx="5" fill="rgba(255,255,255,.35)" stroke="#3c5c60" stroke-width="2"/>
+      <rect x="-46" y="272" width="92" height="12" rx="4" fill="#9eb8b6" stroke="#3c5c60" stroke-width="1.6"/>
+      ${S.oilStep === 2 ? `
+        <rect x="-29" y="48" width="58" height="222" fill="rgba(165,228,242,.75)"/>
+        <text x="0" y="164" text-anchor="middle" font-size="9" font-weight="700" fill="#0d3b4d">Bura eritmasi</text>
+        <text x="0" y="178" text-anchor="middle" font-size="8.5" fill="#1b484f">95 ml</text>
+      ` : ""}
+      ${S.oilStep === 3 ? `
+        <rect x="-29" y="54" width="58" height="216" fill="rgba(165,228,242,.75)"/>
+        <rect x="-29" y="42" width="58" height="12" fill="#e8b838"/>
+        <text x="0" y="37" text-anchor="middle" font-size="8.5" font-weight="700" fill="#9c6f06">+2,5 ml moy</text>
+      ` : ""}
+      ${S.oilStep >= 4 ? `
+        <rect x="-29" y="42" width="58" height="228" fill="#fdf3d2"/>
+        ${Array.from({length:24},(_,k)=>`<circle cx="${-22+(k*17)%44}" cy="${56+(k*29)%200}" r="${2.2+(k%3)*0.6}" fill="#f0d27a" opacity=".75"/>`).join("")}
+        <text x="0" y="156" text-anchor="middle" font-size="9.5" font-weight="800" fill="#6b4b06">PAXTA MOYI</text>
+        <text x="0" y="170" text-anchor="middle" font-size="8.8" font-weight="700" fill="#1f9d6b">BARQAROR M/S</text>
+      ` : ""}
+      <rect x="-32" y="8" width="64" height="264" rx="5" fill="url(#gShine)"/>
+    </g>
+    <text x="160" y="376" text-anchor="middle" font-size="11" font-weight="700" fill="${S.oilStep>=4?"#1f9d6b":"#587276"}">${
+      S.oilStep===0 ? "1) 4,5 g bura tortib oling"
+      : S.oilStep===1 ? "2) 95 ml issiq suvda eriting"
+      : S.oilStep===2 ? "3) 2,5 ml paxta moyi qoʻshing"
+      : S.oilStep===3 ? "4) Qattiq chayqating"
+      : "✓ Barqaror paxta moyi emulsiyasi"
+    }</text>
+  </g>`;
+
+  /* --- ZONA C: EMULSIYA TIPINI ANIQLASH --- */
+  const readyTest = S.bzStep >= 4 || S.oilStep >= 4;
+  s += `<g transform="translate(680, 82)" filter="url(#sh)">
+    <rect x="0" y="0" width="290" height="392" rx="14" fill="rgba(255,255,255,.58)" stroke="#b3cac7" stroke-width="1.5"/>
+    <text x="145" y="25" text-anchor="middle" font-size="13" font-weight="800" fill="#132629">C. Emulsiya tipini aniqlash</text>
+
+    <!-- 1. Suyultirish testi (2 ta soat oynasi: SUV va MOY) -->
+    <g class="clk ${readyTest && !S.testDilute ? "glow" : ""}" data-act="testDilute" transform="translate(18, 44)">
+      <rect x="0" y="0" width="254" height="132" rx="10" fill="#ffffff" stroke="#d4e1df"/>
+      <text x="127" y="18" text-anchor="middle" font-size="11" font-weight="700" fill="#1b484f">1. Suyultirish usuli (tomchi testi)</text>
+      <!-- Suvli chashka -->
+      <circle cx="68" cy="76" r="40" fill="#d7f2fa" stroke="#5aa9c2" stroke-width="2"/>
+      <text x="68" y="126" text-anchor="middle" font-size="10" font-weight="700" fill="#132629">Suv yuzasi</text>
+      ${S.testDilute ? `
+        <circle cx="68" cy="76" r="${24 + Math.sin(S.t*3)*3}" fill="rgba(255,255,255,.78)" stroke="#92c9db" stroke-dasharray="3 2"/>
+        <circle cx="68" cy="76" r="33" fill="none" stroke="rgba(255,255,255,.65)" stroke-width="4"/>
+        <text x="68" y="79" text-anchor="middle" font-size="9" font-weight="800" fill="#1f9d6b">Tarqaldi!</text>
+      ` : `<text x="68" y="79" text-anchor="middle" font-size="9.5" fill="#587276">Tomizing</text>`}
+
+      <!-- Moyli chashka -->
+      <circle cx="186" cy="76" r="40" fill="#faebba" stroke="#c9a538" stroke-width="2"/>
+      <text x="186" y="126" text-anchor="middle" font-size="10" font-weight="700" fill="#132629">Moy yuzasi</text>
+      ${S.testDilute ? `
+        <circle cx="186" cy="76" r="10" fill="#ffffff" stroke="#999" stroke-width="1.5"/>
+        <text x="186" y="102" text-anchor="middle" font-size="8.5" font-weight="700" fill="#9c5a00">Tomchi qoldi</text>
+      ` : `<text x="186" y="79" text-anchor="middle" font-size="9.5" fill="#7d641f">Tomizing</text>`}
+    </g>
+
+    <!-- 2. Boʻyash testi (Metilen koʻki mikroskop koʻrinishi) -->
+    <g class="clk ${readyTest && !S.testDye ? "glow" : ""}" data-act="testDye" transform="translate(18, 190)">
+      <rect x="0" y="0" width="254" height="178" rx="10" fill="#ffffff" stroke="#d4e1df"/>
+      <text x="127" y="18" text-anchor="middle" font-size="11" font-weight="700" fill="#1b484f">2. Metilen koʻki (mikroskop ×200)</text>
+      <circle cx="127" cy="94" r="62" fill="${S.testDye ? "#2578d4" : "#eef4f3"}" stroke="#1b484f" stroke-width="3"/>
+      ${S.testDye ? `
+        <!-- Boʻyalmagan moy/benzol tomchilari koʻk suvli muhit ichida -->
+        ${[[100,72,12],[144,68,9],[124,104,15],[156,108,11],[92,114,10],[126,64,8],[108,132,8],[146,134,7]].map(([cx,cy,r]) =>
+          `<circle cx="${cx + Math.sin(S.t*2+cx)*1.5}" cy="${cy + Math.cos(S.t*2+cy)*1.5}" r="${r}" fill="#fffdf2" stroke="#184e8c" stroke-width="1.2"/>`
+        ).join("")}
+        <text x="127" y="170" text-anchor="middle" font-size="10" font-weight="800" fill="#1f9d6b">Tashqi faza KOʻK (Suv) → M/S!</text>
+      ` : `<text x="127" y="98" text-anchor="middle" font-size="10.5" fill="#587276">Metilen koʻki tomizing</text>`}
+    </g>
+  </g>`;
+
+  s += `<text x="500" y="538" text-anchor="middle" fill="#cbe0dd" font-size="13" font-family="var(--mono)">Bankroft qoidasi: gidrofil emulgator (sovun, bura + yogʻ kislotasi) → M/S (moy/suv) emulsiyasi</text>`;
+  return s;
+}
+
+function drawFoamApparatus(kind) {
+  const isAgar = kind === "agar";
+  const f = isAgar ? S.agar : S.nekal;
+  const sp = FOAM_SPEC[kind];
+  const st = f.filled ? foamStateAt(kind, f.time) : { t: 0, Vsuy: 0, H: sp.H0 * f.fillProg, Vkopik: sp.V0 * f.fillProg, VinFoam: 0, K: 0 };
+  const pressP = f.pumpOn ? f.depth : 0;
+  const manDiff = pressP * 2.2; // px shift in U-manometer
+
+  let s = `<text x="30" y="36" fill="#132629" font-size="18.5" font-weight="800">${isAgar ? "3-BOSQICH: Gel strukturasi — 0,2% Agar-agar + 0,2% Nekal (8-rasm)" : "2-BOSQICH: Koʻpik hosil qilish asbobi (8-rasm) — 0,2% Nekal"}</text>
+    <text x="30" y="57" fill="#476366" font-size="12.8">${isAgar ? "0,2% agar-agar qoʻshilishi koʻpik pardalariga gel strukturasi berib, drenajni sekinlashtiradi va yashash davrini oshiradi" : "Doimiy havo bosimi oʻrnating, joʻmrakni ochib yigʻgichni 100 ml gacha toʻldiring va «oyna» quriguncha V_suy va H ni oʻlchang"}</text>`;
+
+  // Barcha ulovchi shisha/rezina naylar (orqa qatlam)
+  s += `<g fill="none" stroke="#3c5e62" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Puflagich -> T-ulagich -> Bosim silindri -->
+    <path d="M128 332 L180 332 L180 148 L228 148 L228 ${248 + f.depth * 4.5}"/>
+    <!-- T-ulagich -> U-manometr -->
+    <path d="M180 148 L345 148 L345 210"/>
+    <!-- T-ulagich -> Gʻovak silindr (tiqin chap teshigi) -->
+    <path d="M345 148 L480 148 L480 385"/>
+    <!-- Gʻovak silindr (oʻng teshik) -> Joʻmrak -> Yigʻgich -->
+    <path d="M518 205 L518 148 L718 148 L718 192"/>
+  </g>`;
+  // Nay ichidagi havo oqimi animatsiyasi
+  if (f.pumpOn) {
+    s += `<g fill="none" stroke="#6ee7ff" stroke-width="2.2" stroke-dasharray="6 7" stroke-dashoffset="${-S.t * 95}">
+      <path d="M128 332 L180 332 L180 148 L480 148 L480 385"/>
+      ${f.valveOpen ? `<path d="M518 205 L518 148 L718 148 L718 192"/>` : ""}
+    </g>`;
+  }
+
+  /* 1. HAVO PUFLAGICH */
+  const vib = f.pumpOn ? Math.sin(S.t * 45) * 1.6 : 0;
+  s += `<g class="clk ${!f.pumpOn && !f.filled ? "glow" : ""}" data-act="togglePump" transform="translate(${32 + vib}, 296)" filter="url(#sh)">
+    <rect x="0" y="0" width="98" height="106" rx="14" fill="#1b484f" stroke="#0f2e33" stroke-width="2"/>
+    <circle cx="49" cy="44" r="24" fill="#0d2529" stroke="#75b5ae" stroke-width="2"/>
+    <g transform="translate(49, 44) rotate(${f.pumpOn ? (S.t * 480) % 360 : 0})">
+      <line x1="-16" y1="0" x2="16" y2="0" stroke="#e89b3c" stroke-width="4" stroke-linecap="round"/>
+      <line x1="0" y1="-16" x2="0" y2="16" stroke="#e89b3c" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="0" cy="0" r="5" fill="#fff"/>
+    </g>
+    <text x="49" y="84" text-anchor="middle" fill="#edf6f5" font-size="10" font-weight="700">1. Havo</text>
+    <text x="49" y="97" text-anchor="middle" fill="${f.pumpOn ? "#77f5be" : "#e89b3c"}" font-size="9.5" font-weight="700">${f.pumpOn ? "● YONIQ" : "PUFLAGICH"}</text>
+  </g>`;
+
+  /* 2. BOSIMNI TARTIBGA SOLUVCHI SILINDR */
+  const tubeBottomY = 248 + f.depth * 4.5;
+  s += `<g transform="translate(188, 212)" filter="url(#sh)">
+    <rect x="0" y="0" width="80" height="236" rx="6" fill="rgba(255,255,255,.38)" stroke="#3e5e62" stroke-width="2"/>
+    <rect x="3" y="42" width="74" height="191" fill="url(#waterGrad)"/>
+    <!-- Suv ichiga botirilgan nay -->
+    <rect x="37" y="-20" width="6" height="${tubeBottomY - 212 + 20}" fill="#dff3f0" stroke="#3c5e62" stroke-width="1.3"/>
+    <!-- Ortiqcha havo pufakchalari (bosim stabilizatsiyasi) -->
+    ${f.pumpOn ? Array.from({length: 6}, (_, k) => {
+      const py = tubeBottomY - 212 - ((S.t * 95 + k * 28) % Math.max(20, tubeBottomY - 254));
+      return `<circle cx="${40 + Math.sin(S.t*6 + k)*8}" cy="${py}" r="${3.2 + (k%2)}" fill="#fff" opacity=".82"/>`;
+    }).join("") : ""}
+    <rect x="0" y="0" width="80" height="236" rx="6" fill="url(#gShine)"/>
+    <text x="40" y="254" text-anchor="middle" font-size="10" font-weight="800" fill="#132629">2. Bosim</text>
+    <text x="40" y="267" text-anchor="middle" font-size="9.5" font-family="var(--mono)" fill="#1b484f">h = ${f.depth} cm</text>
+  </g>`;
+
+  /* 3. U-SHAKLLI MANOMETR */
+  s += `<g transform="translate(328, 206)" filter="url(#sh)">
+    <rect x="0" y="0" width="76" height="238" rx="9" fill="#f7fbfa" stroke="#99b3b0" stroke-width="1.5"/>
+    <!-- U-trubka -->
+    <path d="M22 14 L22 192 Q22 214 38 214 Q54 214 54 192 L54 14" fill="none" stroke="#456569" stroke-width="12" stroke-linecap="round"/>
+    <path d="M22 14 L22 192 Q22 214 38 214 Q54 214 54 192 L54 14" fill="none" stroke="#eaf5f4" stroke-width="8" stroke-linecap="round"/>
+    <!-- Suyuqlik ustuni (manometr) -->
+    <path d="M22 ${120 + manDiff*0.5} L22 192 Q22 214 38 214 Q54 214 54 192 L54 ${120 - manDiff*0.5}" fill="none" stroke="#e0533c" stroke-width="7"/>
+    <text x="38" y="256" text-anchor="middle" font-size="10" font-weight="800" fill="#132629">3. Manometr</text>
+    <text x="38" y="269" text-anchor="middle" font-size="9.5" font-family="var(--mono)" fill="#d64545">ΔP=${pressP} cm</text>
+  </g>`;
+
+  /* 4. GʻOVAK SHISHA PLASTINKALI KOʻPIK SILINDRI */
+  const hasSol = !isAgar || f.dosed;
+  s += `<g transform="translate(446, 198)" filter="url(#sh)">
+    <!-- Ikki teshikli rezina tiqin -->
+    <path d="M12 -4 L96 -4 L90 20 L18 20 Z" fill="#4f3b31" stroke="#2e211b" stroke-width="1.6"/>
+    <!-- Silindr -->
+    <rect x="10" y="18" width="88" height="234" rx="8" fill="rgba(255,255,255,.4)" stroke="#3e5e62" stroke-width="2"/>
+    <!-- Gʻovak shisha plastinka -->
+    <rect x="13" y="196" width="82" height="10" rx="2" fill="#d4e0de" stroke="#5b7a7d" stroke-width="1.4" stroke-dasharray="3 2"/>
+    <!-- Eritma (0.2% nekal yoki agar+nekal) -->
+    ${hasSol ? `<rect x="13" y="142" width="82" height="54" fill="${isAgar ? "url(#agarGrad)" : "url(#waterGrad)"}"/>` : ""}
+    <!-- Silindr ichida hosil boʻlayotgan koʻpik -->
+    ${hasSol && f.pumpOn ? `
+      <rect x="13" y="24" width="82" height="118" fill="#ffffff" opacity=".92"/>
+      ${Array.from({length: 28}, (_, k) => {
+        const bx = 22 + ((k * 23) % 64);
+        const by = 140 - ((S.t * 52 + k * 19) % 114);
+        return `<circle cx="${bx}" cy="${by}" r="${4 + (k%3)*1.8}" fill="${isAgar ? "#e8faf2" : "#f7fcfc"}" stroke="#b4d2ce" stroke-width="1"/>`;
+      }).join("")}
+    ` : ""}
+    <rect x="10" y="18" width="88" height="234" rx="8" fill="url(#gShine)"/>
+    <text x="54" y="270" text-anchor="middle" font-size="10" font-weight="800" fill="#132629">4. Gʻovak silindr</text>
+    <text x="54" y="283" text-anchor="middle" font-size="9.2" fill="${isAgar ? "#1f9d6b" : "#1b484f"}">${isAgar ? (f.dosed ? "0,2% Agar+Nekal" : "Boʻsh (dozator)") : "0,2% Nekal"}</text>
+  </g>`;
+
+  /* 5. JOʻMRAK (STOPCOCK) */
+  s += `<g class="clk ${f.pumpOn && !f.filled ? "glow" : ""}" data-act="openValve" transform="translate(612, 148)">
+    <circle cx="0" cy="0" r="16" fill="#fff" stroke="#1b484f" stroke-width="2.5"/>
+    <rect x="-13" y="-4" width="26" height="8" rx="3" fill="${f.valveOpen ? "#1f9d6b" : "#d64545"}" transform="rotate(${f.valveOpen ? 0 : 90})"/>
+    <text x="0" y="-24" text-anchor="middle" font-size="10" font-weight="800" fill="#132629">5. Joʻmrak</text>
+    <text x="0" y="29" text-anchor="middle" font-size="9" font-weight="700" fill="${f.valveOpen ? "#1f9d6b" : "#d64545"}">${f.valveOpen ? "OCHIQ" : "YOPIQ"}</text>
+  </g>`;
+
+  /* 6. MAYDA ULUSHLARGA BOʻLINGAN YIGʻGICH (0–100 ml / 0–20 cm) */
+  const recH = 228; // 100 ml = 228 px
+  const liqH = (st.Vsuy / 100) * recH * 2.4; // koʻrinish uchun aniqroq shkala (pastki qism)
+  const foamH = clamp((st.H / sp.H0) * (recH - liqH), 0, recH - liqH);
+  const foamTopY = 232 - liqH - foamH;
+
+  s += `<g transform="translate(674, 198)" filter="url(#sh)">
+    <rect x="0" y="0" width="88" height="236" rx="6" fill="rgba(255,255,255,.42)" stroke="#3e5e62" stroke-width="2"/>
+    <rect x="-12" y="236" width="112" height="12" rx="4" fill="#9eb8b6" stroke="#3e5e62" stroke-width="1.6"/>
+    <!-- Ajralib chiqqan suyuqlik V_suy -->
+    ${liqH > 0.5 ? `<rect x="3" y="${233 - liqH}" width="82" height="${liqH}" fill="${isAgar ? "url(#agarGrad)" : "url(#waterGrad)"}"/>` : ""}
+    <!-- Koʻpik ustuni H(t) -->
+    ${foamH > 1.5 ? `
+      <rect x="3" y="${foamTopY}" width="82" height="${foamH}" fill="${isAgar ? "#f3fcf8" : "#ffffff"}"/>
+      ${Array.from({length: 34}, (_, k) => {
+        const bx = 12 + ((k * 19) % 64);
+        const by = foamTopY + 6 + ((k * 23) % Math.max(8, foamH - 10));
+        return `<circle cx="${bx}" cy="${by}" r="${3.6 + (k%3)*1.4}" fill="${isAgar ? "#e4f7ef" : "#f4f9f9"}" stroke="${isAgar ? "#8ac9ae" : "#bfd6d4"}" stroke-width=".9"/>`;
+      }).join("")}
+      <line x1="-10" y1="${foamTopY}" x2="98" y2="${foamTopY}" stroke="#e89b3c" stroke-width="2" stroke-dasharray="4 3"/>
+      <text x="102" y="${foamTopY + 4}" font-size="10.5" font-weight="800" font-family="var(--mono)" fill="#d18224">H=${f1(st.H,1)}cm</text>
+    ` : ""}
+    <!-- Shkala -->
+    ${[0,20,40,60,80,100].map(v => {
+      const yy = 232 - (v / 100) * 220;
+      return `<line x1="0" y1="${yy}" x2="12" y2="${yy}" stroke="#2c484c" stroke-width="1.2"/>
+              <text x="15" y="${yy+3}" font-size="8" font-family="var(--mono)" fill="#2c484c">${v}</text>`;
+    }).join("")}
+    <rect x="0" y="0" width="88" height="236" rx="6" fill="url(#gShine)"/>
+    <text x="44" y="266" text-anchor="middle" font-size="10" font-weight="800" fill="#132629">6. Yigʻgich (100 ml)</text>
+    <text x="44" y="280" text-anchor="middle" font-size="9.5" font-family="var(--mono)" fill="#1b484f">V_suy = ${f1(st.Vsuy,1)} ml</text>
+  </g>`;
+
+  /* 7. "OYNA" YUQORIDAN KOʻRINISH + PARDA STRUKTURASI INSET */
+  const bubbleFrac = f.filled ? clamp(st.H / sp.H0, 0, 1) : f.fillProg;
+  const nBub = Math.round(bubbleFrac * 24);
+  s += `<g transform="translate(822, 130)" filter="url(#sh)">
+    <rect x="0" y="0" width="154" height="175" rx="12" fill="#ffffff" stroke="#b9cecb" stroke-width="1.6"/>
+    <text x="77" y="20" text-anchor="middle" font-size="11" font-weight="800" fill="#132629">«Oyna» koʻrinishi</text>
+    <circle cx="77" cy="90" r="52" fill="${isAgar ? "#b6e6d1" : "#c7ebf5"}" stroke="#3e5e62" stroke-width="2.5"/>
+    ${Array.from({length: nBub}, (_, k) => {
+      const ang = k * 2.39996;
+      const rr = 8 + Math.sqrt(k / 24) * 38;
+      return `<circle cx="${77 + Math.cos(ang)*rr}" cy="${90 + Math.sin(ang)*rr}" r="${7 + (k%3)*2}" fill="#ffffff" stroke="${isAgar ? "#76bfa1" : "#9dc5cf"}" stroke-width="1.2"/>`;
+    }).join("")}
+    <text x="77" y="160" text-anchor="middle" font-size="10.5" font-weight="800" fill="${f.done ? "#1f9d6b" : "#587276"}">${f.done ? "✓ «OYNA» QURIDI!" : (f.filled ? "τ = " + Math.round(f.time) + " s" : "Kutilmoqda")}</text>
+  </g>`;
+
+  // Pastki oʻng inset: Parda mikrostrukturasi
+  s += `<g transform="translate(822, 318)" filter="url(#sh)">
+    <rect x="0" y="0" width="154" height="128" rx="12" fill="#133136" stroke="#2c5960" stroke-width="1.6"/>
+    <text x="77" y="18" text-anchor="middle" fill="#e89b3c" font-size="9.5" font-weight="800">${isAgar ? "GEL-PARDALAR (×500)" : "ODDIY PARDA (×500)"}</text>
+    <!-- Plato-Gibbs kanali -->
+    <path d="M22 30 Q77 64 132 30 L132 96 Q77 62 22 96 Z" fill="${isAgar ? "#47a885" : "#4da8c7"}" opacity=".75"/>
+    ${isAgar ? `
+      <!-- 3D agar-agar gel toʻri -->
+      <path d="M26 42 L128 84 M26 84 L128 42 M40 36 L114 90 M40 90 L114 36 M60 54 L94 72 M60 72 L94 54" stroke="#b9f5dc" stroke-width="1.8" opacity=".85"/>
+      <text x="77" y="114" text-anchor="middle" fill="#9bf2c8" font-size="9">Gel toʻri drenajni ushlaydi</text>
+    ` : `
+      <path d="M77 44 L77 88 M71 80 L77 88 L83 80" stroke="#fff" stroke-width="2" fill="none"/>
+      <text x="77" y="114" text-anchor="middle" fill="#c7e6ed" font-size="9">Suyuqlik tez oqib tushadi</text>
+    `}
+  </g>`;
+
+  // Pastki status paneli
+  s += `<text x="500" y="540" text-anchor="middle" fill="#cbe0dd" font-size="13" font-family="var(--mono)">Vaqt t = ${Math.round(f.time)} s   |   H = ${f1(st.H,1)} cm   |   V_suy = ${f1(st.Vsuy,1)} ml   |   Karralilik K = ${st.K ? f1(st.K,1) : "—"}   |   Tezlik ×${S.speed}</text>`;
+  return s;
+}
+
+function drawStage4() {
+  const sc = total();
+  return `<g transform="translate(80, 72)" filter="url(#sh)">
+    <rect x="0" y="0" width="840" height="448" rx="18" fill="#ffffff" stroke="#b9cecb" stroke-width="2"/>
+    <rect x="0" y="0" width="840" height="72" rx="18" fill="#0f2e33"/>
+    <rect x="0" y="50" width="840" height="22" fill="#0f2e33"/>
+    <text x="420" y="34" text-anchor="middle" fill="#fff" font-size="20" font-weight="800">12-LABORATORIYA ISHI · YAKUNIY NATIJALAR</text>
+    <text x="420" y="56" text-anchor="middle" fill="#9bc9c3" font-size="12.5">Emulsiyalar (benzol, paxta moyi) va koʻpiklar barqarorligi (Nekal vs Agar-agar + Nekal)</text>
+
+    <g transform="translate(36, 98)">
+      <rect x="0" y="0" width="240" height="122" rx="12" fill="#f1f7f6" stroke="#d4e1df"/>
+      <text x="120" y="30" text-anchor="middle" fill="#587276" font-size="12" font-weight="700">UMUMIY BALL</text>
+      <text x="120" y="84" text-anchor="middle" fill="#0f2e33" font-size="44" font-weight="800" font-family="var(--mono)">${sc.tot}</text>
+      <text x="120" y="108" text-anchor="middle" fill="#1f9d6b" font-size="12" font-weight="700">100 balldan</text>
+    </g>
+    <g transform="translate(300, 98)">
+      <rect x="0" y="0" width="240" height="122" rx="12" fill="#fff6f6" stroke="#f0c7c7"/>
+      <text x="120" y="30" text-anchor="middle" fill="#9c2f2f" font-size="11.5" font-weight="700">0,2% NEKAL KOʻPIGI</text>
+      <text x="120" y="76" text-anchor="middle" fill="#d64545" font-size="30" font-weight="800" font-family="var(--mono)">${S.nekal.done ? "τ = 120 s" : "—"}</text>
+      <text x="120" y="104" text-anchor="middle" fill="#587276" font-size="12">K₀ = 8,0 · Tez drenaj</text>
+    </g>
+    <g transform="translate(564, 98)">
+      <rect x="0" y="0" width="240" height="122" rx="12" fill="#effaf5" stroke="#b9e6d3"/>
+      <text x="120" y="30" text-anchor="middle" fill="#126b47" font-size="11.5" font-weight="700">0,2% AGAR + 0,2% NEKAL</text>
+      <text x="120" y="76" text-anchor="middle" fill="#1f9d6b" font-size="30" font-weight="800" font-family="var(--mono)">${S.agar.done ? "τ = 360 s" : "—"}</text>
+      <text x="120" y="104" text-anchor="middle" fill="#587276" font-size="12">K₀ = 6,25 · 3× barqaror!</text>
+    </g>
+
+    <g transform="translate(36, 248)">
+      <text x="0" y="0" font-size="13" font-weight="800" fill="#132629">Asosiy ilmiy xulosalar:</text>
+      <text x="0" y="26" font-size="12.5" fill="#3a595c">1. Emulgatorsiz benzol+suv tizimi tez ajraladi; 2% sovun yoki bura+paxta moyi barqaror M/S emulsiya beradi.</text>
+      <text x="0" y="52" font-size="12.5" fill="#3a595c">2. Suyultirish va metilen koʻki testlari ikkala emulsiyaning ham moy/suv (M/S) tipida ekanini tasdiqladi.</text>
+      <text x="0" y="78" font-size="12.5" fill="#3a595c">3. 0,2% agar-agar koʻpik pardalarida gel strukturasi hosil qilib, yashash davrini 120 s dan 360 s gacha oshirdi.</text>
+      <text x="0" y="114" font-size="12.5" font-weight="700" fill="#d18224">Oʻng panelda 5 savoldan iborat yakuniy testni topshiring va hisobotni chop eting!</text>
+    </g>
+  </g>`;
+}
+
+function bindStageClicks() {
+  el("scene").querySelectorAll(".clk").forEach(n => {
+    n.onclick = () => {
+      const a = n.dataset.act;
+      if (a === "bzCyl") bzAction();
+      else if (a === "oilCyl") oilAction();
+      else if (a === "testDilute") runDiluteTest();
+      else if (a === "testDye") runDyeTest();
+      else if (a === "togglePump") togglePump();
+      else if (a === "openValve") openValveAndFill();
+    };
+  });
+}
+
+/* ============ TAQQOSLASH GRAFIKLARI ============ */
+function comparisonChartsHTML() {
+  const nPtsH = S.nekal.logs.map(r => ({ x: r.t, y: r.H }));
+  const aPtsH = S.agar.logs.map(r => ({ x: r.t, y: r.H }));
+  const nPtsV = S.nekal.logs.map(r => ({ x: r.t, y: r.Vsuy }));
+  const aPtsV = S.agar.logs.map(r => ({ x: r.t, y: r.Vsuy }));
+  return `
+    <div class="legend-row">
+      <span><i class="legend-dot" style="background:#d9534f"></i>0,2% Nekal (τ = 120 s)</span>
+      <span><i class="legend-dot" style="background:#1f9d6b"></i>0,2% Agar + 0,2% Nekal (τ = 360 s)</span>
+    </div>
+    ${LabUI.svgChart({
+      H: 175, x0: 0, xm: 360, y0: 0, ym: 22, sx: 60, sy: 5,
+      title: "Koʻpik ustuni balandligi H(t)", xl: "Vaqt, s", yl: "H, cm",
+      series: [
+        { pts: nPtsH, color: "#d9534f", dot: "#d9534f" },
+        { pts: aPtsH, color: "#1f9d6b", dot: "#1f9d6b" }
+      ]
+    })}
+    <div style="height:8px"></div>
+    ${LabUI.svgChart({
+      H: 175, x0: 0, xm: 360, y0: 0, ym: 18, sx: 60, sy: 4,
+      title: "Ajralib chiqqan suyuqlik V_suy(t)", xl: "Vaqt, s", yl: "V_suy, ml",
+      series: [
+        { pts: nPtsV, color: "#d9534f", dot: "#d9534f" },
+        { pts: aPtsV, color: "#1f9d6b", dot: "#1f9d6b" }
+      ]
+    })}
+  `;
+}
+
+/* ============ OʻNG PANEL ============ */
+function renderQuestionsHTML(list) {
+  return list.map((q, qi) => {
+    const order = shuf(q.opts.length, S.seed + qi * 19 + q.id.charCodeAt(q.id.length - 1));
+    const chosen = S.ans[q.id];
+    return `<div class="q">
+      <p>${qi + 1}. ${q.q}</p>
+      ${order.map(oi => {
+        let cls = "";
+        if (chosen !== undefined) {
+          if (oi === q.ok) cls = "right";
+          else if (oi === chosen) cls = "wrong";
+        }
+        return `<button class="${cls}" data-qid="${q.id}" data-oi="${oi}" data-ok="${q.ok}" ${chosen !== undefined ? "disabled" : ""}>${q.opts[oi]}</button>`;
+      }).join("")}
+    </div>`;
+  }).join("");
+}
+
+function bindQuestions(root) {
+  root.querySelectorAll("button[data-qid]").forEach(b => {
+    b.onclick = () => answerQ(b.dataset.qid, +b.dataset.oi, +b.dataset.ok);
+  });
+}
+
+function renderPanel() {
+  const p = el("panel");
+  const st = S.stage;
+  let h = "";
+
+  if (st === 0) {
+    const bzLabels = ["1. 50 ml H₂O + 10 ml benzol quyish", "2. Qattiq chayqatish (emulgatorsiz)", "3. +10 ml 2% sovun qoʻshish", "4. Qayta chayqatish → Emulsiya", "✓ Benzol emulsiyasi tayyor"];
+    const oilLabels = ["1. 4,50 g bura tortib olish", "2. 95 ml issiq suvda eritish", "3. +2,5 ml paxta moyi qoʻshish", "4. Qattiq chayqatish → Emulsiya", "✓ Paxta moyi emulsiyasi tayyor"];
+    h = `<h2>1-bosqich: Emulsiyalar va tiplar</h2>
+      <p class="sub">Benzol (sovun bilan) va paxta moyi (bura bilan) emulsiyalarini oling, soʻng suyultirish va boʻyash usullarida emulsiya tipini aniqlang.</p>
+      <ul class="tasks">
+        <li class="${S.bzStep>=4?"done":"cur"}"><span class="b">${S.bzStep>=4?"✓":"1"}</span>Benzol emulsiyasi (50ml H₂O + 10ml benzol + 10ml 2% sovun)</li>
+        <li class="${S.oilStep>=4?"done":(S.bzStep>=4?"cur":"")}"><span class="b">${S.oilStep>=4?"✓":"2"}</span>Paxta moyi emulsiyasi (4,5g bura + 95ml issiq H₂O + 2,5ml moy)</li>
+        <li class="${S.testDilute&&S.testDye&&S.typePicked==="MS"?"done":(S.bzStep>=4&&S.oilStep>=4?"cur":"")}"><span class="b">${S.testDilute&&S.testDye&&S.typePicked==="MS"?"✓":"3"}</span>Suyultirish va metilen koʻki bilan tipni (M/S) aniqlash</li>
+      </ul>
+
+      <div class="step-card">
+        <h5><span>A. Benzol emulsiyasi</span><span class="badge-pill ${S.bzStep>=4?"ok":""}">${S.bzStep}/4</span></h5>
+        <button class="${S.bzStep>=4?"on":"pri"}" id="btnBz" style="width:100%" ${S.bzStep>=4?"disabled":""}>${bzLabels[S.bzStep]}</button>
+      </div>
+
+      <div class="step-card">
+        <h5><span>B. Paxta moyi emulsiyasi</span><span class="badge-pill ${S.oilStep>=4?"ok":""}">${S.oilStep}/4</span></h5>
+        <button class="${S.oilStep>=4?"on":"pri"}" id="btnOil" style="width:100%" ${S.oilStep>=4?"disabled":""}>${oilLabels[S.oilStep]}</button>
+      </div>
+
+      <div class="box">
+        <h4>C. Emulsiya tipini aniqlash (M/S vs S/M)</h4>
+        <div class="grid2" style="margin-bottom:8px">
+          <button class="${S.testDilute?"on":"dark"}" id="btnDilute">${S.testDilute?"✓ Suyultirish":"💧 Suyultirish testi"}</button>
+          <button class="${S.testDye?"on":"dark"}" id="btnDye">${S.testDye?"✓ Metilen koʻki":"🔵 Metilen koʻki"}</button>
+        </div>
+        <p class="note" style="margin-bottom:6px">Kuzatuv asosida emulsiya tipini tanlang:</p>
+        <div class="grid2">
+          <button class="${S.typePicked==="MS"?"on":""}" id="btnPickMS">M/S (moy/suv)</button>
+          <button class="${S.typePicked==="SM"?"bad":""}" id="btnPickSM">S/M (suv/moy)</button>
+        </div>
+      </div>
+
+      <div class="box"><h4>Nazorat savollari (1-bosqich)</h4>${renderQuestionsHTML(STAGE_QS[0])}</div>
+      <button class="pri next" id="btnNext" ${!stageDone(0)?"disabled":""}>2-bosqichga oʻtish: 0,2% Nekal koʻpigi →</button>`;
+  } else if (st === 1 || st === 2) {
+    const isAgar = st === 2;
+    const f = isAgar ? S.agar : S.nekal;
+    const kind = isAgar ? "agar" : "nekal";
+    const sp = FOAM_SPEC[kind];
+    const cur = f.filled ? foamStateAt(kind, f.time) : null;
+
+    h = `<h2>${isAgar ? "3-bosqich: 0,2% Agar-agar + 0,2% Nekal" : "2-bosqich: 0,2% Nekal koʻpigi (8-rasm)"}</h2>
+      <p class="sub">${isAgar ? "Pardalarga gel strukturasi beruvchi 0,2% agar-agar + 0,2% nekal aralashmasi bilan tajribani takrorlang va solishtiring." : "Doimiy havo bosimini sozlab, 0,2% Nekal koʻpigini yigʻgichga toʻldiring va «oyna» quriguncha drenaj hamda balandlikni oʻlchang."}</p>
+      <ul class="tasks">
+        ${isAgar ? `<li class="${f.dosed?"done":"cur"}"><span class="b">${f.dosed?"✓":"1"}</span>Dozator bilan 0,2% Agar-agar + 0,2% Nekal tayyorlash</li>` : ""}
+        <li class="${f.pumpOn||f.filled?"done":(!isAgar||f.dosed?"cur":"")}"><span class="b">${f.pumpOn||f.filled?"✓":(isAgar?"2":"1")}</span>Havo bosimini sozlash (nay chuqurligi) va puflagichni yoqish</li>
+        <li class="${f.filled?"done":(f.pumpOn?"cur":"")}"><span class="b">${f.filled?"✓":(isAgar?"3":"2")}</span>Joʻmrakni ochib, yigʻgichni 100 ml gacha koʻpik bilan toʻldirish</li>
+        <li class="${f.done?"done":(f.filled?"cur":"")}"><span class="b">${f.done?"✓":(isAgar?"4":"3")}</span>Havoni toʻxtatib «oyna» quriguncha V_suy va H ni oʻlchash</li>
+      </ul>
+
+      <div class="box">
+        <h4>8-rasm asbobini boshqarish</h4>
+        ${isAgar ? `<button class="${f.dosed?"on":"pri"}" id="btnDose" style="width:100%;margin-bottom:8px" ${f.dosed?"disabled":""}>${f.dosed?"✓ 0,2% Agar + 0,2% Nekal quyildi":"🧪 Oʻlchov dozatorda aralashma quyish"}</button>` : ""}
+        <div class="kv"><span>Nay botish chuqurligi (bosim):</span><b>${f.depth} cm H₂O</b></div>
+        <input type="range" id="rngDepth" min="12" max="28" step="2" value="${f.depth}" ${f.filled?"disabled":""}>
+        <div class="row" style="margin-top:8px">
+          <button class="${f.pumpOn?"on":"pri"}" id="btnPump" ${f.filled || (isAgar && !f.dosed)?"disabled":""}>${f.pumpOn?"● Puflagich yoniq":"💨 1. Puflagichni yoqish"}</button>
+          <button class="${f.filled?"on":"dark"}" id="btnValve" ${!f.pumpOn || f.filled?"disabled":""}>${f.filled?"✓ 100 ml toʻldi":"🔧 2. Joʻmrakni ochish"}</button>
+        </div>
+        <button class="${f.done?"on":"pri"}" id="btnDrain" style="width:100%;margin-top:7px" ${!f.filled || f.done?"disabled":""}>${f.done ? "✓ «Oyna» quridi (τ = " + sp.tauLife + " s)" : (f.measuring ? "⏸ Oʻlchashni toʻxtatish" : "⏱ 3. Havoni toʻxtatish va oʻlchash")}</button>
+        <div class="kpi-grid">
+          <div class="kpi"><small>Vaqt (t / τ)</small><b>${Math.round(f.time)} / ${sp.tauLife} s</b></div>
+          <div class="kpi"><small>Karralilik K₀</small><b>${f.filled ? f1(sp.V0 / sp.Vmax, 2) : "—"}</b></div>
+          <div class="kpi"><small>Koʻpik balandligi H</small><b>${cur ? f1(cur.H, 1) + " cm" : "—"}</b></div>
+          <div class="kpi"><small>Ajralgan suyuqlik V_suy</small><b>${cur ? f1(cur.Vsuy, 1) + " ml" : "—"}</b></div>
+        </div>
+      </div>
+
+      <div class="box">
+        <h4>Oʻlchash jadvali (${sp.name})</h4>
+        <table class="j">
+          <thead><tr><th>t, s</th><th>H, cm</th><th>V_suy, ml</th><th>V_ichida</th><th>K</th></tr></thead>
+          <tbody>
+            ${f.logs.length ? f.logs.map(r => `<tr>
+              <td>${r.t}</td><td>${f1(r.H,1)}</td><td>${f1(r.Vsuy,1)}</td><td>${f1(r.VinFoam,1)}</td><td><b>${r.K ? f1(r.K,1) : "0"}</b></td>
+            </tr>`).join("") : `<tr><td colspan="5" style="text-align:center;color:var(--muted)">Oʻlchash boshlangach maʼlumotlar chiqadi</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+
+      ${isAgar && f.done ? `
+        <div class="box">
+          <h4>Yonma-yon taqqoslash: Nekal vs Agar-agar + Nekal</h4>
+          ${!f.compared ? `<button class="pri" id="btnCompare" style="width:100%;margin-bottom:8px">📊 Taqqoslash grafiklarini qurish</button>` : comparisonChartsHTML()}
+        </div>` : ""}
+
+      <div class="box"><h4>Nazorat savollari (${st+1}-bosqich)</h4>${renderQuestionsHTML(STAGE_QS[st])}</div>
+      <button class="pri next" id="btnNext" ${!stageDone(st)?"disabled":""}>${isAgar ? "Yakuniy hisobotga oʻtish →" : "3-bosqichga oʻtish: Agar-agar taʼsiri →"}</button>`;
+  } else {
+    const sc = total();
+    h = `<div class="rep">
+      <h2>12-laboratoriya · Yakuniy hisobot</h2>
+      <div class="score">
+        <div class="n">${sc.tot}</div>
+        <div>
+          <b>Umumiy ball (100 dan)</b>
+          <div style="font-size:12px;opacity:.82">Amaliyot: ${sc.prac}/52 · Bosqich savollari: ${sc.sq}/18 · Test: ${sc.fq}/30</div>
+        </div>
+      </div>
+      <div class="box">
+        <h4>1. Emulsiyalar xulosasi</h4>
+        <div class="kv"><span>Benzol + H₂O (emulgatorsiz):</span><b>Tez 2 qavatga ajraldi</b></div>
+        <div class="kv"><span>Benzol + H₂O + 2% sovun:</span><b>Barqaror M/S emulsiya</b></div>
+        <div class="kv"><span>Paxta moyi + 4,5 g bura + 95 ml H₂O:</span><b>Barqaror M/S emulsiya</b></div>
+        <div class="kv"><span>Tipni aniqlash (suv + metilen koʻki):</span><b>${S.typePicked === "MS" ? "M/S (moy/suv) ✓" : "Aniqlanmagan"}</b></div>
+      </div>
+      <div class="box">
+        <h4>2. Koʻpiklarning qiyosiy jadvali</h4>
+        <table class="j">
+          <thead><tr><th>Koʻrsatkich</th><th>0,2% Nekal</th><th>0,2% Agar+Nekal</th></tr></thead>
+          <tbody>
+            <tr><td>Boshlangʻich hajm V₀</td><td>100 ml</td><td>100 ml</td></tr>
+            <tr><td>Jami suyuqlik V_suy,max</td><td>12,5 ml</td><td>16,0 ml</td></tr>
+            <tr><td>Boshlangʻich karralilik K₀</td><td><b>8,0</b></td><td><b>6,25</b></td></tr>
+            <tr><td>40 s da ajralgan V_suy</td><td>${f1(foamStateAt("nekal",40).Vsuy,1)} ml</td><td>${f1(foamStateAt("agar",40).Vsuy,1)} ml</td></tr>
+            <tr><td>60 s da balandlik H</td><td>${f1(foamStateAt("nekal",60).H,1)} cm</td><td>${f1(foamStateAt("agar",60).H,1)} cm</td></tr>
+            <tr class="hl"><td>Yashash davri τ («oyna»)</td><td>120 s</td><td>360 s (3×)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      ${S.nekal.done && S.agar.done ? `<div class="box"><h4>3. Taqqoslash grafiklari H(t) va V_suy(t)</h4>${comparisonChartsHTML()}</div>` : ""}
+      <div class="box">
+        <h4>Yakuniy test (5 savol × 6 ball = 30 ball)</h4>
+        ${renderQuestionsHTML(FINAL_QUIZ)}
+      </div>
+      <div class="row noprint">
+        <button class="pri" id="btnPrint" style="flex:1">🖨 Hisobotni chop etish</button>
+        <button class="ghost" id="btnReset">🔄 Qaytadan boshlash</button>
+      </div>
+    </div>`;
+  }
+
+  p.innerHTML = h;
+  bindQuestions(p);
+
+  const bBz = el("btnBz"); if (bBz) bBz.onclick = bzAction;
+  const bOil = el("btnOil"); if (bOil) bOil.onclick = oilAction;
+  const bDil = el("btnDilute"); if (bDil) bDil.onclick = runDiluteTest;
+  const bDye = el("btnDye"); if (bDye) bDye.onclick = runDyeTest;
+  const bMS = el("btnPickMS"); if (bMS) bMS.onclick = () => pickType("MS");
+  const bSM = el("btnPickSM"); if (bSM) bSM.onclick = () => pickType("SM");
+
+  const bDose = el("btnDose"); if (bDose) bDose.onclick = doseAgarMixture;
+  const rDep = el("rngDepth"); if (rDep) rDep.oninput = () => { activeFoamObj().depth = +rDep.value; renderPanel(); renderSVG(); };
+  const bPump = el("btnPump"); if (bPump) bPump.onclick = togglePump;
+  const bValve = el("btnValve"); if (bValve) bValve.onclick = openValveAndFill;
+  const bDrain = el("btnDrain"); if (bDrain) bDrain.onclick = startFoamDrainage;
+  const bComp = el("btnCompare"); if (bComp) bComp.onclick = () => {
+    SFX.play("fanfare"); S.agar.compared = true;
+    LabUI.toast("Taqqoslash grafiklari qurildi! Agar-agar koʻpik yashash davrini 3 baravar oshirdi.", "ok");
+    renderAll();
+  };
+
+  const bNext = el("btnNext"); if (bNext) bNext.onclick = () => { SFX.play("whoosh"); S.stage++; renderAll(); };
+  const bPrint = el("btnPrint"); if (bPrint) bPrint.onclick = () => window.print();
+  const bReset = el("btnReset"); if (bReset) bReset.onclick = () => { SFX.play("click"); S = createInitialState(); renderAll(); LabUI.toast("Laboratoriya qaytadan boshlandi.", ""); };
+}
+
+function renderAll() {
+  renderTabs();
+  renderPanel();
+  renderSVG();
+}
+
+/* ============ MODALLAR ============ */
+function showIntro() {
+  LabUI.modal(`
+    <h1>12-laboratoriya ishi: Emulsiyalar va koʻpiklar</h1>
+    <p style="color:var(--muted);margin-bottom:10px">Emulsiyalarni olish, tiplarini aniqlash va 8-rasm asbobida koʻpiklarning barqarorligini oʻrganish</p>
+    <p>Ushbu laboratoriyada siz ikki xil barqaror emulsiya (benzol va paxta moyi) tayyorlab, ularning tipini (M/S yoki S/M) tajribada aniqlaysiz, soʻng 8-rasm asbobida <b>0,2% Nekal</b> hamda <b>0,2% Agar-agar + 0,2% Nekal</b> koʻpiklarining karraliligi va yashash davrini solishtirasiz.</p>
+    <h3>Ish bosqichlari:</h3>
+    <ul>
+      <li><b>1-bosqich:</b> Benzol (50 ml H₂O + 10 ml benzol + 10 ml 2% sovun) va paxta moyi (4–5 g bura + 95 ml issiq H₂O + 2–3 ml moy) emulsiyalari + suyultirish va metilen koʻki testlari.</li>
+      <li><b>2-bosqich:</b> 8-rasm koʻpik asbobida 0,2% Nekal eritmasidan koʻpik olish, har 10 sekundda drenaj V_suy va balandlik H ni oʻlchash («oyna» quriguncha).</li>
+      <li><b>3-bosqich:</b> 0,2% Agar-agar + 0,2% Nekal aralashmasida gel pardalar taʼsirini kuzatish va H(t), V_suy(t) grafiklarini solishtirish.</li>
+    </ul>
+    <div style="margin-top:16px;text-align:right">
+      <button class="pri" onclick="LabUI.closeModal();SFX.play('click')">Tajribani boshlash ▶</button>
+    </div>
+  `);
+}
+
+function showTheory() {
+  LabUI.modal(`
+    <h1>Nazariy maʼlumotlar (12-lab)</h1>
+    <h3>1. Emulsiyalar va ularning tiplari</h3>
+    <p>Emulsiyalar — oʻzaro aralashmaydigan ikki suyuqlikdan iborat dispers sistemalar. Emulgatorsiz (masalan, suv + benzol) tizim termodinamik beqaror boʻlib, tezda qavatlarga ajraladi. Gidrofil emulgatorlar (2% sovun, yoki bura + moyning erkin yogʻ kislotalaridan hosil boʻlgan sovun) <b>M/S (moy/suv)</b> tipidagi toʻgʻri emulsiyani barqarorlashtiradi.</p>
+    <p>Emulsiya tipini aniqlash: <b>suyultirish usuli</b> (M/S tomchisi suvda darhol tarqaladi) va <b>boʻyash usuli</b> (suvda eruvchan metilen koʻki tashqi fazani koʻk rangga boʻyaydi).</p>
+    <h3>2. Koʻpiklar va ularning asosiy koʻrsatkichlari</h3>
+    <p>Koʻpik — suyuqlik ichida gaz pufakchalari tarqalgan (G/S) konsentrlangan dispers sistema. 0,2% Nekal (butilsulfonaftalinning natriyli tuzi) sirt taranglikni kamaytirib koʻpik hosil qiladi.</p>
+    <div class="eq">K = V_koʻpik / V_suy,ichida    |    V_suy,ichida = V_suy,jami − V_suy,ajralgan</div>
+    <p>Tajriba boshidan to suyuqlik sirti ochilib <b>«oyna» quriguncha</b> oʻtgan vaqt <b>koʻpikning yashash davri (τ)</b> deb ataladi.</p>
+    <h3>3. Gel strukturasi (Agar-agar) taʼsiri</h3>
+    <p>0,2% agar-agar koʻpik pardalari ichida uch oʻlchamli elastik <b>gel strukturasi</b> hosil qiladi. Natijada pardalardan suyuqlik oqib tushishi (drenaj / sinerezis) keskin sekinlashadi va koʻpikning yashash davri bir necha baravar uzayadi.</p>
+    ${LabUI.refsHTML()}
+    <div style="margin-top:14px;text-align:right"><button class="dark" onclick="LabUI.closeModal()">Yopish</button></div>
+  `);
+}
+
+function showJournal() {
+  LabUI.modal(`
+    <h1>Laboratoriya jurnali (12-lab)</h1>
+    <h3>0,2% Nekal koʻpigi (τ = 120 s, K₀ = 8,0)</h3>
+    <table class="j">
+      <thead><tr><th>t, s</th><th>H, cm</th><th>V_suy, ml</th><th>V_ichida, ml</th><th>K</th></tr></thead>
+      <tbody>${S.nekal.logs.length ? S.nekal.logs.map(r=>`<tr><td>${r.t}</td><td>${f1(r.H,1)}</td><td>${f1(r.Vsuy,1)}</td><td>${f1(r.VinFoam,1)}</td><td>${r.K?f1(r.K,1):"0"}</td></tr>`).join("") : `<tr><td colspan="5" style="text-align:center">Hali oʻlchanmagan</td></tr>`}</tbody>
+    </table>
+    <h3>0,2% Agar-agar + 0,2% Nekal (τ = 360 s, K₀ = 6,25)</h3>
+    <table class="j">
+      <thead><tr><th>t, s</th><th>H, cm</th><th>V_suy, ml</th><th>V_ichida, ml</th><th>K</th></tr></thead>
+      <tbody>${S.agar.logs.length ? S.agar.logs.map(r=>`<tr><td>${r.t}</td><td>${f1(r.H,1)}</td><td>${f1(r.Vsuy,1)}</td><td>${f1(r.VinFoam,1)}</td><td>${r.K?f1(r.K,1):"0"}</td></tr>`).join("") : `<tr><td colspan="5" style="text-align:center">Hali oʻlchanmagan</td></tr>`}</tbody>
+    </table>
+    <div style="margin-top:14px;text-align:right"><button class="dark" onclick="LabUI.closeModal()">Yopish</button></div>
+  `);
+}
+
+function showSmartHint() {
+  SFX.play("beep");
+  let msg = "";
+  if (S.stage === 0) {
+    if (S.bzStep < 4) msg = "Benzol silindrini yoki oʻng paneldagi «A. Benzol emulsiyasi» tugmasini bosib 4 bosqichni bajaring.";
+    else if (S.oilStep < 4) msg = "«B. Paxta moyi emulsiyasi» boʻlimida bura tortib, 95 ml issiq suvda eriting va 2,5 ml moy qoʻshib chayqating.";
+    else msg = "«💧 Suyultirish testi» va «🔵 Metilen koʻki» tugmalarini bosib, soʻng «M/S (moy/suv)» ni tanlang!";
+  } else if (S.stage === 1 || S.stage === 2) {
+    const f = activeFoamObj();
+    if (S.stage === 2 && !f.dosed) msg = "Avval «🧪 Oʻlchov dozatorda aralashma quyish» tugmasini bosing.";
+    else if (!f.pumpOn && !f.filled) msg = "1-qadam: «💨 Puflagichni yoqish» tugmasini bosib havo bosimini barqarorlashtiring.";
+    else if (!f.filled) msg = "2-qadam: «🔧 Joʻmrakni ochish» tugmasini bosib yigʻgichni 100 ml gacha toʻldiring.";
+    else if (!f.done) msg = "3-qadam: «⏱ Havoni toʻxtatish va oʻlchash» tugmasini bosing (×10 yoki ×20 tezlikdan foydalanishingiz mumkin).";
+    else if (S.stage === 2 && !f.compared) msg = "«📊 Taqqoslash grafiklarini qurish» tugmasini bosing!";
+    else msg = "Bosqich yakunlandi! Savollarga javob berib keyingi bosqichga oʻting.";
+  } else {
+    msg = "5 ta yakuniy test savoliga javob bering va hisobotni chop eting!";
+  }
+  LabUI.toast("💡 " + msg, "warn", 4600);
+}
+
+/* ============ ANIMATSIYA SIKLI ============ */
+let lastTs = performance.now();
+function loop(now) {
+  const dt = Math.min((now - lastTs) / 1000, 0.08);
+  lastTs = now;
+  S.t += dt;
+  let dirty = false;
+
+  // 1-bosqich animatsiyalari
+  if (S.bzShakeT > 0) S.bzShakeT = Math.max(0, S.bzShakeT - dt);
+  if (S.oilShakeT > 0) S.oilShakeT = Math.max(0, S.oilShakeT - dt);
+  if (S.bzStep === 2 && S.bzShakeT === 0 && S.bzSepProg < 1) {
+    S.bzSepProg = Math.min(1, S.bzSepProg + dt * 0.65);
+  }
+
+  // 2- va 3-bosqich koʻpik toʻldirish va drenaj
+  [["nekal", S.nekal], ["agar", S.agar]].forEach(([kind, f]) => {
+    const sp = FOAM_SPEC[kind];
+    if (f.valveOpen && !f.filled) {
+      f.fillProg = Math.min(1, f.fillProg + dt * 0.48);
+      if (f.fillProg >= 1) {
+        f.filled = true;
+        f.valveOpen = false;
+        SFX.play("ok");
+        LabUI.toast(`Yigʻgich 100 ml belgisigacha toʻldi! Endi «3. Havoni toʻxtatish va oʻlchash» tugmasini bosing.`, "ok");
+        dirty = true;
+      }
+    }
+    if (f.measuring && !f.done) {
+      const prevT = f.time;
+      f.time = Math.min(sp.tauLife, f.time + dt * S.speed);
+      // Jadval nuqtalarini avtomatik qayd etish
+      sp.logTimes.forEach(lt => {
+        if (lt > prevT && lt <= f.time && !f.logs.some(x => x.t === lt)) {
+          f.logs.push(foamStateAt(kind, lt));
+          SFX.play("tick");
+          dirty = true;
+        }
+      });
+      if (f.time >= sp.tauLife) {
+        f.measuring = false;
+        f.done = true;
+        SFX.play("bell");
+        LabUI.toast(`«Oyna» quridi! ${sp.name} koʻpigining yashash davri τ = ${sp.tauLife} s.`, "ok");
+        dirty = true;
+      } else if (Math.floor(prevT / 2) !== Math.floor(f.time / 2)) {
+        dirty = true;
+      }
+    }
+  });
+
+  if (dirty) renderAll();
+  else renderSVG();
+  requestAnimationFrame(loop);
+}
+
+/* ============ INITSIALIZATSIYA ============ */
+function init() {
+  LabUI.initShell(LAB_ID);
+  document.querySelectorAll("footer.lab-foot button[data-sp]").forEach(b => {
+    const sp = +b.dataset.sp;
+    if (sp === S.speed) b.classList.add("on");
+    b.onclick = () => {
+      SFX.play("click");
+      S.speed = sp;
+      document.querySelectorAll("footer.lab-foot button[data-sp]").forEach(x => x.classList.toggle("on", +x.dataset.sp === sp));
+      renderPanel();
+    };
+  });
+  el("btnTable").onclick = () => { SFX.play("paper"); showJournal(); };
+  el("btnHint").onclick = showSmartHint;
+  el("btnTheory").onclick = () => { SFX.play("paper"); showTheory(); };
+  renderAll();
+  showIntro();
+  requestAnimationFrame(loop);
+}
+
+init();
+</script>
+</body>
+</html>

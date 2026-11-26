@@ -1,0 +1,1113 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="author" content="Qayumov Hayitali">
+<meta name="description" content="2-laboratoriya ishi: Kolloid sistemalarni disperslash usulida olinishi — H₂SnO₃ choʻkmasi va dekantatsiya, peptizatsiya, benzol va pista moyi emulsiyalari.">
+<title>2-lab · Disperslash va peptizatsiya — Kolloid Kimyo</title>
+<link rel="stylesheet" href="../assets/lab-core.css">
+<style>
+  .sub-tabs { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:10px; }
+  .sub-tabs button { font-weight:700; font-size:12.5px; padding:8px; border:1.5px solid var(--line); background:#fff; }
+  .sub-tabs button.active { background:var(--top); color:#fff; border-color:var(--top); }
+  .wash-row { display:flex; align-items:center; justify-content:space-between; padding:5px 0; border-bottom:1px dashed var(--line); font-size:12.5px; }
+  .pill { font-family:var(--mono); font-size:11px; padding:2px 8px; border-radius:6px; background:#edf5f3; color:var(--top); font-weight:700; }
+  .pill.hi { background:#fdecec; color:#962222; }
+  .pill.mid { background:#fff3da; color:#8a5800; }
+  .pill.ok { background:#e3f7ee; color:#116443; }
+</style>
+</head>
+<body>
+<header class="lab-head">
+  <a class="home-link" href="../index.html">← Bosh sahifa</a>
+  <div class="lab-switch-wrap" id="labSwitchWrap"></div>
+  <div class="brand">Disperslash va peptizatsiya<small>2-laboratoriya · H₂SnO₃ zoli va barqaror emulsiyalar</small></div>
+  <nav class="tabs" id="tabs"></nav>
+  <div class="scorechip" id="chip">0 ball</div>
+</header>
+
+<main class="lab-main">
+  <div id="stageWrap">
+    <svg id="scene" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+  <aside id="panel"></aside>
+</main>
+
+<footer class="lab-foot">
+  <span class="lbl">2-LAB · DISPERSLASH</span>
+  <span class="sp"></span>
+  <button id="btnTable">📋 Jurnal</button>
+  <button id="btnHint">💡 Maslahat</button>
+  <button id="btnTheory">📘 Nazariya</button>
+  <button id="btnSnd">🔊 Ovoz</button>
+  <button id="btnFull">⛶ Toʻliq ekran</button>
+  <a class="ig-credit" href="https://instagram.com/hayitali1612" target="_blank" rel="noopener noreferrer" title="Instagram: @hayitali1612">hayitali1612</a>
+</footer>
+
+<div id="toasts"></div>
+<div id="modal"><div class="card" id="modalCard"></div></div>
+
+<script src="../assets/lab-core.js"></script>
+<script>
+"use strict";
+
+const LAB_ID = 2;
+const { el, clamp, lerp, f1, shuf, toast, modal, closeModal } = LabUI;
+
+/* ============ HOLAT (STATE) ============ */
+const S = {
+  stage: 1,
+  unlocked: 1,
+  hints: 0,
+  pen: { 1: 0, 2: 0, 3: 0 },
+  events: [],
+  q: {},
+  quiz: {},
+  // 1-bosqich: H2SnO3 cho'kmasi va 3 marta dekantatsiya
+  s1: {
+    snAdded: 0,      // 1 n SnCl4 tomchi/dozalar (maqsad >= 3)
+    precipDone: false,
+    washes: 0,       // bajarilgan yuvishlar (0..3)
+    tested: [false, false, false], // har bir yuvish suvi AgNO3 bilan tekshirilganmi
+    clConc: [0.42, 0.14, 0.02, 0.0], // mol/l shartli Cl- konsentratsiyasi
+    tiltT: 0
+  },
+  // 2-bosqich: Peptizatsiya
+  s2: {
+    pept: "HCl",     // "HCl" (0,1 n) yoki "NaOH" (1 n)
+    drops: 0,        // peptizator tomchilari (maqsad >= 3)
+    diluted: false,  // ko'p suv qo'shish
+    shaken: false,   // chayqatish -> zolga o'tish
+    solProgress: 0,  // 0 (cho'kma) .. 1 (opalesent zol)
+    laser: false,
+    shakeT: 0
+  },
+  // 3-bosqich: Emulsiya tayyorlash
+  s3: {
+    sub: "A",        // "A" (benzol + sovun) yoki "B" (bura + pista moyi)
+    // A: Benzol + suv + sovun
+    aWater: false,   // 50 ml H2O
+    aBenz: false,    // 10 ml benzol
+    aShaken1: false, // sovunsiz chayqatish -> ajraladi
+    aSepPhase: 1,    // 0 (aralashgan) .. 1 (2 qavatga ajralgan)
+    aSoap: false,    // 10 ml 2% sovun
+    aStable: false,  // sovun bilan barqaror emulsiya
+    aShakeT: 0,
+    // B: Bura (ZEC 21) + 95 ml H2O + isitish + 2-3 ml pista moyi
+    bMass: 0.0,      // tarozida tortilgan bura (maqsad 4.0 - 5.0 g)
+    bWeighed: false,
+    bDissolved: false, // 95 ml H2O da isitib eritilgan
+    bTransferred: false,
+    bOil: false,     // 2-3 ml pista moyi
+    bStable: false,
+    bShakeT: 0
+  },
+  anim: {
+    t: 0,
+    drops: [],
+    bubbles: []
+  }
+};
+
+const STG = [
+  null,
+  { s: "H₂SnO₃ va yuvish", t: "Stannat kislota choʻkmasini olish va dekantatsiya" },
+  { s: "Peptizatsiya", t: "Choʻkmani kislota yoki ishqor bilan peptizlash" },
+  { s: "Emulsiyalar", t: "Benzol va pista moyining barqaror emulsiyalari" },
+  { s: "Hisobot", t: "Laboratoriya ishi hisoboti" }
+];
+
+const TASKS = {
+  1: [
+    ["Qaynab turgan 200 ml suvga 1 n SnCl₄ eritmasini tomchilab qoʻshib, oq H₂SnO₃ choʻkmasini oling", () => S.s1.precipDone],
+    ["Choʻkmani qaynoq distillangan suv bilan 3 marta dekantatsiya qilib yuving", () => S.s1.washes >= 3],
+    ["Har uchala yuvish suvini 0,1 n AgNO₃ bilan tekshirib, Cl⁻ ionlari yoʻqolganini tasdiqlang", () => S.s1.tested.every(Boolean)]
+  ],
+  2: [
+    ["Yuvilgan H₂SnO₃ choʻkmasiga peptizator (0,1 n HCl yoki 1 n NaOH) dan bir necha tomchi qoʻshing", () => S.s2.drops >= 3],
+    ["Distillangan suv bilan suyultiring va chayqatib opalesent stannat kislota zolini hosil qiling", () => S.s2.shaken]
+  ],
+  3: [
+    ["A qism: 50 ml H₂O + 10 ml benzolni chayqatib qavatlarga ajralishini kuzating, soʻng 10 ml 2% sovun qoʻshib barqaror emulsiya oling", () => S.s3.aStable],
+    ["B qism: ZEC 21 tarozida 4–5 g bura torting, 95 ml suvda isitib eriting va 2–3 ml pista moyi qoʻshib barqaror emulsiya oling", () => S.s3.bStable]
+  ]
+};
+
+const QS = {
+  1: [
+    {
+      id: "q1_1",
+      q: "Nima uchun H₂SnO₃ choʻkmasini peptizlashdan oldin qaynoq suv bilan dekantatsiya qilib Cl⁻ ionlaridan yuvish shart?",
+      o: [
+        "Ortiqcha HCl (Cl⁻ ionlari) elektrolit boʻlib, zol hosil boʻlishiga toʻsqinlik qiladi va koagullanishni keltirib chiqaradi",
+        "Yuvish natijasida choʻkma qora rangga boʻyaladi",
+        "Suv qoʻshilmasa, SnCl₄ muzlab qoladi",
+        "Cl⁻ ionlari shishani eritib yuboradi"
+      ],
+      a: 0
+    },
+    {
+      id: "q1_2",
+      q: "3-dekantatsiyadan keyin yuvish suviga 0,1 n AgNO₃ tomizilganda eritma tiniq qolishi nimani anglatadi?",
+      o: [
+        "Yuvish suvida Cl⁻ ionlari qolmagan (AgCl choʻkmasi hosil boʻlmadi) — choʻkma toʻliq yuvilgan",
+        "AgNO₃ eritmasi yaroqsiz boʻlib qolgan",
+        "H₂SnO₃ choʻkmasi toʻliq erib ketgan",
+        "Suvda natriy ionlari koʻpayib ketgan"
+      ],
+      a: 0
+    }
+  ],
+  2: [
+    {
+      id: "q2_1",
+      q: "Peptizatsiya jarayonining fizik-kimyoviy mohiyati qanday?",
+      o: [
+        "Yangi tushgan gʻovak choʻkmani oz miqdor peptizator-elektrolit taʼsirida kolloid eritma (zol) holatiga oʻtkazish",
+        "Kolloid eritmani qizdirib choʻkmaga tushirish",
+        "Ikki xil gazni aralashtirib aerozol olish",
+        "Kolloid zarrachalarni filtr qogʻozdan oʻtkazish"
+      ],
+      a: 0
+    },
+    {
+      id: "q2_2",
+      q: "H₂SnO₃ choʻkmasi 0,1 n HCl bilan peptizlanganda hosil boʻladigan mitsella formulasida potensial aniqlovchi ion qaysi?",
+      o: [
+        "SnO²⁺ (mitsella: {[H₂SnO₃]ₘ · nSnO²⁺ · 2(n−x)Cl⁻}²ˣ⁺ · 2xCl⁻)",
+        "Na⁺ (mitsella: {[H₂SnO₃]ₘ · nNa⁺})",
+        "SO₄²⁻ ionlari",
+        "OH⁻ ionlari"
+      ],
+      a: 0
+    }
+  ],
+  3: [
+    {
+      id: "q3_1",
+      q: "Sovun qoʻshilmagan «suv + benzol» aralashmasi chayqatilgandan soʻng nima uchun tezda ikki qavatga ajraladi?",
+      o: [
+        "Faza chegarasidagi sirt taranglik katta va tomchilar birlashishiga (koalessensiyaga) qarshilik koʻrsatuvchi himoya qavati yoʻq",
+        "Benzol suvda kimyoviy reaksiyaga kirishib choʻkadi",
+        "Benzolning zichligi suvnikidan ancha katta",
+        "Suv molekulalari benzolni muzlatib qoʻyadi"
+      ],
+      a: 0
+    },
+    {
+      id: "q3_2",
+      q: "Sovun (R–COONa) benzolning suvdagi emulsiyasini qanday barqarorlashtiradi?",
+      o: [
+        "Tomchilar sirtida adsorbsiya qavati hosil qiladi: gidrofob R− radikali benzolga, qutbli −COO⁻ guruhi suvga yoʻnaladi",
+        "Benzolni butunlay suvga aylantiradi",
+        "Suvning qaynash haroratini 200 °C ga koʻtaradi",
+        "Benzol tomchilarini qattiq muzga aylantiradi"
+      ],
+      a: 0
+    }
+  ]
+};
+
+const QZ = [
+  ["Disperslash usuli kondensatsion usuldan nimasi bilan farq qiladi?", ["Yirik qattiq yoki suyuq fazani kolloid oʻlchamgacha maydalashga asoslanadi", "Ionlardan yangi molekula sintez qilishga asoslanadi", "Faqat gazsimon moddalarga qoʻllaniladi", "Eritmani sovitib kristallashga asoslanadi"], 0],
+  ["SnCl₄ qaynoq suvda gidrolizlanganda qaysi choʻkma hosil boʻladi?", ["Stannat kislota — H₂SnO₃ (Sn(OH)₄ dan suv ajralishi natijasida)", "Kumush xlorid — AgCl", "Temir (III) gidroksid — Fe(OH)₃", "Kalsiy karbonat — CaCO₃"], 0],
+  ["H₂SnO₃ choʻkmasiga 1 n NaOH qoʻshilganda qaysi kimyoviy reaksiya natijasida stabilizator hosil boʻladi?", ["H₂SnO₃ + 2NaOH → Na₂SnO₃ + 2H₂O", "H₂SnO₃ + 2NaOH → SnCl₄ + 2H₂O", "H₂SnO₃ + NaOH → NaCl + O₂", "Sn + 2NaOH → Na₂O + H₂"], 0],
+  ["Pista moyining suvdagi emulsiyasini tayyorlashda emulgator sifatida qaysi modda va qancha miqdorda olinadi?", ["4–5 g bura (95 ml suvda isitib eritiladi)", "100 g osh tuzi", "0,5 ml xlorid kislota", "20 g oltingugurt kukuni"], 0],
+  ["Benzolning suvdagi emulsiyasi qaysi tipdagi emulsiyaga kiradi?", ["«Moy/suv» (M/S) tipidagi toʻgʻri emulsiya", "«Suv/moy» (S/M) tipidagi teskari emulsiya", "Qattiq aerozol", "Molekulyar chin eritma"], 0]
+];
+
+/* ============ YORDAMCHILAR ============ */
+function idx(st) {
+  const list = TASKS[st] || [];
+  for (let i = 0; i < list.length; i++) if (!list[i][1]()) return i;
+  return list.length;
+}
+function qDone(id) { return S.q[id] && S.q[id].ans !== undefined; }
+function stageDone(st) {
+  return st >= 1 && st <= 3 && idx(st) >= TASKS[st].length && QS[st].every(q => qDone(q.id));
+}
+function pen(pts, msg, type = "warn") {
+  if (S.stage <= 3) S.pen[S.stage] = (S.pen[S.stage] || 0) + pts;
+  S.events.push({ st: S.stage, msg: msg.replace(/<[^>]+>/g, "") });
+  toast(msg, type, 3500);
+  SFX.play(type === "err" ? "err" : "warn");
+}
+function spawnDrop(x, y0, y1, color, r = 4.2) {
+  S.anim.drops.push({ x, y: y0, vy: 95, targetY: y1, color, r });
+}
+
+/* ============ 1-BOSQICH AMALLARI ============ */
+function addSnCl4() {
+  if (S.stage !== 1) return;
+  if (S.s1.precipDone) { toast("H₂SnO₃ choʻkmasi tayyor. Endi dekantatsiya qilib yuving.", "warn"); return; }
+  S.s1.snAdded++;
+  spawnDrop(290, 215, 360, "#e6eef2", 4.6);
+  SFX.play("drip");
+  if (S.s1.snAdded >= 3) {
+    S.s1.precipDone = true;
+    SFX.play("ok");
+    toast("✓ Oq gʻovak H₂SnO₃ choʻkmasi tushdi! Endi qaynoq suv bilan 3 marta dekantatsiya qiling.", "ok", 3600);
+  } else {
+    toast(`1 n SnCl₄ tomizildi (${S.s1.snAdded}/3) — gidroliz bormoqda...`, "", 1800);
+  }
+  renderPanel();
+}
+function decantWash() {
+  if (S.stage !== 1) return;
+  if (!S.s1.precipDone) { pen(0.5, "Avval 1 n SnCl₄ tomizib H₂SnO₃ choʻkmasini oling.", "warn"); return; }
+  if (S.s1.washes >= 3) { toast("3 marta yuvish bajarildi. Barcha probirkalarni AgNO₃ bilan tekshiring.", "warn"); return; }
+  if (S.s1.washes > 0 && !S.s1.tested[S.s1.washes - 1]) {
+    pen(0.5, `Avval ${S.s1.washes}-yuvish suvini AgNO₃ bilan tekshirib koʻring!`, "warn");
+    return;
+  }
+  S.s1.washes++;
+  S.s1.tiltT = 0.95;
+  SFX.play("pour");
+  toast(`💧 ${S.s1.washes}-dekantatsiya bajarildi! Endi ${S.s1.washes}-probirkaga 0,1 n AgNO₃ tomizib Cl⁻ ni tekshiring.`, "", 3200);
+  renderPanel();
+}
+function testAgWash(k) {
+  if (S.stage !== 1) return;
+  if (k + 1 > S.s1.washes) { pen(0.5, `Avval ${k + 1}-yuvishni (dekantatsiyani) bajaring.`, "warn"); return; }
+  if (S.s1.tested[k]) { toast(`${k + 1}-probirka allaqachon tekshirilgan.`, "", 1600); return; }
+  S.s1.tested[k] = true;
+  spawnDrop([725, 805, 885][k], 240, 395, "#e0eef5", 4.2);
+  SFX.play("drip");
+  if (k === 0) toast("1-yuvish + AgNO₃: kuchli oq AgCl↓ loyqasi (+++ Cl⁻ koʻp!). Yana yuving.", "warn", 3400);
+  else if (k === 1) toast("2-yuvish + AgNO₃: kuchsiz loyqalanish (+ Cl⁻ kamaydi). 3-marta yuving.", "warn", 3400);
+  else {
+    SFX.play("ok");
+    toast("✓ 3-yuvish + AgNO₃: eritma mutlaqo tiniq (− Cl⁻ yoʻq)! Choʻkma peptizatsiyaga tayyor!", "ok", 3800);
+  }
+  renderPanel();
+}
+
+/* ============ 2-BOSQICH AMALLARI ============ */
+function setPept(type) {
+  if (S.s2.drops > 0 && !S.s2.shaken) {
+    toast("Joriy peptizator bilan davom eting yoki qayta boshlang.", "warn");
+    return;
+  }
+  S.s2.pept = type;
+  if (S.s2.shaken) {
+    // Talaba ikkinchi peptizatorni ham sinab ko'rishi uchun holatni yangilash (progress saqlanadi)
+    SFX.play("click");
+    toast(`${type === "HCl" ? "0,1 n HCl (kislotali)" : "1 n NaOH (ishqoriy)"} sxemasi koʻrsatilmoqda.`, "", 2200);
+  } else {
+    SFX.play("click");
+  }
+  renderPanel();
+}
+function addPeptDrop() {
+  if (S.stage !== 2) return;
+  if (S.s2.drops >= 5) { toast("Peptizator yetarlicha qoʻshildi. Endi suv bilan suyultirib chayqating.", "warn"); return; }
+  S.s2.drops++;
+  spawnDrop(430, 225, 385, S.s2.pept === "HCl" ? "#d5eef7" : "#e2f5e6", 4.5);
+  SFX.play("drip");
+  toast(`+1 tomchi ${S.s2.pept === "HCl" ? "0,1 n HCl" : "1 n NaOH"} qoʻshildi (${S.s2.drops} tomchi).`, "", 1700);
+  renderPanel();
+}
+function dilutePept() {
+  if (S.stage !== 2) return;
+  if (S.s2.drops < 3) { pen(0.5, "Avval choʻkmaga kamida 3 tomchi peptizator (HCl yoki NaOH) qoʻshing.", "warn"); return; }
+  if (S.s2.diluted) { toast("Suv allaqachon qoʻshilgan — endi chayqating.", "", 1800); return; }
+  S.s2.diluted = true;
+  SFX.play("pour");
+  toast("Koʻp miqdorda distillangan suv qoʻshildi. Endi kolbani chayqating!", "", 2400);
+  renderPanel();
+}
+function shakePept() {
+  if (S.stage !== 2) return;
+  if (!S.s2.diluted) { pen(0.5, "Avval peptizator qoʻshib, soʻng distillangan suv bilan suyultiring.", "warn"); return; }
+  S.s2.shaken = true;
+  S.s2.shakeT = 1.15;
+  S.s2.solProgress = 1;
+  SFX.play("shake");
+  setTimeout(() => SFX.play("ok"), 420);
+  toast("✓ Choʻkma disperslanib, havorang-oqish opalesent H₂SnO₃ zoliga aylandi!", "ok", 3800);
+  renderPanel();
+}
+function toggleLaser2() {
+  S.s2.laser = !S.s2.laser;
+  SFX.play("click");
+  renderPanel();
+}
+
+/* ============ 3-BOSQICH AMALLARI ============ */
+function setSub3(s) { S.s3.sub = s; SFX.play("click"); renderPanel(); }
+function aAddWater() {
+  if (S.s3.aWater) return;
+  S.s3.aWater = true;
+  SFX.play("pour");
+  toast("Silindrga 50 ml distillangan suv quyildi.", "", 1800);
+  renderPanel();
+}
+function aAddBenz() {
+  if (!S.s3.aWater) { pen(0.5, "Avval silindrga 50 ml distillangan suv quying.", "warn"); return; }
+  if (S.s3.aBenz) return;
+  S.s3.aBenz = true;
+  SFX.play("pour");
+  toast("10 ml benzol qoʻshildi — zichligi kichikligi uchun suv ustida qavat hosil qildi.", "", 2500);
+  renderPanel();
+}
+function aShake() {
+  if (!S.s3.aBenz) { pen(0.5, "Avval 50 ml suv va 10 ml benzol quying.", "warn"); return; }
+  S.s3.aShakeT = 1.1;
+  SFX.play("shake");
+  if (!S.s3.aSoap) {
+    S.s3.aShaken1 = true;
+    S.s3.aSepPhase = 0; // animatsiyada sekin 1 ga qaytib qavatlarga ajraladi!
+    toast("⚠️ Qattiq chayqatildi — ammo emulgatorsiz benzol va suv tezda 2 qavatga ajralib ketmoqda!", "warn", 3800);
+  } else {
+    S.s3.aStable = true;
+    S.s3.aSepPhase = 0;
+    SFX.play("ok");
+    toast("✓ 2% sovun bilan barqaror sutdek oppoq «benzol/suv» emulsiyasi hosil boʻldi!", "ok", 3800);
+  }
+  renderPanel();
+}
+function aAddSoap() {
+  if (!S.s3.aShaken1) { pen(0.5, "Avval sovunsiz aralashmani chayqatib, qavatlarga ajralishini kuzating!", "warn"); return; }
+  if (S.s3.aSoap) return;
+  S.s3.aSoap = true;
+  SFX.play("pour");
+  toast("10 ml 2% li sovun (emulgator) qoʻshildi. Endi silindrni yana qattiq chayqating!", "", 2800);
+  renderPanel();
+}
+
+// B qism: Bura + ZEC 21 + pista moyi
+function bScoop(delta) {
+  if (S.s3.bWeighed) { toast("Bura allaqachon tortib olingan.", "", 1800); return; }
+  S.s3.bMass = clamp(+(S.s3.bMass + delta).toFixed(2), 0, 8);
+  SFX.play("weigh");
+  renderPanel();
+}
+function bConfirmWeigh() {
+  if (S.s3.bMass < 4.0 || S.s3.bMass > 5.0) {
+    pen(0.5, `Metodik koʻrsatma boʻyicha <b>4–5 g</b> kristallik bura tortish kerak (hozir ${f1(S.s3.bMass, 2)} g).`, "warn");
+    return;
+  }
+  S.s3.bWeighed = true;
+  SFX.play("ok");
+  toast(`✓ ZEC 21 tarozida ${f1(S.s3.bMass, 2)} g kristallik bura tortib olindi!`, "ok", 2600);
+  renderPanel();
+}
+function bDissolve() {
+  if (!S.s3.bWeighed) { pen(0.5, "Avval ZEC 21 tarozida 4–5 g bura torting.", "warn"); return; }
+  if (S.s3.bDissolved) return;
+  S.s3.bDissolved = true;
+  SFX.play("heat");
+  setTimeout(() => SFX.play("ok"), 450);
+  toast("✓ Bura 95 ml distillangan suvda isitib toʻliq eritildi va silindrga quyildi!", "ok", 3000);
+  S.s3.bTransferred = true;
+  renderPanel();
+}
+function bAddOil() {
+  if (!S.s3.bTransferred) { pen(0.5, "Avval burani 95 ml suvda isitib eriting va silindrga quying.", "warn"); return; }
+  if (S.s3.bOil) return;
+  S.s3.bOil = true;
+  SFX.play("drip");
+  toast("2,5 ml pista moyi qoʻshildi. Endi silindrni qattiq chayqating!", "", 2500);
+  renderPanel();
+}
+function bShake() {
+  if (!S.s3.bOil) { pen(0.5, "Avval bura eritmasi ustiga 2–3 ml pista moyi qoʻshing.", "warn"); return; }
+  S.s3.bStable = true;
+  S.s3.bShakeT = 1.15;
+  SFX.play("shake");
+  setTimeout(() => SFX.play("ok"), 400);
+  toast("✓ Pista moyining bura bilan barqaror emulsiyasi hosil boʻldi!", "ok", 3600);
+  renderPanel();
+}
+
+/* ============ SVG SAHNA ============ */
+function benchSVG(title) {
+  return `
+  <defs>
+    <linearGradient id="wall2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#c3d5d2"/><stop offset="100%" stop-color="#a5beba"/></linearGradient>
+    <linearGradient id="tbl2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5e797c"/><stop offset="100%" stop-color="#395053"/></linearGradient>
+    <linearGradient id="gls2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#fff" stop-opacity="0.52"/><stop offset="30%" stop-color="#e3f3f6" stop-opacity="0.16"/>
+      <stop offset="78%" stop-color="#cde2e7" stop-opacity="0.14"/><stop offset="100%" stop-color="#fff" stop-opacity="0.46"/>
+    </linearGradient>
+    <linearGradient id="laserB2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ff2e4c" stop-opacity="0.9"/><stop offset="100%" stop-color="#ff6b81" stop-opacity="0.5"/>
+    </linearGradient>
+    <filter id="gf2"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect x="0" y="0" width="1000" height="472" fill="url(#wall2)"/>
+  <g opacity="0.16" stroke="#2a484c" stroke-width="1">
+    <line x1="0" y1="120" x2="1000" y2="120"/><line x1="0" y1="240" x2="1000" y2="240"/><line x1="0" y1="360" x2="1000" y2="360"/>
+    <line x1="250" y1="0" x2="250" y2="472"/><line x1="500" y1="0" x2="500" y2="472"/><line x1="750" y1="0" x2="750" y2="472"/>
+  </g>
+  <rect x="0" y="470" width="1000" height="18" fill="#465e61"/>
+  <rect x="0" y="486" width="1000" height="114" fill="url(#tbl2)"/>
+  <rect x="20" y="16" width="960" height="36" rx="10" fill="rgba(15,46,51,0.84)"/>
+  <text x="36" y="39" fill="#edf5f4" font-size="14" font-weight="700">${title}</text>`;
+}
+
+function sceneHTML() {
+  if (S.stage === 1) {
+    const s = S.s1;
+    const precH = s.precipDone ? 36 : s.snAdded * 11;
+    const tubes = [0, 1, 2].map(k => {
+      const tx = [725, 805, 885][k];
+      const hasWater = k + 1 <= s.washes;
+      const tested = s.tested[k];
+      let liqCol = "rgba(186,230,242,0.38)";
+      let lbl = hasWater ? "Tekshiring" : "Boʻsh";
+      if (tested) {
+        if (k === 0) { liqCol = "rgba(248,250,252,0.95)"; lbl = "+++ AgCl↓"; }
+        else if (k === 1) { liqCol = "rgba(235,244,248,0.72)"; lbl = "+ Kuchsiz"; }
+        else { liqCol = "rgba(195,235,246,0.34)"; lbl = "✓ Tiniq"; }
+      }
+      return `
+      <g class="clk ${hasWater && !tested ? "glow" : ""}" data-t="tube${k}" transform="translate(${tx},430)">
+        <rect x="-15" y="-128" width="30" height="128" rx="14" fill="url(#gls2)" stroke="#24484f" stroke-width="2"/>
+        ${hasWater ? `<rect x="-13" y="-76" width="26" height="74" rx="12" fill="${liqCol}"/>` : ""}
+        ${tested && k === 0 ? `<ellipse cx="0" cy="-10" rx="11" ry="6" fill="#ffffff"/>` : ""}
+        <rect x="-18" y="-132" width="36" height="6" rx="3" fill="#d9ecee" stroke="#24484f" stroke-width="1.5"/>
+        <text x="0" y="20" text-anchor="middle" font-size="11" font-weight="800" fill="#132629">${k + 1}-yuvish</text>
+        <text x="0" y="36" text-anchor="middle" font-size="10.5" font-weight="700" fill="${tested && k === 2 ? "#1f9d6b" : tested ? "#b8740e" : "#587276"}">${lbl}</text>
+      </g>`;
+    }).join("");
+
+    return benchSVG("1-tajriba: H₂SnO₃ choʻkmasini olish va qaynoq suv bilan dekantatsiya qilish") + `
+      <!-- Uch oyoqli o'choq va asbest to'r -->
+      <g transform="translate(290,478)">
+        <line x1="-64" y1="-88" x2="-78" y2="0" stroke="#304347" stroke-width="7" stroke-linecap="round"/>
+        <line x1="64" y1="-88" x2="78" y2="0" stroke="#304347" stroke-width="7" stroke-linecap="round"/>
+        <line x1="0" y1="-88" x2="0" y2="0" stroke="#243538" stroke-width="6" stroke-linecap="round"/>
+        <rect x="-78" y="-96" width="156" height="10" rx="3" fill="#52686c" stroke="#243538" stroke-width="1.5"/>
+        <!-- Spirt lampa / gorelka alangasi -->
+        <rect x="-26" y="-26" width="52" height="26" rx="5" fill="#3a5256"/>
+        ${!s.precipDone ? `<path d="M-12,-28 Q0,-76 12,-28 Z" fill="#ff9436" opacity="0.9"/><path d="M-6,-28 Q0,-56 6,-28 Z" fill="#fff099"/>` : ""}
+      </g>
+
+      <!-- Asosiy stakan (200 ml qaynoq suv -> H2SnO3 cho'kmasi) -->
+      <g id="beaker1" transform="translate(290,382)">
+        <rect x="-66" y="-128" width="132" height="128" rx="8" fill="url(#gls2)" stroke="#24484f" stroke-width="2.5"/>
+        <rect x="-63" y="-94" width="126" height="92" rx="6" fill="rgba(186,230,242,0.38)"/>
+        ${precH > 0 ? `<path d="M-62,-${precH} Q-22,-${precH + 8} 0,-${precH - 2} Q28,-${precH + 6} 62,-${precH} L62,-3 Q62,0 58,0 L-58,0 Q-62,0 -62,-3 Z" fill="#f7fafb" stroke="#cddce0" stroke-width="1.2"/>` : ""}
+        <g id="boilBub1"></g>
+        <text x="0" y="-138" text-anchor="middle" font-size="12" font-weight="800" fill="#0f2e33">200 ml qaynoq H₂O ${s.precipDone ? "+ H₂SnO₃↓" : ""}</text>
+      </g>
+
+      <!-- 1 n SnCl4 tomizgich shishasi -->
+      <g class="clk ${!s.precipDone ? "glow" : ""}" data-t="botSn" transform="translate(115,392)">
+        <rect x="-34" y="-82" width="68" height="82" rx="9" fill="#5e3a1f" stroke="#2c190a" stroke-width="2"/>
+        <rect x="-14" y="-105" width="28" height="24" rx="4" fill="#462a14"/>
+        <path d="M-10,-105 L-10,-126 Q0,-138 10,-126 L10,-105 Z" fill="#c94b38"/>
+        <rect x="-28" y="-65" width="56" height="36" rx="4" fill="#fffdf6"/>
+        <text x="0" y="-49" text-anchor="middle" font-size="11.5" font-weight="800" fill="#132629">SnCl₄</text>
+        <text x="0" y="-35" text-anchor="middle" font-size="9.5" fill="#587276">1 n eritma</text>
+        <text x="0" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#132629">Tomizish</text>
+      </g>
+
+      <!-- Qaynoq suv yuvish idishi (dekantatsiya) -->
+      <g class="clk ${s.precipDone && s.washes < 3 ? "glow" : ""}" data-t="washBtn" transform="translate(505,468)">
+        <rect x="-48" y="-110" width="96" height="110" rx="12" fill="url(#gls2)" stroke="#24484f" stroke-width="2.2"/>
+        <rect x="-45" y="-76" width="90" height="74" rx="9" fill="rgba(165,222,240,0.52)"/>
+        <path d="M18,-110 L18,-132 L-42,-154" fill="none" stroke="#24484f" stroke-width="4" stroke-linecap="round"/>
+        <rect x="-38" y="-62" width="76" height="36" rx="5" fill="#fff"/>
+        <text x="0" y="-46" text-anchor="middle" font-size="11" font-weight="800" fill="#0f2e33">Qaynoq H₂O</text>
+        <text x="0" y="-32" text-anchor="middle" font-size="9.5" fill="#1f9d6b">Dekantatsiya (${s.washes}/3)</text>
+      </g>
+
+      <!-- Probirkalar shtativi (AgNO3 sinovi) -->
+      <g transform="translate(805,478)">
+        <rect x="-125" y="-18" width="250" height="18" rx="4" fill="#6b4b32" stroke="#3c2818" stroke-width="2"/>
+        <rect x="-118" y="-96" width="236" height="10" rx="3" fill="#7c593c" stroke="#3c2818" stroke-width="1.5"/>
+        <rect x="-112" y="-90" width="8" height="74" fill="#5d4029"/><rect x="104" y="-90" width="8" height="74" fill="#5d4029"/>
+      </g>
+      ${tubes}
+
+      <!-- 0,1 n AgNO3 yorlig'i -->
+      <g transform="translate(680,82)">
+        <rect x="0" y="0" width="275" height="92" rx="10" fill="rgba(15,46,51,0.9)" stroke="#e89b3c" stroke-width="1.5"/>
+        <text x="14" y="24" font-size="12" font-weight="800" fill="#e89b3c">Cl⁻ IONI SINOVI (0,1 n AgNO₃)</text>
+        <text x="14" y="46" font-family="JetBrains Mono,monospace" font-size="11.5" fill="#edf5f4">Ag⁺ + Cl⁻ → AgCl↓ (oq loyqa)</text>
+        <text x="14" y="68" font-size="11" fill="#9bf2c8">Probirkalarni bosib AgNO₃ tomizing</text>
+      </g>
+      <g id="fxLayer"></g>`;
+  }
+
+  if (S.stage === 2) {
+    const s = S.s2;
+    const solAlpha = lerp(0.22, 0.78, s.solProgress);
+    const liqColor = s.shaken ? `rgba(218,236,246,${solAlpha.toFixed(2)})` : "rgba(186,230,242,0.34)";
+    const precH = s.shaken ? 0 : 34;
+    return benchSVG("2-tajriba: Yuvilgan H₂SnO₃ choʻkmasini kislota (HCl) yoki ishqor (NaOH) bilan peptizlash") + `
+      <!-- Tindal lazeri -->
+      <g class="clk" data-t="laser2" transform="translate(76,412)">
+        <rect x="0" y="-16" width="96" height="32" rx="7" fill="#23373b" stroke="#0f1e21" stroke-width="2"/>
+        <circle cx="48" cy="0" r="6" fill="${s.laser ? "#ff3b57" : "#4b666b"}" stroke="#fff" stroke-width="1.5"/>
+        <text x="48" y="30" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">🔦 Tindal lazeri</text>
+      </g>
+      ${s.laser && s.shaken ? `<polygon points="178,408 505,396 505,428 178,416" fill="url(#laserB2)" opacity="0.72" filter="url(#gf2)"/>` : ""}
+
+      <!-- Asosiy peptizatsiya kolbasi -->
+      <g id="peptFlask" class="clk" data-t="shake2" transform="translate(430,478)">
+        <ellipse cx="0" cy="4" rx="76" ry="11" fill="rgba(12,30,34,0.28)"/>
+        <path d="M-74,-82 L-74,-8 Q-74,0 -64,0 L64,0 Q74,0 74,-8 L74,-82 Z" fill="${liqColor}" stroke="#87b8c9" stroke-width="1.5"/>
+        ${s.diluted ? `<rect x="-73" y="-124" width="146" height="44" fill="${liqColor}"/>` : ""}
+        ${precH > 0 ? `<path d="M-70,-${precH} Q-20,-${precH + 10} 8,-${precH - 3} Q42,-${precH + 7} 70,-${precH} L70,-3 Q70,0 64,0 L-64,0 Q-70,0 -70,-3 Z" fill="#f8fbfc" stroke="#c8dbe0" stroke-width="1.4"/>` : ""}
+        <rect x="-76" y="-175" width="152" height="175" rx="10" fill="url(#gls2)" stroke="#24484f" stroke-width="2.6"/>
+        <text x="0" y="32" text-anchor="middle" font-size="13" font-weight="800" fill="#edf5f4">${s.shaken ? "Opalesent H₂SnO₃ zoli ✓" : "Yuvilgan H₂SnO₃ choʻkmasi"}</text>
+        <text x="0" y="49" text-anchor="middle" font-size="11.5" fill="#cbe0dd">${s.pept === "HCl" ? "0,1 n HCl" : "1 n NaOH"}: ${s.drops} tomchi ${s.diluted ? "· suyultirilgan" : ""}</text>
+      </g>
+
+      <!-- Peptizator shishalari (0,1 n HCl va 1 n NaOH) -->
+      <g class="clk ${s.pept === "HCl" && s.drops < 3 ? "glow" : ""}" data-t="botHCl" transform="translate(705,365)">
+        <rect x="-36" y="-82" width="72" height="82" rx="9" fill="#2c5968" stroke="#142d36" stroke-width="2"/>
+        <rect x="-14" y="-106" width="28" height="25" rx="4" fill="#1e3f4a"/>
+        <path d="M-10,-106 L-10,-126 Q0,-138 10,-126 L10,-106 Z" fill="#e89b3c"/>
+        <rect x="-30" y="-66" width="60" height="38" rx="4" fill="#fff"/>
+        <text x="0" y="-50" text-anchor="middle" font-size="12" font-weight="800" fill="#132629">HCl</text>
+        <text x="0" y="-36" text-anchor="middle" font-size="9.5" fill="#587276">0,1 n kislota</text>
+      </g>
+      <g class="clk ${s.pept === "NaOH" && s.drops < 3 ? "glow" : ""}" data-t="botNaOH" transform="translate(835,365)">
+        <rect x="-36" y="-82" width="72" height="82" rx="9" fill="#3a6b4e" stroke="#183323" stroke-width="2"/>
+        <rect x="-14" y="-106" width="28" height="25" rx="4" fill="#264a35"/>
+        <path d="M-10,-106 L-10,-126 Q0,-138 10,-126 L10,-106 Z" fill="#e89b3c"/>
+        <rect x="-30" y="-66" width="60" height="38" rx="4" fill="#fff"/>
+        <text x="0" y="-50" text-anchor="middle" font-size="12" font-weight="800" fill="#132629">NaOH</text>
+        <text x="0" y="-36" text-anchor="middle" font-size="9.5" fill="#587276">1 n ishqor</text>
+      </g>
+
+      <!-- Sxema taxtasi -->
+      <g transform="translate(555,74)">
+        <rect x="0" y="0" width="415" height="145" rx="11" fill="rgba(15,46,51,0.9)" stroke="#e89b3c" stroke-width="1.5"/>
+        <text x="16" y="24" font-size="12" font-weight="800" fill="#e89b3c">PEPTIZATSIYA REAKSIYALARI VA MITSELLA</text>
+        <text x="16" y="48" font-family="JetBrains Mono,monospace" font-size="11.5" fill="#edf5f4">H₂SnO₃ + 2NaOH → Na₂SnO₃ + 2H₂O</text>
+        <text x="16" y="70" font-family="JetBrains Mono,monospace" font-size="11.5" fill="#edf5f4">H₂SnO₃ + 2HCl → SnOCl₂ + 2H₂O</text>
+        <text x="16" y="98" font-size="11" fill="#9bf2c8">Mitsella (HCl bilan):</text>
+        <text x="16" y="118" font-family="JetBrains Mono,monospace" font-size="11.5" fill="#fff">{[H₂SnO₃]ₘ · nSnO²⁺ · 2(n−x)Cl⁻}²ˣ⁺ · 2xCl⁻</text>
+      </g>
+      <g id="fxLayer"></g>`;
+  }
+
+  if (S.stage === 3) {
+    const s = S.s3;
+    if (s.sub === "A") {
+      // Silindr: 50 ml H2O + 10 ml benzol (+ 10 ml 2% sovun)
+      const sep = s.aStable ? 0 : s.aSepPhase;
+      const milky = s.aStable || (s.aShaken1 && sep < 0.75);
+      const emulAlpha = s.aStable ? 0.94 : lerp(0.82, 0, sep);
+      return benchSVG("3-tajriba (A qism): Benzolning suvdagi emulsiyasi — sovun emulgatorining roli") + `
+        <!-- Po'kakli 100 ml o'lchov silindri -->
+        <g id="cylA" class="clk" data-t="shakeA" transform="translate(310,478)">
+          <ellipse cx="0" cy="4" rx="56" ry="9" fill="rgba(12,30,34,0.3)"/>
+          <rect x="-54" y="-12" width="108" height="12" rx="4" fill="#c7dfe2" stroke="#24484f" stroke-width="2"/>
+          <!-- Suyuqlik qatlamlari -->
+          ${s.aWater ? `<rect x="-34" y="-172" width="68" height="160" fill="${milky ? `rgba(250,250,245,${emulAlpha.toFixed(2)})` : "rgba(176,226,242,0.48)"}"/>` : ""}
+          ${s.aBenz && !s.aStable && sep > 0.25 ? `<rect x="-34" y="-208" width="68" height="36" fill="rgba(245,232,162,${(0.76 * sep).toFixed(2)})" stroke="#cbb85a" stroke-width="1"/>` : ""}
+          ${s.aStable ? `<rect x="-34" y="-224" width="68" height="212" fill="rgba(252,250,242,0.95)"/>` : ""}
+          <!-- Silindr devori va shkalasi -->
+          <rect x="-36" y="-286" width="72" height="274" rx="4" fill="url(#gls2)" stroke="#24484f" stroke-width="2.5"/>
+          <path d="M-26,-286 L-22,-314 L22,-314 L26,-286 Z" fill="#b78852" stroke="#5d3f1d" stroke-width="2"/>
+          ${[20, 40, 60, 80, 100].map((v, i) => `<line x1="-35" y1="${-45 - i * 44}" x2="-18" y2="${-45 - i * 44}" stroke="#24484f" stroke-width="1.3"/><text x="-13" y="${-41 - i * 44}" font-size="9.5" fill="#132629">${v}</text>`).join("")}
+          <text x="0" y="34" text-anchor="middle" font-size="13" font-weight="800" fill="#edf5f4">${s.aStable ? "✓ Barqaror benzol/suv emulsiyasi" : s.aShaken1 && sep > 0.7 ? "2 qavatga ajraldi (barqaror emas)" : "100 ml poʻkakli silindr"}</text>
+        </g>
+
+        <!-- Mikro-sxema: Sovun adsorbsiya qavati -->
+        <g transform="translate(505,110)">
+          <rect x="0" y="0" width="445" height="295" rx="14" fill="rgba(255,255,255,0.94)" stroke="#b8ccca" stroke-width="1.8"/>
+          <text x="18" y="28" font-size="13.5" font-weight="800" fill="#0f2e33">Sovun molekulalarining faza chegarasida adsorbsiyasi</text>
+          <text x="18" y="48" font-family="JetBrains Mono,monospace" font-size="11.5" fill="#587276">[C₆H₆]ₘ + nRCOO⁻ + nNa⁺ → {[C₆H₆]ₘ·nRCOO⁻}ⁿ⁻ · nNa⁺</text>
+          <!-- Benzol tomchisi va sovun qobig'i -->
+          <g transform="translate(222,174)">
+            <circle cx="0" cy="0" r="56" fill="#f7e89b" stroke="#cbb042" stroke-width="2"/>
+            <text x="0" y="-4" text-anchor="middle" font-size="13" font-weight="800" fill="#5b4608">C₆H₆</text>
+            <text x="0" y="13" text-anchor="middle" font-size="10" fill="#7c6316">Benzol tomchisi</text>
+            ${Array.from({ length: 12 }, (_, k) => {
+              const ang = k * Math.PI / 6;
+              const x1 = Math.cos(ang) * 44, y1 = Math.sin(ang) * 44;
+              const x2 = Math.cos(ang) * 74, y2 = Math.sin(ang) * 74;
+              const x3 = Math.cos(ang) * 89, y3 = Math.sin(ang) * 89;
+              return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#24484f" stroke-width="2.2"/>
+                <circle cx="${x2.toFixed(1)}" cy="${y2.toFixed(1)}" r="7" fill="${s.aSoap ? "#1f9d6b" : "#b8c7c5"}" stroke="#0f2e33" stroke-width="1.2"/>
+                ${s.aSoap ? `<text x="${x3.toFixed(1)}" y="${(y3 + 3).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="#d64545">Na⁺</text>` : ""}`;
+            }).join("")}
+          </g>
+          <text x="18" y="280" font-size="11.5" fill="#132629">Gidrofob R− dumlari benzolga, qutbli −COO⁻ boshlari suvga yoʻnalib himoya qavati hosil qiladi.</text>
+        </g>`;
+    } else {
+      // B qism: ZEC 21 tarozi + 95 ml suvda bura + 2-3 ml pista moyi silindri
+      return benchSVG("3-tajriba (B qism): Analitik tarozi ZEC 21 da bura tortish va pista moyi emulsiyasi") + `
+        <!-- Analitik tarozi ZEC 21 -->
+        <g transform="translate(260,478)">
+          <rect x="-135" y="-66" width="270" height="66" rx="12" fill="#2c4347" stroke="#142326" stroke-width="2.5"/>
+          <rect x="-112" y="-196" width="224" height="130" rx="8" fill="rgba(235,248,250,0.45)" stroke="#3e5b60" stroke-width="2.2"/>
+          <rect x="-66" y="-82" width="132" height="14" rx="4" fill="#9fb5b8" stroke="#304347" stroke-width="1.5"/>
+          <!-- Bura kristallari uyumi -->
+          ${s.bMass > 0 ? `<path d="M-${clamp(s.bMass * 7, 8, 42)},-82 Q0,-${82 + clamp(s.bMass * 6.5, 6, 36)} ${clamp(s.bMass * 7, 8, 42)},-82 Z" fill="#ffffff" stroke="#d5e2e5"/>` : ""}
+          <!-- Raqamli displey -->
+          <rect x="-85" y="-50" width="170" height="34" rx="6" fill="#0c1f22" stroke="#527478"/>
+          <text x="0" y="-28" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="18" font-weight="700" fill="${s.bMass >= 4 && s.bMass <= 5 ? "#87e8be" : "#ffd27a"}">${f1(s.bMass, 2)} g</text>
+          <text x="0" y="28" text-anchor="middle" font-size="13" font-weight="800" fill="#edf5f4">Analitik tarozi · ZEC 21</text>
+          <text x="0" y="45" text-anchor="middle" font-size="11.5" fill="#cbe0dd">Maqsad: 4,00–5,00 g kristallik bura</text>
+        </g>
+
+        <!-- Po'kakli silindr B (95 ml bura eritmasi + 2-3 ml pista moyi) -->
+        <g id="cylB" class="clk" data-t="shakeB" transform="translate(690,478)">
+          <ellipse cx="0" cy="4" rx="56" ry="9" fill="rgba(12,30,34,0.3)"/>
+          <rect x="-54" y="-12" width="108" height="12" rx="4" fill="#c7dfe2" stroke="#24484f" stroke-width="2"/>
+          ${s.bTransferred ? `<rect x="-34" y="-212" width="68" height="200" fill="${s.bStable ? "rgba(255,244,205,0.95)" : "rgba(182,228,242,0.45)"}"/>` : ""}
+          ${s.bOil && !s.bStable ? `<rect x="-34" y="-228" width="68" height="16" fill="rgba(232,188,36,0.88)"/>` : ""}
+          <rect x="-36" y="-286" width="72" height="274" rx="4" fill="url(#gls2)" stroke="#24484f" stroke-width="2.5"/>
+          <path d="M-26,-286 L-22,-314 L22,-314 L26,-286 Z" fill="#b78852" stroke="#5d3f1d" stroke-width="2"/>
+          <text x="0" y="32" text-anchor="middle" font-size="13" font-weight="800" fill="#edf5f4">${s.bStable ? "✓ Barqaror pista moyi emulsiyasi" : "100 ml silindr (bura + pista moyi)"}</text>
+          <text x="0" y="49" text-anchor="middle" font-size="11.5" fill="#cbe0dd">95 ml bura eritmasi + 2–3 ml pista moyi</text>
+        </g>
+
+        <!-- Bosqichma-bosqich jarayon ko'rsatkichi -->
+        <g transform="translate(460,90)">
+          <rect x="0" y="0" width="490" height="72" rx="10" fill="rgba(15,46,51,0.88)" stroke="#e89b3c" stroke-width="1.5"/>
+          <text x="16" y="26" font-size="12" font-weight="800" fill="#e89b3c">PISTA MOYI EMULSIYASI BOSQICHLARI</text>
+          <text x="16" y="50" font-size="12" fill="#edf5f4">1. Tarozi (4–5 g bura) ${s.bWeighed ? "✓" : "…"}  →  2. 95 ml H₂O (isitish) ${s.bDissolved ? "✓" : "…"}  →  3. Pista moyi + chayqatish ${s.bStable ? "✓" : "…"}</text>
+        </g>`;
+    }
+  }
+
+  // Stage 4: Yakuniy ko'rgazma
+  return benchSVG("2-laboratoriya yakunlandi — Disperslash, peptizatsiya va barqaror emulsiyalar") + `
+    <g transform="translate(220,478)">
+      <rect x="-66" y="-140" width="132" height="140" rx="8" fill="rgba(218,236,246,0.82)" stroke="#24484f" stroke-width="2.5"/>
+      <text x="0" y="32" text-anchor="middle" font-size="13" font-weight="800" fill="#edf5f4">H₂SnO₃ zoli (peptizatsiya)</text>
+    </g>
+    <g transform="translate(500,478)">
+      <rect x="-36" y="-230" width="72" height="230" rx="4" fill="rgba(252,250,242,0.95)" stroke="#24484f" stroke-width="2.5"/>
+      <text x="0" y="32" text-anchor="middle" font-size="13" font-weight="800" fill="#edf5f4">Benzol + sovun (M/S)</text>
+    </g>
+    <g transform="translate(780,478)">
+      <rect x="-36" y="-230" width="72" height="230" rx="4" fill="rgba(255,244,205,0.95)" stroke="#24484f" stroke-width="2.5"/>
+      <text x="0" y="32" text-anchor="middle" font-size="13" font-weight="800" fill="#edf5f4">Pista moyi + bura (M/S)</text>
+    </g>
+    <text x="500" y="135" text-anchor="middle" font-size="22" font-weight="800" fill="#0f2e33">Disperslash va emulsiya barqarorligi oʻrganildi</text>`;
+}
+
+function renderScene() {
+  const svg = el("scene");
+  svg.innerHTML = sceneHTML();
+  svg.querySelectorAll("[data-t]").forEach(node => {
+    node.addEventListener("click", e => {
+      e.stopPropagation();
+      const t = node.dataset.t;
+      SFX.init();
+      if (t === "botSn") addSnCl4();
+      else if (t === "washBtn") decantWash();
+      else if (t.startsWith("tube")) testAgWash(+t.slice(4));
+      else if (t === "botHCl") { S.s2.pept = "HCl"; addPeptDrop(); }
+      else if (t === "botNaOH") { S.s2.pept = "NaOH"; addPeptDrop(); }
+      else if (t === "shake2") shakePept();
+      else if (t === "laser2") toggleLaser2();
+      else if (t === "shakeA") aShake();
+      else if (t === "shakeB") bShake();
+    });
+  });
+}
+
+/* ============ SAVOLLAR VA PANEL ============ */
+function qBlock(Q, seed) {
+  const q = S.q[Q.id] || {};
+  return `<div class="q"><p>${Q.q}</p>${shuf(Q.o.length, seed).map(oi => {
+    let c = "";
+    if (q.ans !== undefined && oi === Q.a) c = "right";
+    else if (q.wrong && q.wrong.includes(oi)) c = "wrong";
+    return `<button class="${c}" onclick="ansQ('${Q.id}',${oi})" ${q.ans !== undefined || (q.wrong && q.wrong.includes(oi)) ? "disabled" : ""}>${Q.o[oi]}</button>`;
+  }).join("")}</div>`;
+}
+function ansQ(id, i) {
+  let Q;
+  for (const k in QS) { Q = QS[k].find(x => x.id === id); if (Q) break; }
+  const q = S.q[id] || (S.q[id] = { tries: 0, wrong: [], pts: 0 });
+  if (q.ans !== undefined) return;
+  q.tries++;
+  if (i === Q.a) {
+    q.ans = i; q.pts = q.tries === 1 ? 2 : 1;
+    SFX.play("ok"); toast("✓ Toʻgʻri javob!", "ok", 1600);
+  } else {
+    q.wrong.push(i);
+    if (q.tries >= 2) { q.ans = Q.a; SFX.play("warn"); toast("Toʻgʻri javob koʻrsatildi.", "warn", 2400); }
+    else { SFX.play("err"); toast("✗ Notoʻgʻri. Yana bir urinish.", "err", 1800); }
+  }
+  renderPanel();
+}
+function tasksHTML(st) {
+  const cur = idx(st);
+  return `<ul class="tasks">${TASKS[st].map((t, k) => `<li class="${k < cur ? "done" : k === cur ? "cur" : ""}"><span class="b">${k < cur ? "✓" : k + 1}</span><span>${t[0]}</span></li>`).join("")}</ul>`;
+}
+
+function clDecayChart() {
+  const pts = [{ x: 0, y: 0.42 }];
+  if (S.s1.washes >= 1) pts.push({ x: 1, y: 0.14 });
+  if (S.s1.washes >= 2) pts.push({ x: 2, y: 0.03 });
+  if (S.s1.washes >= 3) pts.push({ x: 3, y: 0.002 });
+  return LabUI.svgChart({
+    title: "Dekantatsiya davomida Cl⁻ kamayishi",
+    xl: "Yuvish soni", yl: "[Cl⁻], mol/l",
+    x0: 0, xm: 3, y0: 0, ym: 0.5, sx: 1, sy: 0.1,
+    series: [{ pts, color: "#1b484f", dot: "#e89b3c" }]
+  });
+}
+
+function renderPanel() {
+  const P = el("panel");
+  const st = S.stage;
+  if (st === 4) {
+    P.innerHTML = reportHTML();
+    renderScene();
+    renderTabs();
+    return;
+  }
+  const cur = idx(st), totT = TASKS[st].length;
+  let h = `<h2>${st}. ${STG[st].t}</h2>`;
+
+  if (st === 1) {
+    const s = S.s1;
+    h += `<div class="sub">200 ml qaynab turgan suvga 1 n SnCl₄ tomizib H₂SnO₃ choʻkmasi olinadi va qaynoq suv bilan Cl⁻ ionlari yoʻqolguncha 3 marta dekantatsiya qilinadi.</div>` + tasksHTML(1);
+    h += `<div class="box"><h4>1 · Choʻkma olish (gidroliz)</h4>
+      <div class="eq">SnCl₄ + 4H₂O → 4HCl + Sn(OH)₄↓</div>
+      <div class="eq">Sn(OH)₄ → H₂SnO₃↓ + H₂O</div>
+      <button class="pri" style="width:100%;margin-top:6px" onclick="addSnCl4()" ${s.precipDone ? "disabled" : ""}>💧 1 n SnCl₄ tomizish (${s.snAdded}/3)</button></div>`;
+    h += `<div class="box"><h4>2 · Dekantatsiya va AgNO₃ sinovi</h4>
+      <button class="dark" style="width:100%;margin-bottom:8px" onclick="decantWash()" ${!s.precipDone || s.washes >= 3 ? "disabled" : ""}>🚿 Qaynoq suv bilan dekantatsiya (${s.washes}/3)</button>
+      ${[0, 1, 2].map(k => `<div class="wash-row">
+        <span>${k + 1}-yuvish suvi</span>
+        ${s.tested[k]
+          ? `<span class="pill ${k === 0 ? "hi" : k === 1 ? "mid" : "ok"}">${k === 0 ? "+++ Oq AgCl↓" : k === 1 ? "+ Kuchsiz loyqa" : "− Tiniq (Cl⁻ yoʻq)"}</span>`
+          : `<button onclick="testAgWash(${k})" style="padding:4px 9px;font-size:11.5px" ${k + 1 > s.washes ? "disabled" : ""}>+ 0,1 n AgNO₃</button>`}
+      </div>`).join("")}
+      ${s.washes > 0 ? `<div style="margin-top:8px">${clDecayChart()}</div>` : ""}
+    </div>`;
+    if (cur >= totT) h += QS[1].map((q, k) => `<div class="box"><h4>Nazorat savoli ${k + 1}</h4>${qBlock(q, 17 + k * 5)}</div>`).join("");
+  }
+
+  if (st === 2) {
+    const s = S.s2;
+    h += `<div class="sub">Yuvilgan gʻovak H₂SnO₃ choʻkmasiga oz miqdor peptizator (0,1 n HCl yoki 1 n NaOH) tomizib, koʻp suv bilan suyultirib chayqatilganda stannat kislota zoli hosil boʻladi.</div>` + tasksHTML(2);
+    h += `<div class="box"><h4>Peptizatorni tanlang</h4>
+      <div class="sub-tabs">
+        <button class="${s.pept === "HCl" ? "active" : ""}" onclick="setPept('HCl')">0,1 n HCl (musbat zol)</button>
+        <button class="${s.pept === "NaOH" ? "active" : ""}" onclick="setPept('NaOH')">1 n NaOH (manfiy zol)</button>
+      </div>
+      <div class="row">
+        <button class="pri" onclick="addPeptDrop()">💧 +1 tomchi ${s.pept} (${s.drops})</button>
+        <button onclick="dilutePept()" ${s.drops < 3 || s.diluted ? "disabled" : ""}>🫗 Suv bilan suyultirish</button>
+        <button class="dark" onclick="shakePept()" ${!s.diluted ? "disabled" : ""}>🤲 Chayqatish</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button class="ghost" onclick="toggleLaser2()">🔦 Tindal lazeri (${s.laser ? "ON" : "OFF"})</button>
+      </div>
+      <div class="eq" style="margin-top:8px">${s.pept === "HCl" ? "H₂SnO₃ + 2HCl → SnOCl₂ + 2H₂O" : "H₂SnO₃ + 2NaOH → Na₂SnO₃ + 2H₂O"}</div>
+      <div class="eq">${s.pept === "HCl" ? "{[H₂SnO₃]ₘ · nSnO²⁺ · 2(n−x)Cl⁻}²ˣ⁺ · 2xCl⁻" : "{[H₂SnO₃]ₘ · nSnO₃²⁻ · 2(n−x)Na⁺}²ˣ⁻ · 2xNa⁺"}</div>
+    </div>`;
+    if (cur >= totT) h += QS[2].map((q, k) => `<div class="box"><h4>Nazorat savoli ${k + 1}</h4>${qBlock(q, 31 + k * 7)}</div>`).join("");
+  }
+
+  if (st === 3) {
+    const s = S.s3;
+    h += `<div class="sub">Ikki xil barqaror «moy/suv» emulsiyasini tayyorlang: benzol (sovun bilan) va pista moyi (bura bilan).</div>` + tasksHTML(3);
+    h += `<div class="sub-tabs">
+      <button class="${s.sub === "A" ? "active" : ""}" onclick="setSub3('A')">A · Benzol + sovun ${s.aStable ? "✓" : ""}</button>
+      <button class="${s.sub === "B" ? "active" : ""}" onclick="setSub3('B')">B · Pista moyi + bura ${s.bStable ? "✓" : ""}</button>
+    </div>`;
+    if (s.sub === "A") {
+      h += `<div class="box"><h4>Benzolning suvdagi emulsiyasi</h4>
+        <div class="row">
+          <button onclick="aAddWater()" class="${s.aWater ? "on" : "pri"}">1. 50 ml H₂O</button>
+          <button onclick="aAddBenz()" class="${s.aBenz ? "on" : "pri"}" ${!s.aWater ? "disabled" : ""}>2. 10 ml benzol</button>
+          <button onclick="aShake()" class="dark" ${!s.aBenz ? "disabled" : ""}>3. 🤲 Chayqatish</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button onclick="aAddSoap()" class="${s.aSoap ? "on" : "pri"}" ${!s.aShaken1 ? "disabled" : ""}>4. +10 ml 2% sovun</button>
+          <button onclick="aShake()" class="pri" ${!s.aSoap ? "disabled" : ""}>5. 🤲 Qattiq chayqatish</button>
+        </div>
+        <div class="eq" style="margin-top:8px">n(R–COONa) ⇌ nRCOO⁻ + nNa⁺</div>
+        <div class="note">Avval sovunsiz chayqatib qavatlarga ajralishini kuzating, soʻng 2% sovun qoʻshib barqaror emulsiya hosil qiling.</div>
+      </div>`;
+    } else {
+      h += `<div class="box"><h4>1 · ZEC 21 tarozida 4–5 g bura tortish</h4>
+        <div class="big">${f1(s.bMass, 2)} g<small>Maqsad: 4,00–5,00 g kristallik bura</small></div>
+        <div class="row">
+          <button onclick="bScoop(1.5)" ${s.bWeighed ? "disabled" : ""}>+1,5 g</button>
+          <button onclick="bScoop(0.5)" ${s.bWeighed ? "disabled" : ""}>+0,5 g</button>
+          <button onclick="bScoop(-0.5)" ${s.bWeighed ? "disabled" : ""}>−0,5 g</button>
+          <button class="pri" onclick="bConfirmWeigh()" ${s.bWeighed ? "disabled" : ""}>✓ Tasdiqlash</button>
+        </div></div>`;
+      h += `<div class="box"><h4>2 · Eritish va emulsiya tayyorlash</h4>
+        <div class="row">
+          <button class="${s.bDissolved ? "on" : "pri"}" onclick="bDissolve()" ${!s.bWeighed || s.bDissolved ? "disabled" : ""}>🔥 95 ml H₂O da eritish</button>
+          <button class="${s.bOil ? "on" : "pri"}" onclick="bAddOil()" ${!s.bTransferred || s.bOil ? "disabled" : ""}>🌻 +2,5 ml pista moyi</button>
+          <button class="dark" onclick="bShake()" ${!s.bOil ? "disabled" : ""}>🤲 Chayqatish</button>
+        </div></div>`;
+    }
+    if (cur >= totT) h += QS[3].map((q, k) => `<div class="box"><h4>Nazorat savoli ${k + 1}</h4>${qBlock(q, 47 + k * 7)}</div>`).join("");
+  }
+
+  if (stageDone(st)) {
+    h += `<button class="pri next" onclick="nextStage()">${st === 3 ? "📊 Hisobotni koʻrish →" : `${st + 1}-bosqichga oʻtish →`}</button>`;
+  }
+  P.innerHTML = h;
+  renderScene();
+  renderTabs();
+}
+
+/* ============ BAHOLASH VA HISOBOT ============ */
+function total() {
+  let proc = 0;
+  for (let k = 1; k <= 3; k++) {
+    const tDone = idx(k) / TASKS[k].length;
+    proc += Math.max(0, 15 * tDone - (S.pen[k] || 0));
+  }
+  const allQ = [1, 2, 3].flatMap(k => QS[k].map(q => q.id));
+  const qp = allQ.reduce((s, id) => s + ((S.q[id] && S.q[id].pts) || 0), 0);
+  const qsScore = 30 * qp / (allQ.length * 2);
+  const qzScore = QZ.filter((q, i) => S.quiz[i] === q[2]).length * 5;
+  const hp = Math.min(5, S.hints * 0.5);
+  return {
+    proc: Math.round(proc),
+    qs: Math.round(qsScore),
+    qz: qzScore,
+    hp,
+    tot: clamp(Math.round(proc + qsScore + qzScore - hp), 0, 100)
+  };
+}
+
+function emulChart() {
+  return LabUI.svgChart({
+    title: "Emulsiyalarning qavatlarga ajralish vaqti (barqarorlik)",
+    yl: "Barqarorlik (ball)",
+    y0: 0, ym: 100, sy: 25,
+    bars: [
+      { l: "Benzol+H₂O", y: S.s3.aShaken1 ? 8 : 0, c: "#d64545", val: S.s3.aShaken1 ? "~10 s" : "—" },
+      { l: "Benzol+sovun", y: S.s3.aStable ? 92 : 0, c: "#1f9d6b", val: S.s3.aStable ? "Barqaror" : "—" },
+      { l: "Moy+bura", y: S.s3.bStable ? 95 : 0, c: "#e89b3c", val: S.s3.bStable ? "Barqaror" : "—" }
+    ]
+  });
+}
+
+function reportHTML() {
+  const g = total();
+  const mark = g.tot >= 86 ? "aʼlo (5)" : g.tot >= 71 ? "yaxshi (4)" : g.tot >= 56 ? "qoniqarli (3)" : "qoniqarsiz (2)";
+  return `<div class="rep">
+    <h2>2-laboratoriya ishi hisoboti</h2>
+    <div class="sub">Kolloid sistemalarni disperslash usulida olinishi · ${new Date().toLocaleDateString("uz-UZ")}</div>
+    <div class="score"><div class="n">${g.tot}</div><div>/100 ball<br><b>${mark}</b></div></div>
+    <div class="box"><h4>Ball tarkibi</h4>
+      <div class="kv"><span>Amaliy tajriba texnikasi (3 bosqich)</span><b>${g.proc}/45</b></div>
+      <div class="kv"><span>Bosqich nazorat savollari (6 ta)</span><b>${g.qs}/30</b></div>
+      <div class="kv"><span>Yakuniy nazorat testi (5 ta)</span><b>${g.qz}/25</b></div>
+      ${g.hp ? `<div class="kv"><span>Maslahat jarimasi (${S.hints})</span><b>−${g.hp}</b></div>` : ""}
+    </div>
+    <div class="box"><h4>Tajribalar natijalari</h4>
+      <table class="j">
+        <tr><th>Tajriba</th><th>Reaktiv / sharoit</th><th>Natija</th></tr>
+        <tr><td>H₂SnO₃ yuvish</td><td>3 marta dekantatsiya + AgNO₃</td><td>${S.s1.tested[2] ? "Cl⁻ yoʻq (−)" : "—"}</td></tr>
+        <tr><td>Peptizatsiya</td><td>${S.s2.pept} + koʻp H₂O</td><td>${S.s2.shaken ? "Opalesent zol" : "—"}</td></tr>
+        <tr><td>Benzol emulsiyasi</td><td>50 ml H₂O + 10 ml C₆H₆ + 10 ml sovun</td><td>${S.s3.aStable ? "Barqaror M/S" : "—"}</td></tr>
+        <tr><td>Pista moyi emulsiyasi</td><td>${f1(S.s3.bMass, 2)} g bura + 95 ml H₂O + moy</td><td>${S.s3.bStable ? "Barqaror M/S" : "—"}</td></tr>
+      </table>
+      <div style="margin-top:8px">${clDecayChart()}</div>
+      <div style="margin-top:8px">${emulChart()}</div>
+    </div>
+    <div class="box"><h4>Yakuniy nazorat testi (5 savol)</h4>
+      ${QZ.map((q, qi) => `<div class="q"><p>${qi + 1}. ${q[0]}</p>${q[1].map((o, oi) => {
+        const a = S.quiz[qi];
+        let c = "";
+        if (a !== undefined) { if (oi === q[2]) c = "right"; else if (oi === a) c = "wrong"; }
+        return `<button class="${c}" onclick="quizA(${qi},${oi})" ${a !== undefined ? "disabled" : ""}>${o}</button>`;
+      }).join("")}</div>`).join("")}
+    </div>
+    <div class="box"><h4>Xulosa</h4>
+      <div class="note">Stannat kislota choʻkmasi (H₂SnO₃) qaynoq suv bilan dekantatsiya qilinib Cl⁻ ionlaridan tozalangach, oz miqdor peptizator (0,1 n HCl yoki 1 n NaOH) taʼsirida kolloid zolga oʻtkazildi. Benzol va pista moyi misolida barqaror «moy/suv» emulsiyalarini olish uchun faza chegarasida adsorbsion himoya qavati hosil qiluvchi emulgatorlar (sovun, bura) zarurligi tasdiqlandi.</div>
+    </div>
+    <div class="row noprint">
+      <button class="dark" onclick="window.print()">🖨 Chop etish / PDF</button>
+      <button class="ghost" onclick="if(confirm('Ishni qaytadan boshlaysizmi?'))location.reload()">↺ Qaytadan boshlash</button>
+    </div>
+  </div>`;
+}
+
+function quizA(qi, oi) {
+  if (S.quiz[qi] !== undefined) return;
+  S.quiz[qi] = oi;
+  SFX.play(oi === QZ[qi][2] ? "ok" : "err");
+  renderPanel();
+}
+
+/* ============ NAVIGATSIYA ============ */
+function goStage(n) {
+  if (n > S.unlocked) return;
+  S.stage = n;
+  SFX.play("paper");
+  renderPanel();
+  el("panel").scrollTop = 0;
+}
+function nextStage() {
+  const n = S.stage + 1;
+  if (n > S.unlocked) S.unlocked = n;
+  goStage(n);
+}
+function renderTabs() {
+  el("tabs").innerHTML = STG.slice(1).map((x, i) => {
+    const n = i + 1;
+    const d = n <= 3 ? stageDone(n) : Object.keys(S.quiz).length === QZ.length;
+    return `<button class="${n === S.stage ? "cur" : ""} ${d ? "done" : ""}" ${n > S.unlocked ? "disabled" : ""} onclick="goStage(${n})" title="${x.t}">${d ? "✓ " : ""}${n} · ${x.s}</button>`;
+  }).join("");
+  const sc = total().tot;
+  el("chip").textContent = sc + " ball";
+  LabProgress.save(LAB_ID, sc, stageDone(1) && stageDone(2) && stageDone(3));
+}
+
+/* ============ MODALLAR ============ */
+function showIntro() {
+  modal(`<h1>⚗️ 2-laboratoriya: Disperslash va peptizatsiya</h1>
+    <p style="color:var(--muted)">Kolloid sistemalarni disperslash (peptizatsiya va emulsiyalash) usulida olish</p>
+    <h3>Ishdan maqsad</h3>
+    <ul>
+      <li>Peptizatsiya yordamida H₂SnO₃ zolini olish hamda uning reaksiya va mitsella formulasini tuzish.</li>
+      <li>Emulgatorlar (2% sovun va kristallik bura) ishtirokida barqaror benzol va pista moyi emulsiyalarini tayyorlash.</li>
+    </ul>
+    <h3>3 ta amaliy bosqich</h3>
+    <ul>
+      <li><b>1-bosqich:</b> Qaynoq suvda SnCl₄ gidrolizi, 3 marta dekantatsiya va AgNO₃ bilan Cl⁻ sinovi.</li>
+      <li><b>2-bosqich:</b> 0,1 n HCl yoki 1 n NaOH bilan peptizatsiya qilib H₂SnO₃ zolini olish.</li>
+      <li><b>3-bosqich:</b> Benzol + sovun hamda ZEC 21 tarozida 4–5 g bura + pista moyi emulsiyalari.</li>
+    </ul>
+    <div class="row" style="margin-top:16px">
+      <button class="pri" style="padding:11px 18px" onclick="closeModal();SFX.play('fanfare')">Laboratoriyani boshlash →</button>
+    </div>`);
+}
+
+function showTheory() {
+  modal(`<h1>📘 Nazariy maʼlumotlar (2-laboratoriya)</h1>
+    <h3>1. Stannat kislota choʻkmasini olish va peptizatsiya</h3>
+    <div class="eq">SnCl₄ + 4H₂O → 4HCl + Sn(OH)₄↓ &nbsp;&nbsp;;&nbsp;&nbsp; Sn(OH)₄ → H₂SnO₃↓ + H₂O</div>
+    <p>Yuvilgan gʻovak choʻkmaga oz miqdor peptizator (NaOH yoki HCl) qoʻshilganda sirtda stabilizator tuzi hosil boʻladi:</p>
+    <div class="eq">H₂SnO₃ + 2NaOH → Na₂SnO₃ + 2H₂O</div>
+    <div class="eq">H₂SnO₃ + 2HCl → SnOCl₂ + 2H₂O</div>
+    <p>Kislotali peptizatsiyada mitsella koʻrinishi:</p>
+    <div class="eq">{[H₂SnO₃]ₘ · nSnO²⁺ · 2(n−x)Cl⁻}²ˣ⁺ · 2xCl⁻</div>
+    <h3>2. Emulsiyalar va emulgatorlar</h3>
+    <p>Bir-birida erimaydigan ikki suyuqlikdan (benzol + suv, pista moyi + suv) barqaror emulsiya hosil qilish uchun emulgator (sovun yoki bura) qoʻshiladi. Emulgator molekulalari faza chegarasida adsorbsion qavat hosil qilib, tomchilarning qoʻshilib ketishiga (koalessensiyaga) yoʻl qoʻymaydi:</p>
+    <div class="eq">n(R–COONa) ⇌ nRCOO⁻ + nNa⁺</div>
+    <div class="eq">[C₆H₆]ₘ + nRCOO⁻ + nNa⁺ → {[C₆H₆]ₘ · nRCOO⁻}ⁿ⁻ · nNa⁺</div>
+    ${LabUI.refsHTML()}
+    <div class="row" style="margin-top:14px"><button class="pri" onclick="closeModal()">Yopish</button></div>`);
+}
+
+function showJournal() {
+  modal(`<h1>📋 Laboratoriya jurnali</h1>
+    <table class="j">
+      <tr><th>Bosqich</th><th>Holat</th><th>Jarima</th></tr>
+      <tr><td>1 · H₂SnO₃ & dekantatsiya</td><td>Choʻkma: ${S.s1.precipDone ? "✓" : "—"}, Yuvish: ${S.s1.washes}/3, AgNO₃: ${S.s1.tested.filter(Boolean).length}/3</td><td>${S.pen[1]}</td></tr>
+      <tr><td>2 · Peptizatsiya</td><td>Peptizator: ${S.s2.pept} (${S.s2.drops} t), Zol: ${S.s2.shaken ? "✓" : "—"}</td><td>${S.pen[2]}</td></tr>
+      <tr><td>3 · Emulsiyalar</td><td>A (benzol): ${S.s3.aStable ? "✓" : "—"}, B (bura ${f1(S.s3.bMass, 2)} g + moy): ${S.s3.bStable ? "✓" : "—"}</td><td>${S.pen[3]}</td></tr>
+    </table>
+    ${S.events.length ? `<h3>Ogohlantirishlar</h3><ul>${S.events.map(e => `<li>${e.st}-bosqich: ${e.msg}</li>`).join("")}</ul>` : "<p class='note' style='margin-top:10px'>Xatolik qayd etilmagan.</p>"}
+    <div class="row" style="margin-top:14px"><button class="pri" onclick="closeModal()">Yopish</button></div>`);
+}
+
+function smartHint() {
+  S.hints++;
+  SFX.play("beep");
+  let msg = "";
+  if (S.stage === 1) {
+    if (!S.s1.precipDone) msg = "1 n SnCl₄ shishasini 3 marta bosib qaynoq suvga tomizing.";
+    else if (S.s1.washes === 0 || (S.s1.tested[S.s1.washes - 1] && S.s1.washes < 3)) msg = "«Qaynoq suv bilan dekantatsiya» tugmasini bosing.";
+    else if (!S.s1.tested.every(Boolean)) msg = "Yuvish suvini tekshirish uchun shtativdagi navbatdagi probirkani bosing (+0,1 n AgNO₃).";
+    else msg = "2 ta nazorat savoliga javob bering va 2-bosqichga oʻting.";
+  } else if (S.stage === 2) {
+    if (S.s2.drops < 3) msg = "0,1 n HCl yoki 1 n NaOH dan kamida 3 tomchi qoʻshing.";
+    else if (!S.s2.diluted) msg = "«Suv bilan suyultirish» tugmasini bosing.";
+    else if (!S.s2.shaken) msg = "«Chayqatish» tugmasini bosing — choʻkma opalesent zolga aylanadi.";
+    else msg = "Savollarga javob bering va 3-bosqichga oʻting.";
+  } else if (S.stage === 3) {
+    if (!S.s3.aStable) msg = "A qismda: 50 ml suv + 10 ml benzol → chayqatish → 10 ml 2% sovun → yana qattiq chayqatish.";
+    else if (!S.s3.bStable) msg = "B qismga oʻting: ZEC 21 tarozida 4,0–5,0 g bura torting, 95 ml suvda isitib eriting, 2,5 ml pista moyi qoʻshib chayqating.";
+    else msg = "Savollarga javob bering va hisobotga oʻting.";
+  } else {
+    msg = "5 ta yakuniy nazorat savolini bajaring va hisobotni chop eting.";
+  }
+  toast("💡 " + msg, "warn", 4200);
+  renderTabs();
+}
+
+/* ============ ANIMATSIYA (rAF) ============ */
+let lastTs = 0;
+function tick(ts) {
+  const dt = Math.min(0.05, (ts - lastTs) / 1000 || 0.016);
+  lastTs = ts;
+  S.anim.t += dt;
+
+  if (S.stage === 1) {
+    if (S.s1.tiltT > 0) {
+      S.s1.tiltT = Math.max(0, S.s1.tiltT - dt);
+      const ang = Math.sin(S.s1.tiltT * Math.PI) * 18;
+      const bk = el("beaker1");
+      if (bk) bk.setAttribute("transform", `translate(290,382) rotate(${ang.toFixed(1)},0,-60)`);
+    }
+    const bg = el("boilBub1");
+    if (bg && !S.s1.precipDone) {
+      if (Math.random() < 0.35) S.anim.bubbles.push({ x: (Math.random() - 0.5) * 100, y: -4, r: 2 + Math.random() * 2.6, vy: 34 + Math.random() * 32 });
+      S.anim.bubbles = S.anim.bubbles.filter(b => { b.y -= b.vy * dt; return b.y > -88; });
+      bg.innerHTML = S.anim.bubbles.map(b => `<circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="${b.r.toFixed(1)}" fill="rgba(255,255,255,0.55)"/>`).join("");
+    }
+  }
+
+  if (S.stage === 2 && S.s2.shakeT > 0) {
+    S.s2.shakeT = Math.max(0, S.s2.shakeT - dt);
+    const ang = Math.sin(S.s2.shakeT * 34) * 9 * (S.s2.shakeT / 1.15);
+    const pf = el("peptFlask");
+    if (pf) pf.setAttribute("transform", `translate(430,478) rotate(${ang.toFixed(1)},0,-80)`);
+  }
+
+  if (S.stage === 3) {
+    if (S.s3.aShakeT > 0) {
+      S.s3.aShakeT = Math.max(0, S.s3.aShakeT - dt);
+      const ang = Math.sin(S.s3.aShakeT * 34) * 10 * (S.s3.aShakeT / 1.1);
+      const cA = el("cylA");
+      if (cA) cA.setAttribute("transform", `translate(310,478) rotate(${ang.toFixed(1)},0,-140)`);
+    }
+    // Sovunsiz benzol+suv asta-sekin 2 qavatga ajraladi
+    if (S.s3.aShaken1 && !S.s3.aStable && S.s3.aSepPhase < 1) {
+      S.s3.aSepPhase = Math.min(1, S.s3.aSepPhase + dt * 0.28);
+      if (S.s3.sub === "A" && Math.floor(S.anim.t * 12) !== Math.floor((S.anim.t - dt) * 12)) renderScene();
+    }
+    if (S.s3.bShakeT > 0) {
+      S.s3.bShakeT = Math.max(0, S.s3.bShakeT - dt);
+      const ang = Math.sin(S.s3.bShakeT * 34) * 10 * (S.s3.bShakeT / 1.15);
+      const cB = el("cylB");
+      if (cB) cB.setAttribute("transform", `translate(690,478) rotate(${ang.toFixed(1)},0,-140)`);
+    }
+  }
+
+  const fx = el("fxLayer");
+  if (fx && S.anim.drops.length) {
+    S.anim.drops = S.anim.drops.filter(d => {
+      d.vy += 420 * dt;
+      d.y += d.vy * dt;
+      return d.y < d.targetY;
+    });
+    fx.innerHTML = S.anim.drops.map(d => `<ellipse cx="${d.x}" cy="${d.y.toFixed(1)}" rx="${d.r * 0.78}" ry="${d.r * 1.22}" fill="${d.color}" stroke="#4a6369" stroke-width="0.8"/>`).join("");
+  } else if (fx && fx.innerHTML) {
+    fx.innerHTML = "";
+  }
+
+  requestAnimationFrame(tick);
+}
+
+/* ============ ISHGA TUSHIRISH ============ */
+LabUI.initShell(LAB_ID);
+el("btnTable").addEventListener("click", showJournal);
+el("btnHint").addEventListener("click", smartHint);
+el("btnTheory").addEventListener("click", showTheory);
+renderPanel();
+showIntro();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

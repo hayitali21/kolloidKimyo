@@ -1,0 +1,1580 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="author" content="Qayumov Hayitali">
+<meta name="description" content="4-laboratoriya ishi: Dispers sistemalarning elektr xossalari. Loy elektroforezi, AgBr zollari zaryad ishorasini va kolloid zarrachalar harakatchanligini aniqlash.">
+<title>4-laboratoriya: Elektroforez va zarracha zaryadi — Kolloid Kimyo</title>
+<link rel="stylesheet" href="../assets/lab-core.css">
+<style>
+  .calc-row { display:flex; gap:6px; align-items:center; margin-top:6px; }
+  .calc-row input[type=text], .calc-row input[type=number] {
+    flex:1; min-width:0; padding:8px 10px; border-radius:9px;
+    border:1.5px solid var(--line); font-family:var(--mono); font-size:13px;
+    background:#fff; color:var(--ink);
+  }
+  .calc-row input:focus { outline:none; border-color:var(--accent); }
+  .pill-row { display:flex; gap:6px; flex-wrap:wrap; margin:6px 0; }
+  .pill-row button { flex:1; min-width:90px; font-size:12.5px; padding:8px 8px; }
+  .micelle {
+    font-family:var(--mono); font-size:11.8px; background:#edf5f3;
+    border:1px solid var(--line); border-radius:8px; padding:7px 9px;
+    margin:5px 0; color:#10383e; line-height:1.45; overflow-x:auto;
+  }
+</style>
+</head>
+<body>
+<header class="lab-head">
+  <a class="home-link" href="../index.html">← Bosh sahifa</a>
+  <div class="lab-switch-wrap" id="labSwitchWrap"></div>
+  <div class="brand">4-lab · Elektroforez va zaryad<small>Dispers sistemalarning elektr xossalari</small></div>
+  <nav class="tabs" id="tabs"></nav>
+  <div class="scorechip" id="chip">0 ball</div>
+</header>
+
+<main class="lab-main">
+  <div id="stageWrap">
+    <svg id="scene" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+  <aside id="panel"></aside>
+</main>
+
+<footer class="lab-foot">
+  <span class="lbl">VAQT TEZLIGI</span>
+  <button data-sp="1">×1</button>
+  <button data-sp="10">×10</button>
+  <button data-sp="30">×30</button>
+  <button data-sp="60">×60</button>
+  <span class="sp"></span>
+  <button id="btnTable">📋 Jurnal</button>
+  <button id="btnHint">💡 Maslahat</button>
+  <button id="btnTheory">📘 Nazariya</button>
+  <button id="btnSnd">🔊 Ovoz</button>
+  <button id="btnFull">⛶</button>
+  <a class="ig-credit" href="https://instagram.com/hayitali1612" target="_blank" rel="noopener noreferrer" title="Instagram: @hayitali1612">hayitali1612</a>
+</footer>
+
+<div id="toasts"></div>
+<div id="modal"><div class="card" id="modalCard"></div></div>
+
+<script src="../assets/lab-core.js"></script>
+<script>
+"use strict";
+const LAB_ID = 4;
+const { el, clamp, lerp, f1, shuf, toast, modal, closeModal, svgChart, refsHTML } = LabUI;
+
+/* ============ HOLAT (STATE) ============ */
+const S = {
+  stage: 0, // 0: Loy, 1: AgBr zaryadi, 2: Harakatchanlik, 3: Hisobot
+  speed: 10,
+  // 1-tajriba: Loy (gil) elektroforezi (28-rasm)
+  s1: {
+    tubes: false,
+    sand: false,
+    water: false,
+    electrodes: false,
+    power: false,
+    tMin: 0,          // daqiqa (0..12)
+    chargeGuess: null, // "-", "+", "0"
+    chargeOk: false,
+    q: {}
+  },
+  // 2-tajriba: AgBr zollari (29-rasm)
+  s2: {
+    activeSol: "A", // "A" (Ag+ ortiqcha, +) yoki "B" (Br- ortiqcha, -)
+    solA: { kbr: false, agno3: false, mixed: false, loaded: false, elec: false, power: false, tMin: 0, guess: null, ok: false },
+    solB: { kbr: false, agno3: false, mixed: false, loaded: false, elec: false, power: false, tMin: 0, guess: null, ok: false },
+    q: {}
+  },
+  // 3-tajriba: Kolloid zarrachalarning harakatchanligi (30-rasm)
+  s3: {
+    solType: "FeOH3", // Fe(OH)3 (+) yoki As2S3 (-)
+    waterFilled: false,
+    solLayered: false,
+    bridges: false,
+    baseMarked: false,
+    power: false,
+    V: 100,       // kuchlanish, V
+    l: 24.0,      // agar-agar ko'priklar orasidagi U-nay uzunligi, sm
+    tMin: 0,      // daqiqa
+    S_cm: 0,      // siljish, sm
+    records: [],  // { tMin, S_cm, V, l }
+    uInput: "",
+    uChecked: false,
+    uOk: false,
+    q: {}
+  },
+  quiz: {}
+};
+
+// Haqiqiy harakatchanlik qiymatlari (sm^2 / (V * min))
+// Fe(OH)3: ~3.5e-4 sm^2/(V*s) = 0.0210 sm^2/(V*min)
+// As2S3:   ~4.2e-4 sm^2/(V*s) = 0.0252 sm^2/(V*min)
+const SOL_PROPS = {
+  FeOH3: {
+    name: "Fe(OH)₃ zoli",
+    charge: "+",
+    color: "#a83a1b",
+    colorLight: "#d1623e",
+    U_min: 0.0210, // sm^2 / (V * min)
+    dir: -1 // chap tirsak Katod (-) tomon ko'tariladi
+  },
+  As2S3: {
+    name: "As₂S₃ zoli",
+    charge: "−",
+    color: "#d4a71c",
+    colorLight: "#ebd05e",
+    U_min: 0.0252,
+    dir: 1 // o'ng tirsak Anod (+) tomon ko'tariladi
+  }
+};
+
+/* ============ SAVOLLAR ============ */
+const STAGE_QS = {
+  0: [
+    {
+      id: "s1q1",
+      p: "1. Loy (gil) elektroforezida nega aynan musbat elektrod (anod) tushirilgan naydagi suv loyqalandi?",
+      opts: [
+        "Loy zarrachalari manfiy (−) zaryadlangan boʻlib, elektr maydonda anod (+) tomon koʻtariladi",
+        "Anodda mis eriydi va suvni loyqalantiradi",
+        "Loy zarrachalari musbat (+) zaryadlangan boʻlib, anoddan itariladi",
+        "Qum qatlami faqat anod nayida erib ketadi"
+      ],
+      ok: 0
+    },
+    {
+      id: "s1q2",
+      p: "2. Anod (+) nayida suv sathining pasayishi va katod (−) nayida koʻtarilishi qaysi elektrokinetik hodisani koʻrsatadi?",
+      opts: [
+        "Elektroosmos — dispersion muhit (suv) ning gʻovak loy orqali katod (−) tomon siljishi",
+        "Sedimentatsiya — ogʻirlik kuchi taʼsirida choʻkish",
+        "Dializ — ionlarning yarimoʻtkazgich parda orqali oʻtishi",
+        "Koagullanish — zarrachalarning yiriklashuvi"
+      ],
+      ok: 0
+    }
+  ],
+  1: [
+    {
+      id: "s2q1",
+      p: "1. AgBr zoli tayyorlanganda qaysi ionlar potensial belgilovchi ion sifatida yadro sirtiga adsorbsiyalanadi?",
+      opts: [
+        "Eritmada ortiqcha boʻlgan va yadro kristall panjarasiga kiruvchi ionlar (Ag⁺ yoki Br⁻)",
+        "Har doim faqat K⁺ kationlari",
+        "Faqat distillangan suv molekulalari",
+        "NO₃⁻ ionlari yadro tarkibiga kiradi"
+      ],
+      ok: 0
+    },
+    {
+      id: "s2q2",
+      p: "2. 5 ml 0,1 n KBr + 4 ml 0,1 n AgNO₃ aralashtirilganda hosil boʻlgan AgBr zoli qaysi elektrodga qarab harakatlanadi?",
+      opts: [
+        "Anod (+) tomon, chunki KBr ortiqcha boʻlib mitsella manfiy (−) zaryadlanadi",
+        "Katod (−) tomon, chunki Ag⁺ ortiqcha qoladi",
+        "Harakatlanmaydi, chunki elektroneytral",
+        "Har ikki elektrodga teng tarqaladi"
+      ],
+      ok: 0
+    }
+  ],
+  2: [
+    {
+      id: "s3q1",
+      p: "1. Harakatchanlikni oʻlchashda (30-rasm) mis elektrodlarni toʻgʻridan-toʻgʻri zolga emas, balki agar-agar koʻprikchalar orqali CuSO₄ eritmasiga tushirishning sababi nima?",
+      opts: [
+        "Elektrodlarning qutblanishini va elektroliz mahsulotlari zol–suv chegarasini buzishini oldini olish uchun",
+        "Kuchlanishni ikki baravar oshirish uchun",
+        "Zolni sovutib turish uchun",
+        "Agar-agar zol zaryadini oʻzgartirishi uchun"
+      ],
+      ok: 0
+    },
+    {
+      id: "s3q2",
+      p: "2. U = S·l / (V·t) formulaga koʻra, kuchlanish V 2 marta oshirilsa (l va t oʻzgarmas boʻlganda), zol chegarasining siljishi S qanday oʻzgaradi?",
+      opts: [
+        "Taxminan 2 marta ortadi (S ∝ V)",
+        "2 marta kamayadi",
+        "Oʻzgarmaydi",
+        "4 marta kamayadi"
+      ],
+      ok: 0
+    }
+  ]
+};
+
+const QUIZ = [
+  {
+    id: "q1",
+    p: "1. Tashqi elektr maydon taʼsirida dispers faza zarrachalarining suyuq muhitda yoʻnalishli harakatlanishi nima deyiladi?",
+    opts: ["Elektroforez", "Elektroosmos", "Potensial oqim", "Sedimentatsiya"],
+    ok: 0
+  },
+  {
+    id: "q2",
+    p: "2. 3 ml 0,1 n KBr va 5 ml 0,1 n AgNO₃ aralashtirib olingan AgBr zoli mitsellasining toʻgʻri formulasi qaysi?",
+    opts: [
+      "{m[AgBr] · nAg⁺ · (n−x)NO₃⁻}ˣ⁺ · xNO₃⁻",
+      "{m[AgBr] · nBr⁻ · (n−x)K⁺}ˣ⁻ · xK⁺",
+      "{m[AgBr] · nK⁺ · (n−x)Br⁻}ˣ⁺ · xBr⁻",
+      "{m[AgBr] · nNO₃⁻ · (n−x)Ag⁺}ˣ⁻ · xAg⁺"
+    ],
+    ok: 0
+  },
+  {
+    id: "q3",
+    p: "3. AlCl₃ eritmasiga moʻl miqdorda H₂S yuborib Al₂S₃ zoli olindi. Reaksiya sharoitiga koʻra zol granulasining zaryadi qanday boʻladi?",
+    opts: [
+      "Manfiy (−), chunki moʻl H₂S dan S²⁻ (yoki HS⁻) ionlari potensial belgilovchi ion boʻladi",
+      "Musbat (+), chunki Al³⁺ ortiqcha",
+      "Neytral (0)",
+      "Musbat (+), chunki Cl⁻ adsorbsiyalanadi"
+    ],
+    ok: 0
+  },
+  {
+    id: "q4",
+    p: "4. Kolloid zarrachalarning elektroforetik harakatchanligi U qaysi formula bilan hisoblanadi?",
+    opts: [
+      "U = (S · l) / (V · t)",
+      "U = (V · t) / (S · l)",
+      "U = (S · V) / (l · t)",
+      "U = (S · t) / (V · l)"
+    ],
+    ok: 0
+  },
+  {
+    id: "q5",
+    p: "5. Qoʻsh elektr qavatda yadro + potensial belgilovchi ionlar + adsorbsion qavatdagi qarama-qarshi ionlar birgalikda nima deb ataladi?",
+    opts: ["Granula (kolloid zarracha)", "Intermitsellyar suyuqlik", "Diffuzion qavat", "Koagulyat"],
+    ok: 0
+  }
+];
+
+/* ============ BALLAR HISOBI (0..100) ============ */
+function total() {
+  // Stage 1: 18 amaliy + 6 savol = 24
+  let p1 = 0;
+  if (S.s1.tubes) p1 += 3;
+  if (S.s1.sand) p1 += 3;
+  if (S.s1.water) p1 += 3;
+  if (S.s1.electrodes) p1 += 3;
+  if (S.s1.tMin >= 3) p1 += 3;
+  if (S.s1.chargeOk) p1 += 3;
+  let q1 = STAGE_QS[0].reduce((a, q) => a + (S.s1.q[q.id] === q.ok ? 3 : 0), 0);
+
+  // Stage 2: 20 amaliy + 6 savol = 26
+  let p2 = 0;
+  if (S.s2.solA.mixed) p2 += 3;
+  if (S.s2.solA.tMin >= 2) p2 += 3;
+  if (S.s2.solA.ok) p2 += 4;
+  if (S.s2.solB.mixed) p2 += 3;
+  if (S.s2.solB.tMin >= 2) p2 += 3;
+  if (S.s2.solB.ok) p2 += 4;
+  let q2 = STAGE_QS[1].reduce((a, q) => a + (S.s2.q[q.id] === q.ok ? 3 : 0), 0);
+
+  // Stage 3: 24 amaliy + 6 savol = 30
+  let p3 = 0;
+  if (S.s3.waterFilled) p3 += 3;
+  if (S.s3.solLayered) p3 += 4;
+  if (S.s3.bridges) p3 += 4;
+  if (S.s3.baseMarked) p3 += 3;
+  if (S.s3.records.length >= 1) p3 += 5;
+  if (S.s3.uOk) p3 += 5;
+  let q3 = STAGE_QS[2].reduce((a, q) => a + (S.s3.q[q.id] === q.ok ? 3 : 0), 0);
+
+  // Quiz: 5 * 4 = 20
+  let qz = QUIZ.reduce((a, q) => a + (S.quiz[q.id] === q.ok ? 4 : 0), 0);
+
+  const tot = p1 + q1 + p2 + q2 + p3 + q3 + qz;
+  return { p1, q1, p2, q2, p3, q3, qz, tot };
+}
+
+function stageDone(i) {
+  if (i === 0) return S.s1.chargeOk && STAGE_QS[0].every(q => S.s1.q[q.id] === q.ok);
+  if (i === 1) return S.s2.solA.ok && S.s2.solB.ok && STAGE_QS[1].every(q => S.s2.q[q.id] === q.ok);
+  if (i === 2) return S.s3.uOk && STAGE_QS[2].every(q => S.s3.q[q.id] === q.ok);
+  return false;
+}
+
+/* ============ TABLAR VA PROGRESS ============ */
+const TAB_NAMES = ["1. Loy elektroforezi", "2. AgBr zaryadi", "3. Harakatchanlik", "4. Hisobot"];
+function renderTabs() {
+  const t = total();
+  const doneAll = stageDone(0) && stageDone(1) && stageDone(2) && QUIZ.every(q => S.quiz[q.id] !== undefined);
+  el("chip").textContent = `${t.tot} / 100 ball`;
+  el("tabs").innerHTML = TAB_NAMES.map((nm, i) => {
+    const cls = [S.stage === i ? "cur" : "", (i < 3 && stageDone(i)) || (i === 3 && doneAll) ? "done" : ""].join(" ");
+    return `<button class="${cls}" onclick="goStage(${i})">${nm}</button>`;
+  }).join("");
+  LabProgress.save(LAB_ID, t.tot, doneAll || t.tot >= 75);
+}
+
+window.goStage = function(i) {
+  SFX.play("click");
+  S.stage = i;
+  renderAll();
+};
+
+/* ============ ANIMATSIYA (requestAnimationFrame) ============ */
+let lastTs = performance.now();
+let animPhase = 0;
+
+function tick(now) {
+  const dt = Math.min(0.08, (now - lastTs) / 1000);
+  lastTs = now;
+  animPhase += dt;
+
+  let needPanelQuickUpdate = false;
+
+  // Stage 1: Loy elektroforezi (0..12 min)
+  if (S.s1.power && S.s1.tMin < 12) {
+    const prevInt = Math.floor(S.s1.tMin);
+    S.s1.tMin = clamp(S.s1.tMin + dt * (S.speed / 12), 0, 12);
+    if (Math.floor(S.s1.tMin) !== prevInt) needPanelQuickUpdate = true;
+    if (S.s1.tMin >= 12) {
+      S.s1.power = false;
+      SFX.play("bell");
+      toast("12 daqiqa oʻtdi! Anod (+) nayidagi suv kuchli loyqalandi, sathi pasaydi. Zaryadni belgilang.", "ok", 4500);
+      needPanelQuickUpdate = true;
+    }
+  }
+
+  // Stage 2: AgBr elektroforezi (0..8 min)
+  const cur2 = S.s2.activeSol === "A" ? S.s2.solA : S.s2.solB;
+  if (cur2.power && cur2.tMin < 8) {
+    const prevInt = Math.floor(cur2.tMin);
+    cur2.tMin = clamp(cur2.tMin + dt * (S.speed / 12), 0, 8);
+    if (Math.floor(cur2.tMin) !== prevInt) needPanelQuickUpdate = true;
+    if (cur2.tMin >= 8) {
+      cur2.power = false;
+      SFX.play("bell");
+      toast(`Zol ${S.s2.activeSol} chegarasi aniq siljidi! Zaryad ishorasini tanlang.`, "ok", 4000);
+      needPanelQuickUpdate = true;
+    }
+  }
+
+  // Stage 3: Harakatchanlik (0..40 min)
+  if (S.s3.power && S.s3.tMin < 40) {
+    const prevHalf = Math.floor(S.s3.tMin * 2);
+    S.s3.tMin = clamp(S.s3.tMin + dt * (S.speed / 10), 0, 40);
+    const prop = SOL_PROPS[S.s3.solType];
+    // S = U_min * V * tMin / l
+    S.s3.S_cm = (prop.U_min * S.s3.V * S.s3.tMin) / S.s3.l;
+    if (Math.floor(S.s3.tMin * 2) !== prevHalf) needPanelQuickUpdate = true;
+    if (S.s3.tMin >= 40) {
+      S.s3.power = false;
+      SFX.play("bell");
+      toast("40 daqiqa toʻldi. Natijani jurnalga qayd etib harakatchanlikni hisoblang.", "ok");
+      needPanelQuickUpdate = true;
+    }
+  }
+
+  updateSceneLive();
+  if (needPanelQuickUpdate) {
+    updateLiveNumbers();
+  }
+  requestAnimationFrame(tick);
+}
+
+function updateLiveNumbers() {
+  if (S.stage === 0) {
+    const e = el("s1Clock");
+    if (e) e.innerHTML = `${f1(S.s1.tMin, 1)} min<small>Elektroforez vaqti (2 V)</small>`;
+    const obs = el("s1Obs");
+    if (obs) {
+      const p = clamp(S.s1.tMin / 10, 0, 1);
+      obs.innerHTML = `<div class="kv"><span>Anod (+) loyqaligi:</span><b>${Math.round(p * 100)}%</b></div>
+        <div class="kv"><span>Anod (+) suv sathi:</span><b>${f1(2.5 - p * 0.6, 2)} sm</b></div>
+        <div class="kv"><span>Katod (−) suv sathi:</span><b>${f1(2.5 + p * 0.6, 2)} sm</b></div>`;
+    }
+    if (S.s1.tMin >= 3 && !el("s1GuessBox")) renderPanel();
+  } else if (S.stage === 1) {
+    const cur = S.s2.activeSol === "A" ? S.s2.solA : S.s2.solB;
+    const e = el("s2Clock");
+    if (e) e.innerHTML = `${f1(cur.tMin, 1)} min<small>100 V kenotron toki · Zol ${S.s2.activeSol}</small>`;
+    if (cur.tMin >= 2 && !el("s2GuessBox")) renderPanel();
+  } else if (S.stage === 2) {
+    const e = el("s3Clock");
+    if (e) e.innerHTML = `t = ${f1(S.s3.tMin, 1)} min · S = ${f1(S.s3.S_cm, 2)} sm<small>V = ${S.s3.V} V · l = ${f1(S.s3.l, 1)} sm</small>`;
+  }
+  renderTabs();
+}
+
+/* ============ SVG SAHNA CHIZISH ============ */
+function commonDefs() {
+  return `<defs>
+    <linearGradient id="wallG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d4e2e0"/><stop offset="100%" stop-color="#b2c7c4"/>
+    </linearGradient>
+    <linearGradient id="benchG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#607c80"/><stop offset="14%" stop-color="#455f63"/><stop offset="100%" stop-color="#2c3f42"/>
+    </linearGradient>
+    <linearGradient id="glassG" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.58"/>
+      <stop offset="24%" stop-color="#ffffff" stop-opacity="0.12"/>
+      <stop offset="78%" stop-color="#dff2f5" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.45"/>
+    </linearGradient>
+    <linearGradient id="clayG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#b56c43"/><stop offset="50%" stop-color="#98532f"/><stop offset="100%" stop-color="#763d20"/>
+    </linearGradient>
+    <linearGradient id="copperG" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f2a679"/><stop offset="50%" stop-color="#c96b38"/><stop offset="100%" stop-color="#8a4018"/>
+    </linearGradient>
+    <linearGradient id="waterG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#c9eef7" stop-opacity="0.72"/><stop offset="100%" stop-color="#9ad8eb" stop-opacity="0.82"/>
+    </linearGradient>
+    <linearGradient id="cuso4G" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4da3f5" stop-opacity="0.8"/><stop offset="100%" stop-color="#1966c2" stop-opacity="0.9"/>
+    </linearGradient>
+    <linearGradient id="agbrG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f7efc4" stop-opacity="0.88"/><stop offset="100%" stop-color="#e3d286" stop-opacity="0.94"/>
+    </linearGradient>
+    <filter id="shd" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#091d20" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+  <rect x="0" y="0" width="1000" height="472" fill="url(#wallG)"/>
+  <g opacity="0.22" stroke="#5d7c7e" stroke-width="1">
+    <line x1="0" y1="115" x2="1000" y2="115"/><line x1="0" y1="230" x2="1000" y2="230"/><line x1="0" y1="345" x2="1000" y2="345"/>
+  </g>
+  <rect x="0" y="468" width="1000" height="132" fill="url(#benchG)"/>
+  <rect x="0" y="466" width="1000" height="5" fill="#82a2a6"/>`;
+}
+
+function renderScene() {
+  const svg = el("scene");
+  if (S.stage === 0) svg.innerHTML = buildScene1();
+  else if (S.stage === 1) svg.innerHTML = buildScene2();
+  else if (S.stage === 2) svg.innerHTML = buildScene3();
+  else svg.innerHTML = buildSceneReport();
+  updateSceneLive();
+}
+
+/* --- SAHNA 1: LOY (GIL) ELEKTROFOREZI (28-rasm) --- */
+function buildScene1() {
+  const s = S.s1;
+  const needTubes = !s.tubes;
+  const needSand = s.tubes && !s.sand;
+  const needWater = s.sand && !s.water;
+  const needElec = s.water && !s.electrodes;
+  const needPower = s.electrodes && !s.power && s.tMin < 3;
+
+  return `${commonDefs()}
+  <text x="28" y="38" font-size="18" font-weight="800" fill="#132629">1-tajriba: Loy (gil) zarrachalarining elektroforezi (28-rasm)</text>
+  <text x="28" y="59" font-size="13" fill="#3b5a5e">8×15×4 sm nam loy boʻlagi · 2 dona shisha nay · 0,5 sm qum · 2–3 sm suv · 2 V batareya</text>
+
+  <!-- Yordamchi reaktivlar (chap tomonda bosiladigan) -->
+  <g class="clk ${needSand ? "glow" : ""}" onclick="act1('sand')" transform="translate(52,330)" filter="url(#shd)">
+    <rect x="0" y="25" width="84" height="105" rx="8" fill="#eef6f7" stroke="#5b787c" stroke-width="2"/>
+    <rect x="6" y="72" width="72" height="52" rx="4" fill="#d9c28c"/>
+    <circle cx="24" cy="92" r="2" fill="#8f7541"/><circle cx="48" cy="105" r="2" fill="#8f7541"/><circle cx="62" cy="88" r="2" fill="#8f7541"/>
+    <rect x="0" y="25" width="84" height="105" rx="8" fill="url(#glassG)"/>
+    <text x="42" y="55" text-anchor="middle" font-size="11.5" font-weight="700" fill="#132629">Yuvilgan</text>
+    <text x="42" y="68" text-anchor="middle" font-size="11.5" font-weight="700" fill="#132629">qum</text>
+    <text x="42" y="148" text-anchor="middle" font-size="11" fill="#edf5f4" font-weight="600">0,5 sm qum</text>
+  </g>
+
+  <g class="clk ${needWater ? "glow" : ""}" onclick="act1('water')" transform="translate(154,310)" filter="url(#shd)">
+    <path d="M22,26 L56,26 L68,58 L68,145 Q68,154 58,154 L20,154 Q10,154 10,145 L10,58 Z" fill="#e8f6f9" stroke="#5b787c" stroke-width="2"/>
+    <path d="M13,82 L65,82 L65,144 Q65,151 58,151 L20,151 Q13,151 13,144 Z" fill="url(#waterG)"/>
+    <path d="M38,26 L38,10 Q38,2 52,2 L78,18" fill="none" stroke="#3c6e78" stroke-width="4" stroke-linecap="round"/>
+    <rect x="26" y="16" width="26" height="12" rx="3" fill="#23545c"/>
+    <text x="39" y="120" text-anchor="middle" font-size="12" font-weight="700" fill="#0d3d4a">H₂O</text>
+    <text x="39" y="170" text-anchor="middle" font-size="11" fill="#edf5f4" font-weight="600">Dist. suv</text>
+  </g>
+
+  <!-- Asosiy loy (gil) bloki 15x8x4 sm -->
+  <g transform="translate(310,362)" filter="url(#shd)">
+    <!-- 3D yuqori sirt -->
+    <polygon points="0,16 32,0 362,0 330,16" fill="#c77e54" stroke="#6d381b" stroke-width="1.6"/>
+    <!-- O'ng yon sirt -->
+    <polygon points="330,16 362,0 362,92 330,108" fill="#7c4222" stroke="#5a2d14" stroke-width="1.6"/>
+    <!-- Old sirt -->
+    <rect x="0" y="16" width="330" height="92" rx="4" fill="url(#clayG)" stroke="#5a2d14" stroke-width="1.8"/>
+    <!-- Loy tekstura nuqtalari -->
+    <g fill="#592b12" opacity="0.32">
+      <circle cx="38" cy="48" r="2.5"/><circle cx="88" cy="82" r="3"/><circle cx="158" cy="56" r="2.2"/>
+      <circle cx="220" cy="88" r="2.8"/><circle cx="288" cy="44" r="2.5"/><circle cx="122" cy="36" r="1.8"/>
+      <circle cx="258" cy="70" r="2"/><circle cx="52" cy="86" r="2.2"/><circle cx="190" cy="42" r="2.5"/>
+    </g>
+    <text x="165" y="72" text-anchor="middle" font-size="15" font-weight="800" fill="#fce4d4">NAM LOY (GIL) — 8 × 15 × 4 sm</text>
+    <text x="165" y="92" text-anchor="middle" font-size="11.5" fill="#f7cfb4">Dispersion faza: manfiy zaryadli silikat zarrachalar</text>
+  </g>
+
+  <!-- 2 dona shisha nay (1-katod, 2-anod) -->
+  <g id="s1TubesGroup" class="clk ${needTubes ? "glow" : ""}" onclick="act1('tubes')">
+    ${s.tubes ? `
+      <!-- 1-nay (Chap, Katod -) -->
+      <g transform="translate(384,168)">
+        <rect x="0" y="0" width="58" height="222" rx="4" fill="#eef9fb" fill-opacity="0.55" stroke="#45676d" stroke-width="2.2"/>
+        <!-- Suv qatlami -->
+        <rect id="s1WaterL" x="2" y="112" width="54" height="82" fill="url(#waterG)" opacity="${s.water ? 1 : 0}"/>
+        <ellipse id="s1MenL" cx="29" cy="112" rx="27" ry="4" fill="#d8f4fb" stroke="#53a4be" stroke-width="1" opacity="${s.water ? 1 : 0}"/>
+        <!-- Qum qatlami (0.5 sm) -->
+        <rect x="2" y="192" width="54" height="26" fill="#d8bf85" opacity="${s.sand ? 1 : 0}"/>
+        <g opacity="${s.sand ? 0.55 : 0}" fill="#7c6332">
+          <circle cx="12" cy="202" r="1.6"/><circle cx="26" cy="210" r="1.8"/><circle cx="42" cy="200" r="1.6"/><circle cx="48" cy="212" r="1.5"/>
+        </g>
+        <!-- Shisha yaltirashi -->
+        <rect x="0" y="0" width="58" height="222" rx="4" fill="url(#glassG)"/>
+        <text x="29" y="-10" text-anchor="middle" font-size="12.5" font-weight="800" fill="#132629">1-nay (−)</text>
+        <text id="s1LblL" x="29" y="246" text-anchor="middle" font-size="11" font-weight="700" fill="#ffe7d6">Tiniq</text>
+      </g>
+
+      <!-- 2-nay (O'ng, Anod +) -->
+      <g transform="translate(528,168)">
+        <rect x="0" y="0" width="58" height="222" rx="4" fill="#eef9fb" fill-opacity="0.55" stroke="#45676d" stroke-width="2.2"/>
+        <!-- Suv qatlami -->
+        <rect id="s1WaterR" x="2" y="112" width="54" height="82" fill="url(#waterG)" opacity="${s.water ? 1 : 0}"/>
+        <!-- Loyqalik qatlami (elektroforez) -->
+        <rect id="s1TurbidR" x="2" y="112" width="54" height="82" fill="#9a5630" opacity="0"/>
+        <g id="s1ClayParticles"></g>
+        <ellipse id="s1MenR" cx="29" cy="112" rx="27" ry="4" fill="#d8f4fb" stroke="#53a4be" stroke-width="1" opacity="${s.water ? 1 : 0}"/>
+        <!-- Qum qatlami -->
+        <rect x="2" y="192" width="54" height="26" fill="#d8bf85" opacity="${s.sand ? 1 : 0}"/>
+        <g opacity="${s.sand ? 0.55 : 0}" fill="#7c6332">
+          <circle cx="14" cy="204" r="1.6"/><circle cx="30" cy="209" r="1.8"/><circle cx="44" cy="201" r="1.6"/>
+        </g>
+        <rect x="0" y="0" width="58" height="222" rx="4" fill="url(#glassG)"/>
+        <text x="29" y="-10" text-anchor="middle" font-size="12.5" font-weight="800" fill="#9c2222">2-nay (+)</text>
+        <text id="s1LblR" x="29" y="246" text-anchor="middle" font-size="11" font-weight="700" fill="#ffe7d6">Tiniq</text>
+      </g>
+    ` : `
+      <!-- O'rnatilmagan 2 ta shisha nay (bosib o'rnatish) -->
+      <g transform="translate(390,120)" opacity="0.88">
+        <rect x="0" y="0" width="52" height="150" rx="4" fill="#eef9fb" stroke="#3c6268" stroke-width="2" stroke-dasharray="6 4"/>
+        <rect x="140" y="0" width="52" height="150" rx="4" fill="#eef9fb" stroke="#3c6268" stroke-width="2" stroke-dasharray="6 4"/>
+        <text x="96" y="82" text-anchor="middle" font-size="13.5" font-weight="800" fill="#132629">Shisha naylarni</text>
+        <text x="96" y="100" text-anchor="middle" font-size="13.5" font-weight="800" fill="#132629">loyga tiqish (bosing)</text>
+      </g>
+    `}
+  </g>
+
+  <!-- Elektroosmos va elektroforez yo'nalish strelkalari -->
+  <g id="s1Arrows" opacity="0">
+    <path d="M518,412 L456,412" stroke="#1888cc" stroke-width="3.5" stroke-linecap="round"/>
+    <polygon points="456,412 468,405 468,419" fill="#1888cc"/>
+    <text x="487" y="404" text-anchor="middle" font-size="10.5" font-weight="800" fill="#d3f3ff">H₂O (osmos)</text>
+
+    <path d="M557,385 L557,315" stroke="#ffcf54" stroke-width="3" stroke-linecap="round" stroke-dasharray="5 3"/>
+    <polygon points="557,308 551,320 563,320" fill="#ffcf54"/>
+  </g>
+
+  <!-- Mis elektrodlar + simlar -->
+  <g class="clk ${needElec ? "glow" : ""}" onclick="act1('electrodes')">
+    ${s.electrodes ? `
+      <rect x="408" y="140" width="10" height="180" rx="3" fill="url(#copperG)" stroke="#63290b" stroke-width="1.2"/>
+      <rect x="552" y="140" width="10" height="180" rx="3" fill="url(#copperG)" stroke="#63290b" stroke-width="1.2"/>
+      <!-- Simlar batareyaga -->
+      <path d="M413,140 L413,92 L772,92 L772,265" fill="none" stroke="#1c2a30" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M557,140 L557,112 L832,112 L832,265" fill="none" stroke="#c83333" stroke-width="3.5" stroke-linejoin="round"/>
+      <circle cx="413" cy="142" r="5" fill="#1c2a30"/>
+      <circle cx="557" cy="142" r="5" fill="#c83333"/>
+      <text x="396" y="138" font-size="13" font-weight="800" fill="#1c2a30">Cu (−)</text>
+      <text x="568" y="138" font-size="13" font-weight="800" fill="#b32424">Cu (+)</text>
+    ` : `
+      <g transform="translate(680,150)" opacity="0.9">
+        <rect x="0" y="0" width="10" height="90" rx="3" fill="url(#copperG)" stroke="#63290b"/>
+        <rect x="22" y="0" width="10" height="90" rx="3" fill="url(#copperG)" stroke="#63290b"/>
+        <text x="16" y="108" text-anchor="middle" font-size="11.5" font-weight="700" fill="#132629">Cu elektrodlar</text>
+      </g>
+    `}
+  </g>
+
+  <!-- 2 V Batareya va kalit -->
+  <g class="clk ${needPower ? "glow" : ""}" onclick="act1('power')" transform="translate(730,265)" filter="url(#shd)">
+    <rect x="0" y="0" width="150" height="190" rx="14" fill="#21353a" stroke="#0d1e22" stroke-width="2.5"/>
+    <rect x="14" y="14" width="122" height="46" rx="8" fill="#0d1f23"/>
+    <text id="s1VoltTxt" x="75" y="37" text-anchor="middle" font-family="var(--mono)" font-size="18" font-weight="700" fill="${s.power ? "#7cf2b6" : "#627f84"}">${s.power ? "2,00 V" : "0,00 V"}</text>
+    <text id="s1StateTxt" x="75" y="53" text-anchor="middle" font-size="10.5" fill="#9fc2c7">${s.power ? "TOK YOQILGAN" : "OʻCHIQ"}</text>
+    <!-- Klemmalar -->
+    <circle cx="42" cy="0" r="8" fill="#1d2528" stroke="#99b1b5" stroke-width="2"/>
+    <text x="42" y="-12" text-anchor="middle" font-size="14" font-weight="800" fill="#132629">−</text>
+    <circle cx="102" cy="0" r="8" fill="#c83333" stroke="#f7b2b2" stroke-width="2"/>
+    <text x="102" y="-12" text-anchor="middle" font-size="14" font-weight="800" fill="#b32424">+</text>
+    <!-- Tugma -->
+    <rect x="26" y="80" width="98" height="42" rx="10" fill="${s.power ? "#1f9d6b" : "#e89b3c"}"/>
+    <text x="75" y="106" text-anchor="middle" font-size="13.5" font-weight="800" fill="${s.power ? "#fff" : "#1b1204"}">${s.power ? "⏸ TOʻXTATISH" : "⚡ TOKNI YOQISH"}</text>
+    <text x="75" y="152" text-anchor="middle" font-size="12" font-weight="700" fill="#d9eae7">2 V BATAREYA</text>
+    <text x="75" y="170" text-anchor="middle" font-size="10.5" fill="#89adb3">Oʻzgarmas tok manbai</text>
+  </g>`;
+}
+
+/* --- SAHNA 2: AgBr ZOLLARI ZARYAD ISHORASI (29-rasm) --- */
+function buildScene2() {
+  const sol = S.s2.activeSol;
+  const cur = sol === "A" ? S.s2.solA : S.s2.solB;
+  const kbrVol = sol === "A" ? "3 ml → 10 ml" : "5 ml → 40 ml";
+  const agVol = sol === "A" ? "5 ml → 40 ml" : "4 ml → 15 ml";
+
+  return `${commonDefs()}
+  <text x="28" y="38" font-size="18" font-weight="800" fill="#132629">2-tajriba: AgBr zollari zaryad ishorasini aniqlash (29-rasm)</text>
+  <text x="28" y="59" font-size="13" fill="#3b5a5e">Faol namuna: Zol ${sol} (${sol === "A" ? "AgNO₃ ortiqcha" : "KBr ortiqcha"}) · 100 V kenotron toʻgʻrilagich</text>
+
+  <!-- Chap taraf: Reaktivlar va Zol tayyorlash kolbasi -->
+  <g class="clk ${!cur.kbr ? "glow" : ""}" onclick="act2('kbr')" transform="translate(36,155)" filter="url(#shd)">
+    <rect x="0" y="20" width="84" height="112" rx="10" fill="#eaf5f7" stroke="#45676d" stroke-width="2"/>
+    <rect x="24" y="0" width="36" height="22" rx="4" fill="#2c4b52"/>
+    <rect x="5" y="58" width="74" height="69" rx="5" fill="#c7e8f5" opacity="0.85"/>
+    <rect x="8" y="68" width="68" height="44" rx="4" fill="#fff" opacity="0.92"/>
+    <text x="42" y="86" text-anchor="middle" font-size="12" font-weight="800" fill="#132629">0,1 n KBr</text>
+    <text x="42" y="102" text-anchor="middle" font-size="10.5" fill="#46696e">${kbrVol}</text>
+  </g>
+
+  <g class="clk ${cur.kbr && !cur.agno3 ? "glow" : ""}" onclick="act2('agno3')" transform="translate(138,155)" filter="url(#shd)">
+    <rect x="0" y="20" width="84" height="112" rx="10" fill="#705031" stroke="#3d2814" stroke-width="2"/>
+    <rect x="24" y="0" width="36" height="22" rx="4" fill="#2c4b52"/>
+    <rect x="8" y="62" width="68" height="48" rx="4" fill="#fff8ec"/>
+    <text x="42" y="81" text-anchor="middle" font-size="11.5" font-weight="800" fill="#47280a">0,1 n AgNO₃</text>
+    <text x="42" y="98" text-anchor="middle" font-size="10.5" fill="#6e4920">${agVol}</text>
+  </g>
+
+  <!-- Tayyorlash kolbasi (Konussimon kolba) -->
+  <g class="clk ${cur.kbr && cur.agno3 && !cur.mixed ? "glow" : ""}" onclick="act2('mix')" transform="translate(66,316)" filter="url(#shd)">
+    <path d="M46,0 L74,0 L74,38 L112,132 Q116,144 102,144 L18,144 Q4,144 8,132 L46,38 Z" fill="#eef8fa" stroke="#45676d" stroke-width="2.2"/>
+    ${cur.kbr || cur.mixed ? `<path d="M${cur.mixed ? 18 : 26},${cur.mixed ? 84 : 112} L${cur.mixed ? 102 : 94},${cur.mixed ? 84 : 112} L109,132 Q112,140 101,140 L19,140 Q8,140 11,132 Z" fill="${cur.mixed ? "url(#agbrG)" : "url(#waterG)"}"/>` : ""}
+    <text x="60" y="128" text-anchor="middle" font-size="11.5" font-weight="800" fill="#3a2f08">${cur.mixed ? `AgBr Zol ${sol}` : cur.kbr ? "KBr tayyor" : "Kolba"}</text>
+    <text x="60" y="164" text-anchor="middle" font-size="11.5" font-weight="700" fill="#edf5f4">${cur.mixed ? "✓ Zol tayyor" : "Aralashtirish"}</text>
+  </g>
+
+  <!-- Markaz: 29-rasm U-simon nay + yon voronka + jo'mrak -->
+  <g transform="translate(320,108)" filter="url(#shd)">
+    <!-- Shtativ tayanchi -->
+    <rect x="135" y="348" width="120" height="12" rx="4" fill="#2c3f44"/>
+    <rect x="190" y="250" width="10" height="100" fill="#4e696f"/>
+    <rect x="115" y="268" width="160" height="10" rx="3" fill="#4e696f"/>
+
+    <!-- Yon voronka va jo'mrak (bosib zol quyish) -->
+    <g class="clk ${cur.mixed && !cur.loaded ? "glow" : ""}" onclick="act2('load')">
+      <!-- Voronka -->
+      <polygon points="10,72 86,72 56,130 40,130" fill="#eef8fa" stroke="#45676d" stroke-width="2"/>
+      ${cur.mixed && !cur.loaded ? `<polygon points="18,86 78,86 55,128 41,128" fill="url(#agbrG)"/>` : ""}
+      <!-- Naycha U-nay tubiga -->
+      <path d="M48,130 L48,295 Q48,318 72,318 L145,318" fill="none" stroke="#45676d" stroke-width="11" stroke-linecap="round"/>
+      <path d="M48,130 L48,295 Q48,318 72,318 L145,318" fill="none" stroke="${cur.loaded ? "#e5d387" : "#eef8fa"}" stroke-width="7" stroke-linecap="round"/>
+      <!-- Jo'mrak -->
+      <circle cx="48" cy="176" r="10" fill="#24484f" stroke="#fff" stroke-width="1.5"/>
+      <rect x="33" y="173" width="30" height="6" rx="2" fill="#e89b3c"/>
+      <text x="48" y="62" text-anchor="middle" font-size="11.5" font-weight="700" fill="#132629">1-voronka</text>
+    </g>
+
+    <!-- U-simon nay korpusi -->
+    <path d="M128,44 L128,274 Q128,324 195,324 Q262,324 262,274 L262,44" fill="none" stroke="#3c5e64" stroke-width="46" stroke-linecap="round"/>
+    <path d="M128,44 L128,274 Q128,324 195,324 Q262,324 262,274 L262,44" fill="none" stroke="#ebf6f8" stroke-width="40" stroke-linecap="round"/>
+
+    <!-- Suyuqlik (yuqori qism: suv/intermitsellyar; pastki qism: AgBr zol) -->
+    ${cur.loaded ? `
+      <clipPath id="uClip2">
+        <path d="M109,52 L147,52 L147,274 Q147,304 195,304 Q243,304 243,274 L243,52 L281,52 L281,346 L109,346 Z"/>
+      </clipPath>
+      <g clip-path="url(#uClip2)">
+        <!-- Tiniq fon suv -->
+        <rect x="108" y="90" width="175" height="255" fill="url(#waterG)"/>
+        <!-- Chap tirsak zol ustuni -->
+        <rect id="s2SolL" x="108" y="175" width="42" height="170" fill="url(#agbrG)"/>
+        <!-- O'ng tirsak zol ustuni -->
+        <rect id="s2SolR" x="240" y="175" width="42" height="170" fill="url(#agbrG)"/>
+        <!-- Pastki yoy zol -->
+        <rect x="108" y="274" width="175" height="72" fill="url(#agbrG)"/>
+        <!-- Chegara chiziqlari -->
+        <line id="s2LineL" x1="108" y1="175" x2="148" y2="175" stroke="#a68112" stroke-width="2.5"/>
+        <line id="s2LineR" x1="242" y1="175" x2="282" y2="175" stroke="#a68112" stroke-width="2.5"/>
+        <!-- Boshlang'ich belgi chiziqlari (punktir) -->
+        <line x1="108" y1="175" x2="148" y2="175" stroke="#132629" stroke-width="1.2" stroke-dasharray="4 3" opacity="0.6"/>
+        <line x1="242" y1="175" x2="282" y2="175" stroke="#132629" stroke-width="1.2" stroke-dasharray="4 3" opacity="0.6"/>
+        <!-- Harakatlanuvchi zarrachalar -->
+        <g id="s2Parts"></g>
+      </g>
+    ` : ""}
+
+    <!-- Shisha tashqi yaltirashi -->
+    <path d="M128,44 L128,274 Q128,324 195,324 Q262,324 262,274 L262,44" fill="none" stroke="url(#glassG)" stroke-width="40" stroke-linecap="round"/>
+
+    <!-- Probkalar va elektrodlar -->
+    <g class="clk ${cur.loaded && !cur.elec ? "glow" : ""}" onclick="act2('elec')">
+      ${cur.elec ? `
+        <rect x="110" y="34" width="36" height="22" rx="4" fill="#8b5a3c" stroke="#4d2e1b"/>
+        <rect x="244" y="34" width="36" height="22" rx="4" fill="#8b5a3c" stroke="#4d2e1b"/>
+        <rect x="125" y="16" width="6" height="120" rx="2" fill="#2c3a40"/>
+        <rect x="259" y="16" width="6" height="120" rx="2" fill="#2c3a40"/>
+        <!-- Simlar -->
+        <path d="M128,16 L128,-8 L465,-8 L465,148" fill="none" stroke="#1d282e" stroke-width="3.2"/>
+        <path d="M262,16 L262,4 L530,4 L530,148" fill="none" stroke="#c83333" stroke-width="3.2"/>
+        <text x="128" y="10" text-anchor="middle" font-size="13" font-weight="800" fill="#132629">Katod (−)</text>
+        <text x="262" y="10" text-anchor="middle" font-size="13" font-weight="800" fill="#b32424">Anod (+)</text>
+      ` : `
+        <rect x="110" y="20" width="36" height="18" rx="4" fill="#8b5a3c" opacity="0.45" stroke="#4d2e1b" stroke-dasharray="3 2"/>
+        <rect x="244" y="20" width="36" height="18" rx="4" fill="#8b5a3c" opacity="0.45" stroke="#4d2e1b" stroke-dasharray="3 2"/>
+        <text x="195" y="32" text-anchor="middle" font-size="11.5" font-weight="700" fill="#132629">2-elektrodlarni oʻrnatish</text>
+      `}
+    </g>
+
+    <!-- Siljish strelkasi (jonli) -->
+    <g id="s2DirArrow" opacity="0"></g>
+  </g>
+
+  <!-- O'ng taraf: 100 V Kenotron to'g'rilagich -->
+  <g class="clk ${cur.elec && !cur.power && cur.tMin < 2 ? "glow" : ""}" onclick="act2('power')" transform="translate(748,256)" filter="url(#shd)">
+    <rect x="0" y="0" width="196" height="200" rx="14" fill="#1b3036" stroke="#0d1b1e" stroke-width="2.5"/>
+    <rect x="16" y="16" width="164" height="54" rx="8" fill="#0b181c"/>
+    <text id="s2Volt" x="98" y="42" text-anchor="middle" font-family="var(--mono)" font-size="22" font-weight="700" fill="${cur.power ? "#8cf5c1" : "#627f84"}">${cur.power ? "100,0 V" : "0,0 V"}</text>
+    <text x="98" y="61" text-anchor="middle" font-size="10.5" fill="#9bc0c4">KENOTRON TOʻGʻRILAGICH</text>
+    <circle cx="37" cy="0" r="8" fill="#1d2528" stroke="#99b1b5" stroke-width="2"/>
+    <circle cx="102" cy="0" r="8" fill="#c83333" stroke="#f7b2b2" stroke-width="2"/>
+    <rect x="24" y="88" width="148" height="44" rx="10" fill="${cur.power ? "#1f9d6b" : "#e89b3c"}"/>
+    <text x="98" y="115" text-anchor="middle" font-size="13.5" font-weight="800" fill="${cur.power ? "#fff" : "#1b1204"}">${cur.power ? "⏸ TOKNI OʻCHIRISH" : "⚡ 100 V TOK BERISH"}</text>
+    <text x="98" y="156" text-anchor="middle" font-size="12" font-weight="700" fill="#d9eae7">Zol ${sol} sinovi</text>
+    <text x="98" y="176" text-anchor="middle" font-size="10.5" fill="#89adb3">Kuchlanish: 100 V DC</text>
+  </g>`;
+}
+
+/* --- SAHNA 3: HARAKATCHANLIKNI ANIQLASH (30-rasm) --- */
+function buildScene3() {
+  const s = S.s3;
+  const prop = SOL_PROPS[s.solType];
+  // Shkala chiziqlari (0..10 sm, y=275 dan y=115 gacha, har sm = 16 px)
+  let ticksL = "", ticksR = "";
+  for (let cm = 0; cm <= 10; cm++) {
+    const y = 275 - cm * 16;
+    const major = cm % 2 === 0;
+    ticksL += `<line x1="168" y1="${y}" x2="${major ? 182 : 176}" y2="${y}" stroke="#1c353a" stroke-width="${major ? 1.4 : 0.9}"/>`;
+    if (major) ticksL += `<text x="163" y="${y + 3}" text-anchor="end" font-size="9.5" font-family="var(--mono)" fill="#1c353a">${cm}</text>`;
+    ticksR += `<line x1="332" y1="${y}" x2="${major ? 318 : 324}" y2="${y}" stroke="#1c353a" stroke-width="${major ? 1.4 : 0.9}"/>`;
+    if (major) ticksR += `<text x="337" y="${y + 3}" text-anchor="start" font-size="9.5" font-family="var(--mono)" fill="#1c353a">${cm}</text>`;
+  }
+
+  return `${commonDefs()}
+  <text x="28" y="36" font-size="18" font-weight="800" fill="#132629">3-tajriba: Kolloid zarrachalarning harakatchanligini aniqlash (30-rasm)</text>
+  <text x="28" y="56" font-size="13" fill="#3b5a5e">${prop.name} · U = S·l / (V·t) · Agar-agar koʻprikchalar va CuSO₄ qutblanmaydigan elektrodlar</text>
+
+  <!-- Chap CuSO4 stakan (4) + Cu elektrod (5, Katod -) -->
+  <g transform="translate(82,256)" filter="url(#shd)">
+    <rect x="0" y="58" width="112" height="148" rx="8" fill="#eef8fa" stroke="#45676d" stroke-width="2.2"/>
+    <rect x="4" y="106" width="104" height="96" rx="4" fill="url(#cuso4G)"/>
+    <rect x="0" y="58" width="112" height="148" rx="8" fill="url(#glassG)"/>
+    <!-- Mis elektrod (5) -->
+    <rect x="18" y="18" width="12" height="156" rx="3" fill="url(#copperG)" stroke="#5c280b"/>
+    <path d="M24,18 L24,-150 L690,-150 L690,4" fill="none" stroke="#1b262b" stroke-width="3.2"/>
+    <text x="24" y="10" text-anchor="middle" font-size="12" font-weight="800" fill="#132629">Cu (−)</text>
+    <text x="56" y="160" text-anchor="middle" font-size="12" font-weight="800" fill="#fff">CuSO₄</text>
+    <text x="56" y="224" text-anchor="middle" font-size="11" font-weight="700" fill="#edf5f4">4-idish (Katod)</text>
+  </g>
+
+  <!-- O'ng CuSO4 stakan (4) + Cu elektrod (5, Anod +) -->
+  <g transform="translate(566,256)" filter="url(#shd)">
+    <rect x="0" y="58" width="112" height="148" rx="8" fill="#eef8fa" stroke="#45676d" stroke-width="2.2"/>
+    <rect x="4" y="106" width="104" height="96" rx="4" fill="url(#cuso4G)"/>
+    <rect x="0" y="58" width="112" height="148" rx="8" fill="url(#glassG)"/>
+    <!-- Mis elektrod (5) -->
+    <rect x="82" y="18" width="12" height="156" rx="3" fill="url(#copperG)" stroke="#5c280b"/>
+    <path d="M88,18 L88,-132 L252,-132 L252,4" fill="none" stroke="#c83333" stroke-width="3.2"/>
+    <text x="88" y="10" text-anchor="middle" font-size="12" font-weight="800" fill="#b32424">Cu (+)</text>
+    <text x="56" y="160" text-anchor="middle" font-size="12" font-weight="800" fill="#fff">CuSO₄</text>
+    <text x="56" y="224" text-anchor="middle" font-size="11" font-weight="700" fill="#edf5f4">4-idish (Anod)</text>
+  </g>
+
+  <!-- Markaz: U-simon o'lchov nayi (30-rasm) -->
+  <g transform="translate(132,96)" filter="url(#shd)">
+    <!-- Voronka (1) va jo'mrak (2) markazdan pastga -->
+    <g class="clk ${s.waterFilled && !s.solLayered ? "glow" : ""}" onclick="act3('layer')">
+      <polygon points="222,12 278,12 256,58 244,58" fill="#eef8fa" stroke="#45676d" stroke-width="2"/>
+      <polygon points="228,22 272,22 255,56 245,56" fill="${prop.color}" opacity="${s.solLayered ? 0.3 : 0.92}"/>
+      <line x1="250" y1="58" x2="250" y2="328" stroke="#45676d" stroke-width="9"/>
+      <line x1="250" y1="58" x2="250" y2="328" stroke="${s.solLayered ? prop.color : "#eef8fa"}" stroke-width="5"/>
+      <!-- Jo'mrak (2) -->
+      <circle cx="250" cy="112" r="9" fill="#21464d" stroke="#fff" stroke-width="1.5"/>
+      <rect x="236" y="109" width="28" height="6" rx="2" fill="#e89b3c"/>
+      <text x="250" y="6" text-anchor="middle" font-size="11" font-weight="700" fill="#132629">1-voronka (2-joʻmrak)</text>
+    </g>
+
+    <!-- U-nay korpusi -->
+    <g class="clk ${!s.waterFilled ? "glow" : ""}" onclick="act3('water')">
+      <path d="M196,68 L196,292 Q196,336 250,336 Q304,336 304,292 L304,68" fill="none" stroke="#3c5e64" stroke-width="44" stroke-linecap="round"/>
+      <path d="M196,68 L196,292 Q196,336 250,336 Q304,336 304,292 L304,68" fill="none" stroke="#edf7f9" stroke-width="38" stroke-linecap="round"/>
+
+      <clipPath id="uClip3">
+        <path d="M178,70 L214,70 L214,292 Q214,317 250,317 Q286,317 286,292 L286,70 L322,70 L322,356 L178,356 Z"/>
+      </clipPath>
+      <g clip-path="url(#uClip3)">
+        <!-- Suv qatlami -->
+        ${s.waterFilled ? `<rect id="s3WaterRect" x="176" y="${s.solLayered ? 105 : 215}" width="148" height="245" fill="url(#waterG)"/>` : ""}
+        <!-- Zol qatlami (chap va o'ng tirsak + pastki yoy) -->
+        ${s.solLayered ? `
+          <rect id="s3SolL" x="176" y="211" width="40" height="145" fill="${prop.color}" opacity="0.88"/>
+          <rect id="s3SolR" x="284" y="211" width="40" height="145" fill="${prop.color}" opacity="0.88"/>
+          <rect x="176" y="290" width="148" height="66" fill="${prop.color}" opacity="0.9"/>
+          <!-- Boshlang'ich sath chizig'i (4.0 sm, y=211) -->
+          ${s.baseMarked ? `
+            <line x1="176" y1="211" x2="216" y2="211" stroke="#fff" stroke-width="2" stroke-dasharray="4 3"/>
+            <line x1="284" y1="211" x2="324" y2="211" stroke="#fff" stroke-width="2" stroke-dasharray="4 3"/>
+          ` : ""}
+          <!-- Jonli chegara chiziqlari -->
+          <line id="s3BoundL" x1="176" y1="211" x2="216" y2="211" stroke="#360e04" stroke-width="2.2"/>
+          <line id="s3BoundR" x1="284" y1="211" x2="324" y2="211" stroke="#360e04" stroke-width="2.2"/>
+        ` : ""}
+      </g>
+      <path d="M196,68 L196,292 Q196,336 250,336 Q304,336 304,292 L304,68" fill="none" stroke="url(#glassG)" stroke-width="38" stroke-linecap="round"/>
+      <!-- Shkala belgilari (sm) -->
+      ${ticksL}
+      ${ticksR}
+      <text x="155" y="102" text-anchor="end" font-size="10" font-weight="700" fill="#1c353a">sm</text>
+      <text x="345" y="102" text-anchor="start" font-size="10" font-weight="700" fill="#1c353a">sm</text>
+      <text x="250" y="366" text-anchor="middle" font-size="11.5" font-weight="700" fill="#edf5f4">l = ${f1(s.l, 1)} sm (koʻpriklar orasi)</text>
+    </g>
+
+    <!-- Agar-agar tuz ko'prikchalari (3) -->
+    <g class="clk ${s.solLayered && !s.bridges ? "glow" : ""}" onclick="act3('bridges')">
+      ${s.bridges ? `
+        <!-- Chap agar-agar ko'prik -->
+        <path d="M32,295 L32,66 Q32,44 56,44 L172,44 Q196,44 196,66 L196,136" fill="none" stroke="#537278" stroke-width="14" stroke-linecap="round"/>
+        <path d="M32,295 L32,66 Q32,44 56,44 L172,44 Q196,44 196,66 L196,136" fill="none" stroke="#e4f3df" stroke-width="9" stroke-linecap="round"/>
+        <!-- O'ng agar-agar ko'prik -->
+        <path d="M304,136 L304,66 Q304,44 328,44 L444,44 Q468,44 468,66 L468,295" fill="none" stroke="#537278" stroke-width="14" stroke-linecap="round"/>
+        <path d="M304,136 L304,66 Q304,44 328,44 L444,44 Q468,44 468,66 L468,295" fill="none" stroke="#e4f3df" stroke-width="9" stroke-linecap="round"/>
+        <text x="112" y="33" text-anchor="middle" font-size="11" font-weight="800" fill="#154734">3-agar-agar koʻprik</text>
+        <text x="388" y="33" text-anchor="middle" font-size="11" font-weight="800" fill="#154734">3-agar-agar koʻprik</text>
+      ` : `
+        <path d="M56,44 L172,44" stroke="#154734" stroke-width="3" stroke-dasharray="5 4" opacity="0.6"/>
+        <path d="M328,44 L444,44" stroke="#154734" stroke-width="3" stroke-dasharray="5 4" opacity="0.6"/>
+        <text x="114" y="34" text-anchor="middle" font-size="11" font-weight="700" fill="#154734">Agar-agar koʻprik oʻrnatish</text>
+      `}
+    </g>
+  </g>
+
+  <!-- O'ng chetda: Kenotron to'g'rilagich + Voltmetr + Sekundomer -->
+  <g class="clk ${s.baseMarked && !s.power && s.records.length === 0 ? "glow" : ""}" onclick="act3('power')" transform="translate(744,248)" filter="url(#shd)">
+    <rect x="0" y="0" width="222" height="214" rx="14" fill="#1a3036" stroke="#0c1a1d" stroke-width="2.5"/>
+    <circle cx="28" cy="0" r="8" fill="#1d2528" stroke="#99b1b5" stroke-width="2"/>
+    <circle cx="74" cy="0" r="8" fill="#c83333" stroke="#f7b2b2" stroke-width="2"/>
+    <rect x="14" y="16" width="194" height="68" rx="9" fill="#09161a"/>
+    <text id="s3LcdV" x="111" y="42" text-anchor="middle" font-family="var(--mono)" font-size="19" font-weight="700" fill="${s.power ? "#8cf5c1" : "#627f84"}">${s.power ? `${s.V} V · ${f1(s.tMin, 1)} min` : `${s.V} V · PAUZA`}</text>
+    <text id="s3LcdS" x="111" y="68" text-anchor="middle" font-family="var(--mono)" font-size="16" font-weight="700" fill="#f7c873">S = ${f1(s.S_cm, 2)} sm</text>
+    <rect x="22" y="100" width="178" height="44" rx="10" fill="${s.power ? "#1f9d6b" : "#e89b3c"}"/>
+    <text x="111" y="127" text-anchor="middle" font-size="13.5" font-weight="800" fill="${s.power ? "#fff" : "#1b1204"}">${s.power ? "⏸ PAUZA / OʻLCHASH" : "⚡ TOKNI YOQISH"}</text>
+    <text x="111" y="170" text-anchor="middle" font-size="11.5" font-weight="700" fill="#d9eae7">VOLTMETR &amp; TAYMER</text>
+    <text x="111" y="190" text-anchor="middle" font-size="10.5" fill="#89adb3">Siljish yoʻnalishi: ${prop.charge === "+" ? "Katod (−) ga" : "Anod (+) ga"}</text>
+  </g>`;
+}
+
+function buildSceneReport() {
+  const t = total();
+  return `${commonDefs()}
+  <rect x="70" y="54" width="860" height="390" rx="20" fill="#ffffff" fill-opacity="0.95" stroke="#c5d8d5" stroke-width="2" filter="url(#shd)"/>
+  <text x="500" y="104" text-anchor="middle" font-size="23" font-weight="800" fill="#0f2e33">4-LABORATORIYA ISHI NATIJALARI</text>
+  <text x="500" y="130" text-anchor="middle" font-size="14" fill="#587276">Dispers sistemalarning elektr xossalari · Elektroforez va elektroosmos</text>
+
+  <g transform="translate(110,160)">
+    <rect x="0" y="0" width="235" height="190" rx="14" fill="#f4f9f8" stroke="#d4e1df"/>
+    <text x="117" y="30" text-anchor="middle" font-size="13" font-weight="800" fill="#0f2e33">1. Loy (gil) elektroforezi</text>
+    <text x="117" y="72" text-anchor="middle" font-size="30" font-weight="800" fill="${S.s1.chargeOk ? "#1f9d6b" : "#9aa8a6"}">${S.s1.chargeOk ? "Zaryad: (−)" : "Kutilmoqda"}</text>
+    <text x="117" y="108" text-anchor="middle" font-size="12" fill="#46696e">Anod (+) nayi loyqalandi</text>
+    <text x="117" y="128" text-anchor="middle" font-size="12" fill="#46696e">Suv katod (−) ga siljidi</text>
+    <text x="117" y="164" text-anchor="middle" font-family="var(--mono)" font-size="13" font-weight="700" fill="#1b484f">${t.p1 + t.q1} / 24 ball</text>
+  </g>
+
+  <g transform="translate(382,160)">
+    <rect x="0" y="0" width="235" height="190" rx="14" fill="#f4f9f8" stroke="#d4e1df"/>
+    <text x="117" y="30" text-anchor="middle" font-size="13" font-weight="800" fill="#0f2e33">2. AgBr zollari zaryadi</text>
+    <text x="117" y="72" text-anchor="middle" font-size="16" font-weight="800" fill="${S.s2.solA.ok ? "#1f9d6b" : "#889"}">Zol A (Ag⁺): ${S.s2.solA.ok ? "Musbat (+)" : "—"}</text>
+    <text x="117" y="104" text-anchor="middle" font-size="16" font-weight="800" fill="${S.s2.solB.ok ? "#1f9d6b" : "#889"}">Zol B (Br⁻): ${S.s2.solB.ok ? "Manfiy (−)" : "—"}</text>
+    <text x="117" y="132" text-anchor="middle" font-size="11.5" fill="#46696e">100 V · Panet–Fayans qoidasi</text>
+    <text x="117" y="164" text-anchor="middle" font-family="var(--mono)" font-size="13" font-weight="700" fill="#1b484f">${t.p2 + t.q2} / 26 ball</text>
+  </g>
+
+  <g transform="translate(654,160)">
+    <rect x="0" y="0" width="235" height="190" rx="14" fill="#f4f9f8" stroke="#d4e1df"/>
+    <text x="117" y="30" text-anchor="middle" font-size="13" font-weight="800" fill="#0f2e33">3. Harakatchanlik (U)</text>
+    <text x="117" y="74" text-anchor="middle" font-family="var(--mono)" font-size="17" font-weight="800" fill="${S.s3.uOk ? "#1f9d6b" : "#889"}">${S.s3.uOk ? f1(SOL_PROPS[S.s3.solType].U_min, 4) : "—"}</text>
+    <text x="117" y="96" text-anchor="middle" font-size="11.5" fill="#46696e">sm² / (V · min)</text>
+    <text x="117" y="124" text-anchor="middle" font-size="11.5" fill="#46696e">${SOL_PROPS[S.s3.solType].name} · ${S.s3.records.length} oʻlchov</text>
+    <text x="117" y="164" text-anchor="middle" font-family="var(--mono)" font-size="13" font-weight="700" fill="#1b484f">${t.p3 + t.q3} / 30 ball</text>
+  </g>
+
+  <text x="500" y="405" text-anchor="middle" font-family="var(--mono)" font-size="18" font-weight="800" fill="#0f2e33">Umumiy natija: ${t.tot} / 100 ball</text>`;
+}
+
+/* ============ JONLI SVG YANGILASH (60 FPS) ============ */
+function updateSceneLive() {
+  if (S.stage === 0 && S.s1.tubes && S.s1.water) {
+    const p = clamp(S.s1.tMin / 10, 0, 1);
+    // Suv sathlari: chap (katod -) ko'tariladi, o'ng (anod +) pasayadi
+    const shift = p * 18;
+    const wL = el("s1WaterL"), mL = el("s1MenL");
+    const wR = el("s1WaterR"), mR = el("s1MenR"), tR = el("s1TurbidR");
+    if (wL) { wL.setAttribute("y", (112 - shift).toFixed(1)); wL.setAttribute("height", (82 + shift).toFixed(1)); }
+    if (mL) mL.setAttribute("cy", (112 - shift).toFixed(1));
+    if (wR) { wR.setAttribute("y", (112 + shift).toFixed(1)); wR.setAttribute("height", (82 - shift).toFixed(1)); }
+    if (mR) mR.setAttribute("cy", (112 + shift).toFixed(1));
+    if (tR) {
+      tR.setAttribute("y", (112 + shift).toFixed(1));
+      tR.setAttribute("height", (82 - shift).toFixed(1));
+      tR.setAttribute("opacity", (p * 0.78).toFixed(3));
+    }
+    const lblR = el("s1LblR"), lblL = el("s1LblL");
+    if (lblR) lblR.textContent = p > 0.55 ? "Kuchli loyqa!" : p > 0.15 ? "Loyqalanmoqda" : "Tiniq";
+    if (lblL) lblL.textContent = p > 0.25 ? "Tiniq (+sath)" : "Tiniq";
+
+    const arr = el("s1Arrows");
+    if (arr) arr.setAttribute("opacity", S.s1.power || p > 0.15 ? "0.95" : "0");
+
+    const grp = el("s1ClayParticles");
+    if (grp && p > 0.02) {
+      let dots = "";
+      const count = Math.floor(6 + p * 28);
+      for (let i = 0; i < count; i++) {
+        const seed = i * 73.13;
+        const x = 7 + ((seed * 17) % 44);
+        const speed = 14 + (i % 5) * 4;
+        const travel = (S.s1.power ? animPhase * speed : 0) + (seed % 70);
+        const hMax = Math.max(10, 74 - shift);
+        const y = 190 - (travel % hMax);
+        const r = 1.6 + (i % 3) * 0.7;
+        dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="#6e3615" opacity="${(0.35 + p * 0.55).toFixed(2)}"/>`;
+      }
+      grp.innerHTML = dots;
+    }
+  } else if (S.stage === 1) {
+    const sol = S.s2.activeSol;
+    const cur = sol === "A" ? S.s2.solA : S.s2.solB;
+    if (cur.loaded) {
+      const p = clamp(cur.tMin / 8, 0, 1);
+      // Zol A (+): chap tirsak Katod (-) ga ko'tariladi, o'ng (Anod +) pasayadi
+      // Zol B (-): o'ng tirsak Anod (+) ga ko'tariladi, chap (Katod -) pasayadi
+      const dir = sol === "A" ? 1 : -1;
+      const dy = p * 54 * dir;
+      const yL = 175 - dy;
+      const yR = 175 + dy;
+      const sL = el("s2SolL"), sR = el("s2SolR"), lL = el("s2LineL"), lR = el("s2LineR");
+      if (sL) { sL.setAttribute("y", yL.toFixed(1)); sL.setAttribute("height", (345 - yL).toFixed(1)); }
+      if (sR) { sR.setAttribute("y", yR.toFixed(1)); sR.setAttribute("height", (345 - yR).toFixed(1)); }
+      if (lL) { lL.setAttribute("y1", yL.toFixed(1)); lL.setAttribute("y2", yL.toFixed(1)); }
+      if (lR) { lR.setAttribute("y1", yR.toFixed(1)); lR.setAttribute("y2", yR.toFixed(1)); }
+
+      const pts = el("s2Parts");
+      if (pts) {
+        let html = "";
+        for (let i = 0; i < 16; i++) {
+          const leftArm = i < 8;
+          const x = leftArm ? 116 + (i * 11) % 24 : 250 + (i * 13) % 24;
+          const baseY = leftArm ? yL + 8 : yR + 8;
+          const span = Math.max(20, 290 - baseY);
+          const off = ((i * 29 + (cur.power ? animPhase * 22 * (leftArm ? -dir : dir) : 0)) % span + span) % span;
+          html += `<circle cx="${x}" cy="${(baseY + off).toFixed(1)}" r="2.2" fill="#8f6c0e" opacity="0.65"/>`;
+        }
+        pts.innerHTML = html;
+      }
+      const arr = el("s2DirArrow");
+      if (arr) {
+        if (p > 0.12) {
+          arr.setAttribute("opacity", "1");
+          if (sol === "A") {
+            arr.innerHTML = `<path d="M96,210 L96,135" stroke="#1f9d6b" stroke-width="3.5" stroke-linecap="round"/>
+              <polygon points="96,126 89,140 103,140" fill="#1f9d6b"/>
+              <text x="86" y="175" text-anchor="end" font-size="11.5" font-weight="800" fill="#126b47">Katod (−) ga</text>`;
+          } else {
+            arr.innerHTML = `<path d="M294,210 L294,135" stroke="#c83333" stroke-width="3.5" stroke-linecap="round"/>
+              <polygon points="294,126 287,140 301,140" fill="#c83333"/>
+              <text x="304" y="175" text-anchor="start" font-size="11.5" font-weight="800" fill="#9c2222">Anod (+) ga</text>`;
+          }
+        } else {
+          arr.setAttribute("opacity", "0");
+        }
+      }
+    }
+  } else if (S.stage === 2) {
+    const s = S.s3;
+    const prop = SOL_PROPS[s.solType];
+    if (s.solLayered) {
+      // 1 sm = 16 px; boshlang'ich sath 4.0 sm -> y = 211
+      const px = clamp(s.S_cm * 16, 0, 92);
+      const yL = 211 + (prop.dir < 0 ? -px : px);
+      const yR = 211 + (prop.dir < 0 ? px : -px);
+      const sL = el("s3SolL"), sR = el("s3SolR"), bL = el("s3BoundL"), bR = el("s3BoundR");
+      if (sL) { sL.setAttribute("y", yL.toFixed(1)); sL.setAttribute("height", (356 - yL).toFixed(1)); }
+      if (sR) { sR.setAttribute("y", yR.toFixed(1)); sR.setAttribute("height", (356 - yR).toFixed(1)); }
+      if (bL) { bL.setAttribute("y1", yL.toFixed(1)); bL.setAttribute("y2", yL.toFixed(1)); }
+      if (bR) { bR.setAttribute("y1", yR.toFixed(1)); bR.setAttribute("y2", yR.toFixed(1)); }
+    }
+    const lv = el("s3LcdV"), ls = el("s3LcdS");
+    if (lv) lv.textContent = s.power ? `${s.V} V · ${f1(s.tMin, 1)} min` : `${s.V} V · PAUZA`;
+    if (ls) ls.textContent = `S = ${f1(s.S_cm, 2)} sm`;
+  }
+}
+
+/* ============ AMALLAR (ACTIONS) ============ */
+window.act1 = function(cmd) {
+  const s = S.s1;
+  if (cmd === "tubes") {
+    if (s.tubes) return toast("Shisha naylar allaqachon loyga tiqilgan.", "warn");
+    s.tubes = true; SFX.play("click");
+    toast("2 ta 1,5–2 sm diametrli shisha nay loy boʻlagiga tiqildi.", "ok");
+  } else if (cmd === "sand") {
+    if (!s.tubes) return toast("Avval shisha naylarni loyga tiqing!", "warn");
+    if (s.sand) return toast("Qum allaqachon solingan.", "warn");
+    s.sand = true; SFX.play("pour");
+    toast("Har ikkala nayga 0,5 sm qalinlikda yuvilgan qum solindi.", "ok");
+  } else if (cmd === "water") {
+    if (!s.sand) return toast("Avval 0,5 sm yuvilgan qum soling!", "warn");
+    if (s.water) return toast("Distillangan suv allaqachon quyilgan.", "warn");
+    s.water = true; SFX.play("pour");
+    toast("Qum yuzasidan 2,5 sm balandlikda distillangan suv quyildi.", "ok");
+  } else if (cmd === "electrodes") {
+    if (!s.water) return toast("Avval distillangan suv quying!", "warn");
+    if (s.electrodes) return toast("Mis elektrodlar oʻrnatilgan.", "warn");
+    s.electrodes = true; SFX.play("click");
+    toast("Mis (Cu) elektrodlar naylarga tushirilib, 2 V batareyaga ulandi.", "ok");
+  } else if (cmd === "power") {
+    if (!s.electrodes) return toast("Avval mis elektrodlarni oʻrnating!", "warn");
+    if (s.tMin >= 12) { s.tMin = 0; }
+    s.power = !s.power;
+    SFX.play(s.power ? "electric" : "click");
+    toast(s.power ? "2 V oʻzgarmas tok yoqildi! Anod (+) va katod (−) naylarini kuzating." : "Tok toʻxtatildi.", s.power ? "ok" : "");
+  }
+  renderAll();
+};
+
+window.guess1 = function(sign) {
+  if (S.s1.tMin < 3) return toast("Avval tokni yoqib kamida 3 daqiqa kuzating!", "warn");
+  S.s1.chargeGuess = sign;
+  if (sign === "-") {
+    S.s1.chargeOk = true;
+    SFX.play("ok");
+    toast("Toʻgʻri! Loy zarrachalari manfiy (−) zaryadlangan, shuning uchun anod (+) ga koʻtariladi.", "ok", 4200);
+  } else {
+    SFX.play("err");
+    toast("Qayta oʻylab koʻring: loy zarrachalari musbat (+) elektrod tomon harakatlandi!", "err");
+  }
+  renderAll();
+};
+
+window.switchSol2 = function(which) {
+  SFX.play("click");
+  S.s2.solA.power = false;
+  S.s2.solB.power = false;
+  S.s2.activeSol = which;
+  renderAll();
+};
+
+window.act2 = function(cmd) {
+  const cur = S.s2.activeSol === "A" ? S.s2.solA : S.s2.solB;
+  if (cmd === "kbr") {
+    if (cur.kbr) return toast("KBr eritmasi allaqachon oʻlchab suyultirilgan.", "warn");
+    cur.kbr = true; SFX.play("pipette");
+    toast(S.s2.activeSol === "A" ? "3 ml 0,1 n KBr + H₂O → 10 ml tayyorlandi." : "5 ml 0,1 n KBr + H₂O → 40 ml tayyorlandi.", "ok");
+  } else if (cmd === "agno3") {
+    if (!cur.kbr) return toast("Avval KBr eritmasini kolbaga quying!", "warn");
+    if (cur.agno3) return toast("AgNO₃ eritmasi tayyor.", "warn");
+    cur.agno3 = true; SFX.play("pipette");
+    toast(S.s2.activeSol === "A" ? "5 ml 0,1 n AgNO₃ → 40 ml gacha suyultirildi." : "4 ml 0,1 n AgNO₃ → 15 ml gacha suyultirildi.", "ok");
+  } else if (cmd === "mix") {
+    if (!cur.agno3) return toast("Avval ikkala eritmani tayyorlang!", "warn");
+    if (cur.mixed) return toast("Zol allaqachon tayyorlangan.", "warn");
+    cur.mixed = true; SFX.play("shake");
+    toast(`AgBr Zol ${S.s2.activeSol} hosil boʻldi! Endi uni U-nay voronkasiga quying.`, "ok");
+  } else if (cmd === "load") {
+    if (!cur.mixed) return toast("Avval AgBr zolini tayyorlang!", "warn");
+    if (cur.loaded) return toast("Zol U-nayga toʻldirilgan.", "warn");
+    cur.loaded = true; SFX.play("pour");
+    toast("U-simon nay voronka va joʻmrak orqali AgBr zoli bilan toʻldirildi.", "ok");
+  } else if (cmd === "elec") {
+    if (!cur.loaded) return toast("Avval U-nayni zol bilan toʻldiring!", "warn");
+    if (cur.elec) return toast("Elektrodlar oʻrnatilgan.", "warn");
+    cur.elec = true; SFX.play("click");
+    toast("Probkalar yordamida elektrodlar oʻrnatildi va 100 V manbaga ulandi.", "ok");
+  } else if (cmd === "power") {
+    if (!cur.elec) return toast("Avval elektrodlarni oʻrnating!", "warn");
+    if (cur.tMin >= 8) cur.tMin = 0;
+    cur.power = !cur.power;
+    SFX.play(cur.power ? "electric" : "click");
+    toast(cur.power ? "100 V kenotron toki ulandi! Zol chegarasi qaysi elektrodga siljishini kuzating." : "Tok oʻchirildi.", cur.power ? "ok" : "");
+  }
+  renderAll();
+};
+
+window.guess2 = function(sign) {
+  const sol = S.s2.activeSol;
+  const cur = sol === "A" ? S.s2.solA : S.s2.solB;
+  if (cur.tMin < 2) return toast("Avval 100 V tokni yoqib kamida 2 daqiqa kuzating!", "warn");
+  const expected = sol === "A" ? "+" : "-";
+  cur.guess = sign;
+  if (sign === expected) {
+    cur.ok = true;
+    SFX.play("ok");
+    toast(sol === "A"
+      ? "Toʻgʻri! Zol A (ortiqcha Ag⁺) — musbat (+) zaryadli, katod (−) ga siljiydi."
+      : "Toʻgʻri! Zol B (ortiqcha Br⁻) — manfiy (−) zaryadli, anod (+) ga siljiydi.", "ok", 4200);
+  } else {
+    SFX.play("err");
+    toast("Notoʻgʻri! Chegara qaysi ishorali elektrod tomon siljiganiga qarang.", "err");
+  }
+  renderAll();
+};
+
+window.switchSol3 = function(type) {
+  if (S.s3.power) S.s3.power = false;
+  S.s3.solType = type;
+  S.s3.tMin = 0;
+  S.s3.S_cm = 0;
+  S.s3.records = [];
+  S.s3.uChecked = false;
+  S.s3.uOk = false;
+  S.s3.uInput = "";
+  SFX.play("click");
+  renderAll();
+};
+
+window.setVolt3 = function(v) {
+  S.s3.V = +v;
+  if (S.s3.tMin > 0) {
+    S.s3.tMin = 0;
+    S.s3.S_cm = 0;
+  }
+  renderAll();
+};
+
+window.act3 = function(cmd) {
+  const s = S.s3;
+  if (cmd === "water") {
+    if (s.waterFilled) return toast("Distillangan suv allaqachon 1/3 balandlikda quyilgan.", "warn");
+    s.waterFilled = true; SFX.play("pour");
+    toast("U-simon nayning ikkala tirsagi 1/3 balandlikgacha distillangan suv bilan toʻldirildi.", "ok");
+  } else if (cmd === "layer") {
+    if (!s.waterFilled) return toast("Avval U-nayga 1/3 balandlikda distillangan suv quying!", "warn");
+    if (s.solLayered) return toast("Zol allaqachon suv ostiga qatlamlangan.", "warn");
+    s.solLayered = true; SFX.play("pour");
+    toast("Joʻmrak sekin ochilib, zol suv ostiga aralashmasdan 1/3 balandlikkacha kiritildi.", "ok");
+  } else if (cmd === "bridges") {
+    if (!s.solLayered) return toast("Avval zolni suv ostiga kiriting!", "warn");
+    if (s.bridges) return toast("Agar-agar koʻprikchalari oʻrnatilgan.", "warn");
+    s.bridges = true; SFX.play("click");
+    toast("Agar-agar koʻprikchalari CuSO₄ eritmali stakanlar va mis elektrodlar bilan tutashtirildi.", "ok");
+  } else if (cmd === "mark") {
+    if (!s.bridges) return toast("Avval agar-agar koʻprikchalarini oʻrnating!", "warn");
+    s.baseMarked = true; SFX.play("beep");
+    toast("Boshlangʻich zol–suv chegarasi (h₀ = 4,00 sm) belgilab olindi!", "ok");
+  } else if (cmd === "power") {
+    if (!s.baseMarked) return toast("Avval boshlangʻich zol–suv sathini belgilab oling!", "warn");
+    s.power = !s.power;
+    SFX.play(s.power ? "electric" : "click");
+    toast(s.power ? `${s.V} V tok ulandi! Taymer va chegaraning siljishini kuzating.` : "Tok pauza qilindi — oʻlchovni qayd etishingiz mumkin.", s.power ? "ok" : "");
+  } else if (cmd === "record") {
+    if (s.tMin < 5) return toast("Aniq oʻlchash uchun tok kamida 5 daqiqa oʻtsin!", "warn");
+    const rec = { tMin: +s.tMin.toFixed(1), S_cm: +s.S_cm.toFixed(2), V: s.V, l: s.l };
+    s.records.push(rec);
+    SFX.play("ok");
+    toast(`Jurnalga yozildi: t = ${f1(rec.tMin, 1)} min, S = ${f1(rec.S_cm, 2)} sm.`, "ok");
+  }
+  renderAll();
+};
+
+window.checkU3 = function() {
+  const s = S.s3;
+  if (s.records.length === 0) return toast("Avval kamida 1 ta (S, t) oʻlchovni jurnalga qayd eting!", "warn");
+  const inp = el("uInputEl");
+  const raw = (inp ? inp.value : s.uInput).trim().replace(",", ".");
+  s.uInput = raw;
+  const val = parseFloat(raw);
+  if (isNaN(val) || val <= 0) return toast("Iltimos, musbat son kiriting (masalan: 0,0210).", "err");
+  const trueU = SOL_PROPS[s.solType].U_min;
+  const relErr = Math.abs(val - trueU) / trueU;
+  s.uChecked = true;
+  if (relErr <= 0.08) {
+    s.uOk = true;
+    SFX.play("fanfare");
+    toast(`Barakalla! U = ${f1(trueU, 4)} sm²/(V·min) = ${f1(trueU / 60 * 1e4, 2)}·10⁻⁴ sm²/(V·s).`, "ok", 5000);
+  } else {
+    s.uOk = false;
+    SFX.play("err");
+    toast(`Xatolik! Formulani tekshiring: U = (S · l) / (V · t), bu yerda t daqiqada.`, "err", 4200);
+  }
+  renderAll();
+};
+
+window.ansStageQ = function(stageIdx, qid, optIdx) {
+  const qObj = STAGE_QS[stageIdx].find(x => x.id === qid);
+  const store = stageIdx === 0 ? S.s1.q : stageIdx === 1 ? S.s2.q : S.s3.q;
+  store[qid] = optIdx;
+  SFX.play(optIdx === qObj.ok ? "ok" : "err");
+  if (optIdx === qObj.ok) toast("Toʻgʻri javob! (+3 ball)", "ok");
+  else toast("Notoʻgʻri. Qayta urinib koʻring!", "err");
+  renderAll();
+};
+
+window.ansQuiz = function(qid, optIdx) {
+  const qObj = QUIZ.find(x => x.id === qid);
+  S.quiz[qid] = optIdx;
+  SFX.play(optIdx === qObj.ok ? "ok" : "err");
+  renderAll();
+};
+
+/* ============ YON PANEL (SIDEBAR) ============ */
+function renderStageQs(stageIdx) {
+  const store = stageIdx === 0 ? S.s1.q : stageIdx === 1 ? S.s2.q : S.s3.q;
+  return `<div class="box"><h4>Nazorat savollari</h4>` +
+    STAGE_QS[stageIdx].map((q, qi) => {
+      const order = shuf(q.opts.length, 41 + stageIdx * 17 + qi * 7);
+      const picked = store[q.id];
+      return `<div class="q"><p>${q.p}</p>` +
+        order.map(oi => {
+          const cls = picked === oi ? (oi === q.ok ? "right" : "wrong") : "";
+          return `<button class="${cls}" onclick="ansStageQ(${stageIdx},'${q.id}',${oi})">${q.opts[oi]}</button>`;
+        }).join("") + `</div>`;
+    }).join("") + `</div>`;
+}
+
+function renderPanel() {
+  const p = el("panel");
+  if (S.stage === 0) {
+    const s = S.s1;
+    const steps = [
+      { done: s.tubes, txt: "2 ta 1,5–2 sm shisha nayni loyga tiqish" },
+      { done: s.sand, txt: "Har bir nayga 0,5 sm yuvilgan qum solish" },
+      { done: s.water, txt: "Qum ustidan 2–3 sm distillangan suv quyish" },
+      { done: s.electrodes, txt: "Mis elektrodlarni tushirib 2 V batareyaga ulash" },
+      { done: s.tMin >= 3, txt: "Tokni yoqib elektroforez va elektroosmosni kuzatish (≥3 min)" },
+      { done: s.chargeOk, txt: "Loy zarrachalarining zaryad ishorasini aniqlash" }
+    ];
+    const curIdx = steps.findIndex(x => !x.done);
+    const pr = clamp(s.tMin / 10, 0, 1);
+    p.innerHTML = `
+      <h2>1-tajriba: Loy elektroforezi</h2>
+      <p class="sub">Nam loy (8×15×4 sm) boʻlagida 2 V oʻzgarmas tok ostida elektroforez va elektroosmos hodisalarini kuzating.</p>
+      <ul class="tasks">${steps.map((st, i) => `<li class="${st.done ? "done" : i === curIdx ? "cur" : ""}"><span class="b">${st.done ? "✓" : i + 1}</span><span>${st.txt}</span></li>`).join("")}</ul>
+      <div class="box">
+        <h4>Jihozlarni yigʻish (yoki sahnada bosing)</h4>
+        <div class="grid2">
+          <button onclick="act1('tubes')" class="${s.tubes ? "on" : ""}">1. Naylarni tiqish</button>
+          <button onclick="act1('sand')" class="${s.sand ? "on" : ""}" ${!s.tubes ? "disabled" : ""}>2. 0,5 sm qum</button>
+          <button onclick="act1('water')" class="${s.water ? "on" : ""}" ${!s.sand ? "disabled" : ""}>3. 2,5 sm suv</button>
+          <button onclick="act1('electrodes')" class="${s.electrodes ? "on" : ""}" ${!s.water ? "disabled" : ""}>4. Cu elektrodlar</button>
+        </div>
+        <button class="next ${s.power ? "on" : "pri"}" onclick="act1('power')" ${!s.electrodes ? "disabled" : ""}>${s.power ? "⏸ 2 V tokni toʻxtatish" : "⚡ 2 V batareyani yoqish"}</button>
+      </div>
+      <div class="box">
+        <h4>Kuzatuv natijalari</h4>
+        <div class="big" id="s1Clock">${f1(s.tMin, 1)} min<small>Elektroforez vaqti (2 V)</small></div>
+        <div id="s1Obs">
+          <div class="kv"><span>Anod (+) loyqaligi:</span><b>${Math.round(pr * 100)}%</b></div>
+          <div class="kv"><span>Anod (+) suv sathi:</span><b>${f1(2.5 - pr * 0.6, 2)} sm</b></div>
+          <div class="kv"><span>Katod (−) suv sathi:</span><b>${f1(2.5 + pr * 0.6, 2)} sm</b></div>
+        </div>
+      </div>
+      ${s.tMin >= 3 ? `
+        <div class="box" id="s1GuessBox">
+          <h4>Xulosa: Loy zarrachalarining zaryadi qanday?</h4>
+          <div class="pill-row">
+            <button onclick="guess1('-')" class="${s.chargeGuess === "-" ? "on" : ""}">Manfiy (−)</button>
+            <button onclick="guess1('+')" class="${s.chargeGuess === "+" ? "bad" : ""}">Musbat (+)</button>
+            <button onclick="guess1('0')" class="${s.chargeGuess === "0" ? "bad" : ""}">Neytral (0)</button>
+          </div>
+          ${s.chargeOk ? `<p class="note" style="margin-top:6px;color:var(--ok);font-weight:600">✓ Tasdiqlandi: loy zarrachalari manfiy (−) zaryadli (anodga koʻtariladi).</p>` : ""}
+        </div>` : `<div class="hint">Tokni yoqing va kamida 3 daqiqa davomida qaysi naydagi suv loyqalanishini kuzating.</div>`}
+      ${renderStageQs(0)}
+      ${stageDone(0) ? `<button class="next pri" onclick="goStage(1)">Keyingi: 2-tajriba (AgBr zaryadi) →</button>` : ""}
+    `;
+  } else if (S.stage === 1) {
+    const sol = S.s2.activeSol;
+    const cur = sol === "A" ? S.s2.solA : S.s2.solB;
+    const steps = [
+      { done: cur.kbr, txt: sol === "A" ? "3 ml 0,1 n KBr + H₂O → 10 ml" : "5 ml 0,1 n KBr + H₂O → 40 ml" },
+      { done: cur.agno3, txt: sol === "A" ? "5 ml 0,1 n AgNO₃ + H₂O → 40 ml" : "4 ml 0,1 n AgNO₃ + H₂O → 15 ml" },
+      { done: cur.mixed, txt: "Asta-sekin aralashtirib AgBr zolini olish" },
+      { done: cur.loaded, txt: "U-nayni voronka orqali zol bilan toʻldirish" },
+      { done: cur.elec, txt: "Probka bilan elektrodlarni oʻrnatish" },
+      { done: cur.ok, txt: "100 V tok berib zaryad ishorasini aniqlash" }
+    ];
+    const curIdx = steps.findIndex(x => !x.done);
+    p.innerHTML = `
+      <h2>2-tajriba: AgBr zollari zaryadi</h2>
+      <p class="sub">Ortiqcha elektrolitga qarab musbat va manfiy AgBr zollarini tayyorlang hamda U-nayda zaryadini aniqlang.</p>
+      <div class="box">
+        <h4>Sinov namunasini tanlang (ikkalasini bajaring)</h4>
+        <div class="grid2">
+          <button onclick="switchSol2('A')" class="${sol === "A" ? "pri" : ""} ${S.s2.solA.ok ? "on" : ""}">Zol A (Ag⁺ moʻl) ${S.s2.solA.ok ? "✓" : ""}</button>
+          <button onclick="switchSol2('B')" class="${sol === "B" ? "pri" : ""} ${S.s2.solB.ok ? "on" : ""}">Zol B (Br⁻ moʻl) ${S.s2.solB.ok ? "✓" : ""}</button>
+        </div>
+        <div class="micelle">${sol === "A"
+          ? "{m[AgBr] · nAg⁺ · (n−x)NO₃⁻}ˣ⁺ · xNO₃⁻"
+          : "{m[AgBr] · nBr⁻ · (n−x)K⁺}ˣ⁻ · xK⁺"}</div>
+      </div>
+      <ul class="tasks">${steps.map((st, i) => `<li class="${st.done ? "done" : i === curIdx ? "cur" : ""}"><span class="b">${st.done ? "✓" : i + 1}</span><span>${st.txt}</span></li>`).join("")}</ul>
+      <div class="box">
+        <h4>Amallar (Zol ${sol})</h4>
+        <div class="grid2">
+          <button onclick="act2('kbr')" class="${cur.kbr ? "on" : ""}">1. KBr quyish</button>
+          <button onclick="act2('agno3')" class="${cur.agno3 ? "on" : ""}" ${!cur.kbr ? "disabled" : ""}>2. AgNO₃ tayyorlash</button>
+          <button onclick="act2('mix')" class="${cur.mixed ? "on" : ""}" ${!cur.agno3 ? "disabled" : ""}>3. Aralashtirish</button>
+          <button onclick="act2('load')" class="${cur.loaded ? "on" : ""}" ${!cur.mixed ? "disabled" : ""}>4. U-nayga quyish</button>
+          <button onclick="act2('elec')" class="${cur.elec ? "on" : ""}" ${!cur.loaded ? "disabled" : ""}>5. Elektrodlar</button>
+          <button onclick="act2('power')" class="${cur.power ? "on" : "pri"}" ${!cur.elec ? "disabled" : ""}>${cur.power ? "⏸ Oʻchirish" : "⚡ 100 V tok"}</button>
+        </div>
+      </div>
+      <div class="box">
+        <div class="big" id="s2Clock">${f1(cur.tMin, 1)} min<small>100 V kenotron toki · Zol ${sol}</small></div>
+        ${cur.tMin >= 2 ? `
+          <div id="s2GuessBox">
+            <h4 style="margin-top:6px">Zol ${sol} zarrachalarining zaryad ishorasi:</h4>
+            <div class="pill-row">
+              <button onclick="guess2('+')" class="${cur.guess === "+" ? (sol === "A" ? "on" : "bad") : ""}">Musbat (+) · Katodga</button>
+              <button onclick="guess2('-')" class="${cur.guess === "-" ? (sol === "B" ? "on" : "bad") : ""}">Manfiy (−) · Anodga</button>
+            </div>
+          </div>` : `<p class="note">Zolni U-nayga quyib 100 V tok bering (≥2 min) va kolloid chegarasi qaysi elektrodga siljishini kuzating.</p>`}
+      </div>
+      ${renderStageQs(1)}
+      ${stageDone(1) ? `<button class="next pri" onclick="goStage(2)">Keyingi: 3-tajriba (Harakatchanlik) →</button>` : ""}
+    `;
+  } else if (S.stage === 2) {
+    const s = S.s3;
+    const prop = SOL_PROPS[s.solType];
+    const steps = [
+      { done: s.waterFilled, txt: "U-nay tirsaklarini 1/3 balandlikda distillangan suv bilan toʻldirish" },
+      { done: s.solLayered, txt: "Voronka joʻmragini sekin ochib zolni suv ostiga 1/3 qismigacha kiritish" },
+      { done: s.bridges, txt: "Agar-agar koʻprikchalarini CuSO₄ stakanlari bilan tutashtirish" },
+      { done: s.baseMarked, txt: "Boshlangʻich zol–suv chegarasini (h₀ = 4,00 sm) belgilash" },
+      { done: s.records.length >= 1, txt: "Tokni yoqib siljish S (sm) va vaqt t (min) ni qayd etish" },
+      { done: s.uOk, txt: "U = S·l / (V·t) formula boʻyicha harakatchanlikni hisoblash" }
+    ];
+    const curIdx = steps.findIndex(x => !x.done);
+    const chartSvg = s.records.length >= 1 ? svgChart({
+      title: `${prop.name}: S(t) bogʻlanishi`,
+      xl: "t, min", yl: "S, sm",
+      x0: 0, xm: 40, y0: 0, ym: 5,
+      series: [{ color: prop.color, pts: [{ x: 0, y: 0 }, ...s.records.map(r => ({ x: r.tMin, y: r.S_cm }))] }]
+    }) : "";
+
+    p.innerHTML = `
+      <h2>3-tajriba: Harakatchanlik (U)</h2>
+      <p class="sub">30-rasmdagi qutblanmaydigan elektrodlarga ega U-simon nayda kolloid zarrachalarning elektroforetik harakatchanligini aniqlang.</p>
+      <div class="box">
+        <h4>Zol va kuchlanish parametrlari</h4>
+        <div class="grid2" style="margin-bottom:8px">
+          <button onclick="switchSol3('FeOH3')" class="${s.solType === "FeOH3" ? "pri" : ""}">Fe(OH)₃ (+)</button>
+          <button onclick="switchSol3('As2S3')" class="${s.solType === "As2S3" ? "pri" : ""}">As₂S₃ (−)</button>
+        </div>
+        <div class="kv"><span>Kuchlanish V:</span><b>${s.V} V</b></div>
+        <input type="range" min="60" max="140" step="20" value="${s.V}" onchange="setVolt3(this.value)" ${s.power ? "disabled" : ""}>
+        <div class="kv"><span>Koʻpriklar orasi l:</span><b>${f1(s.l, 1)} sm</b></div>
+      </div>
+      <ul class="tasks">${steps.map((st, i) => `<li class="${st.done ? "done" : i === curIdx ? "cur" : ""}"><span class="b">${st.done ? "✓" : i + 1}</span><span>${st.txt}</span></li>`).join("")}</ul>
+      <div class="box">
+        <h4>Asbobni tayyorlash va oʻlchash</h4>
+        <div class="grid2">
+          <button onclick="act3('water')" class="${s.waterFilled ? "on" : ""}">1. 1/3 suv quyish</button>
+          <button onclick="act3('layer')" class="${s.solLayered ? "on" : ""}" ${!s.waterFilled ? "disabled" : ""}>2. Zolni qatlamlash</button>
+          <button onclick="act3('bridges')" class="${s.bridges ? "on" : ""}" ${!s.solLayered ? "disabled" : ""}>3. Agar-agar koʻprik</button>
+          <button onclick="act3('mark')" class="${s.baseMarked ? "on" : ""}" ${!s.bridges ? "disabled" : ""}>4. Boshlangʻich belgi</button>
+        </div>
+        <div class="grid2" style="margin-top:6px">
+          <button onclick="act3('power')" class="${s.power ? "on" : "pri"}" ${!s.baseMarked ? "disabled" : ""}>${s.power ? "⏸ Pauza" : "⚡ Tokni yoqish"}</button>
+          <button onclick="act3('record')" ${s.tMin < 5 ? "disabled" : ""}>📌 Oʻlchovni yozish</button>
+        </div>
+      </div>
+      <div class="box">
+        <h4>Jonli koʻrsatkichlar</h4>
+        <div class="big" id="s3Clock">t = ${f1(s.tMin, 1)} min · S = ${f1(s.S_cm, 2)} sm<small>V = ${s.V} V · l = ${f1(s.l, 1)} sm</small></div>
+        ${s.records.length ? `
+          <table class="j">
+            <thead><tr><th>#</th><th>t, min</th><th>S, sm</th><th>V, V</th><th>l, sm</th></tr></thead>
+            <tbody>${s.records.map((r, i) => `<tr><td>${i + 1}</td><td>${f1(r.tMin, 1)}</td><td>${f1(r.S_cm, 2)}</td><td>${r.V}</td><td>${f1(r.l, 1)}</td></tr>`).join("")}</tbody>
+          </table>
+          <div style="margin-top:8px">${chartSvg}</div>
+        ` : `<p class="note">Kamida 5 daqiqa tok oʻtgach «Oʻlchovni yozish» tugmasini bosing (2–3 nuqta olsangiz chiziqli grafik chiqadi).</p>`}
+      </div>
+      <div class="box">
+        <h4>Harakatchanlikni hisoblash</h4>
+        <div class="eq">U = (S · l) / (V · t)   [sm² / (V · min)]</div>
+        <p class="note">Oʻlchov jadvalidan S, l, V, t qiymatlarini qoʻyib U ni hisoblang (masalan, 0,0210):</p>
+        <div class="calc-row">
+          <input id="uInputEl" type="text" placeholder="U [sm²/(V·min)]" value="${s.uInput}">
+          <button class="pri" onclick="checkU3()">Tekshirish</button>
+        </div>
+        ${s.uChecked ? (s.uOk
+          ? `<p class="note" style="margin-top:6px;color:var(--ok);font-weight:700">✓ Toʻgʻri! U = ${f1(prop.U_min, 4)} sm²/(V·min) = ${f1(prop.U_min / 60 * 1e4, 2)}·10⁻⁴ sm²/(V·s)</p>`
+          : `<p class="note" style="margin-top:6px;color:var(--err)">✗ Natija mos kelmadi. S (sm) · ${f1(s.l, 1)} / (${s.V} · t (min)) ni qayta hisoblang.</p>`) : ""}
+      </div>
+      ${renderStageQs(2)}
+      ${stageDone(2) ? `<button class="next pri" onclick="goStage(3)">Yakuniy hisobot va testga oʻtish →</button>` : ""}
+    `;
+  } else {
+    renderReport();
+  }
+}
+
+function renderReport() {
+  const t = total();
+  const prop = SOL_PROPS[S.s3.solType];
+  const grade = t.tot >= 90 ? "Aʼlo (5)" : t.tot >= 75 ? "Yaxshi (4)" : t.tot >= 60 ? "Qoniqarli (3)" : "Tugallanmagan";
+  const chartSvg = S.s3.records.length ? svgChart({
+    title: `${prop.name}: S(t) elektroforez grafigi`,
+    xl: "t, min", yl: "S, sm",
+    x0: 0, xm: Math.max(25, ...S.s3.records.map(r => r.tMin + 4)), y0: 0, ym: Math.max(3, ...S.s3.records.map(r => r.S_cm + 0.6)),
+    series: [{ color: prop.color, pts: [{ x: 0, y: 0 }, ...S.s3.records.map(r => ({ x: r.tMin, y: r.S_cm }))] }]
+  }) : "";
+
+  el("panel").innerHTML = `<div class="rep">
+    <h2>4-laboratoriya hisoboti</h2>
+    <div class="score">
+      <div class="n">${t.tot}</div>
+      <div><b>${grade}</b><br><span style="font-size:12px;opacity:.82">1-tajriba: ${t.p1 + t.q1}/24 · 2-tajriba: ${t.p2 + t.q2}/26 · 3-tajriba: ${t.p3 + t.q3}/30 · Test: ${t.qz}/20</span></div>
+    </div>
+
+    <div class="box">
+      <h4>Tajriba natijalari xulosasi</h4>
+      <table class="j">
+        <thead><tr><th>Tajriba</th><th>Natija</th><th>Holat</th></tr></thead>
+        <tbody>
+          <tr><td>1. Loy (gil)</td><td>Anod (+) loyqalandi → (−)</td><td>${S.s1.chargeOk ? "✓" : "—"}</td></tr>
+          <tr><td>2a. AgBr (Ag⁺ moʻl)</td><td>Katod (−) ga → (+)</td><td>${S.s2.solA.ok ? "✓" : "—"}</td></tr>
+          <tr><td>2b. AgBr (Br⁻ moʻl)</td><td>Anod (+) ga → (−)</td><td>${S.s2.solB.ok ? "✓" : "—"}</td></tr>
+          <tr><td>3. ${prop.name}</td><td>U = ${S.s3.uOk ? f1(prop.U_min, 4) + " sm²/(V·min)" : "—"}</td><td>${S.s3.uOk ? "✓" : "—"}</td></tr>
+        </tbody>
+      </table>
+      ${chartSvg ? `<div style="margin-top:8px">${chartSvg}</div>` : ""}
+    </div>
+
+    <div class="box">
+      <h4>Yakuniy test (5 savol × 4 ball = 20 ball)</h4>
+      ${QUIZ.map((q, qi) => {
+        const order = shuf(q.opts.length, 404 + qi * 13);
+        const picked = S.quiz[q.id];
+        return `<div class="q"><p>${q.p}</p>` +
+          order.map(oi => {
+            const cls = picked === oi ? (oi === q.ok ? "right" : "wrong") : "";
+            return `<button class="${cls}" onclick="ansQuiz('${q.id}',${oi})">${q.opts[oi]}</button>`;
+          }).join("") + `</div>`;
+      }).join("")}
+    </div>
+
+    <div class="row noprint">
+      <button class="pri" style="flex:1" onclick="window.print()">🖨️ Hisobotni chop etish</button>
+      <button class="ghost" onclick="location.reload()">↺ Qaytadan boshlash</button>
+    </div>
+  </div>`;
+}
+
+function renderAll() {
+  renderTabs();
+  renderScene();
+  renderPanel();
+}
+
+/* ============ MODALLAR (NAZARIYA, JURNAL, MASLAHAT, KIRISH) ============ */
+function showTheory() {
+  modal(`
+    <h1>📘 4-laboratoriya nazariyasi</h1>
+    <p><b>Mavzu:</b> Dispers sistemalarning elektr xossalari. Zarracha zaryadini aniqlash. Elektroforez va elektroosmos.</p>
+    <h3>1. Elektroforez va elektroosmos</h3>
+    <ul>
+      <li><b>Elektroforez</b> — tashqi oʻzgarmas elektr maydon taʼsirida dispers faza zarrachalarining suyuq muhitda qarama-qarshi zaryadli elektrod tomon harakatlanishi.</li>
+      <li><b>Elektroosmos</b> — elektr maydon taʼsirida dispersion muhit (suyuqlik) ning qoʻzgʻalmas gʻovak diafragma (masalan, nam loy) orqali harakatlanishi.</li>
+    </ul>
+    <h3>2. Kolloid mitsella tuzilishi (Panet–Fayans qoidasi)</h3>
+    <p>Yadro sirtiga eritmada ortiqcha boʻlgan va kristall panjarani toʻldira oladigan <b>potensial belgilovchi ionlar</b> adsorbsiyalanadi:</p>
+    <div class="eq">AgNO₃ ortiqcha: {m[AgBr] · nAg⁺ · (n−x)NO₃⁻}ˣ⁺ · xNO₃⁻   (musbat zol)</div>
+    <div class="eq">KBr ortiqcha:   {m[AgBr] · nBr⁻ · (n−x)K⁺}ˣ⁻ · xK⁺     (manfiy zol)</div>
+    <h3>3. Elektroforetik harakatchanlik</h3>
+    <p>Kolloid zarrachalarning birlik elektr maydon kuchlanganligidagi (1 V/sm) harakat tezligi <b>harakatchanlik (U)</b> deyiladi:</p>
+    <div class="eq">U = (S · l) / (V · t)</div>
+    <p>Bu yerda: <b>S</b> — chegaraning siljishi (sm), <b>l</b> — agar-agar koʻpriklar orasidagi U-nay uzunligi (sm), <b>V</b> — kuchlanish (V), <b>t</b> — vaqt (min yoki s). Qutblanishni oldini olish uchun Cu elektrodlar CuSO₄ eritmasiga, u esa agar-agar koʻprikchalar orqali U-nayga ulanadi.</p>
+    ${refsHTML()}
+    <div class="row" style="margin-top:14px;justify-content:flex-end"><button class="pri" onclick="LabUI.closeModal()">Yopish</button></div>
+  `);
+}
+
+function showJournal() {
+  const prop = SOL_PROPS[S.s3.solType];
+  modal(`
+    <h1>📋 Laboratoriya jurnali (4-ish)</h1>
+    <h3>1-tajriba: Loy (gil) elektroforezi</h3>
+    <p>Vaqt: <b>${f1(S.s1.tMin, 1)} min</b> · Anod (+) nayi: ${S.s1.tMin >= 3 ? "loyqalandi, suv sathi pasaydi" : "hali kuzatilmadi"} · Zaryad: <b>${S.s1.chargeOk ? "Manfiy (−)" : "aniqlanmagan"}</b></p>
+    <h3>2-tajriba: AgBr zollari</h3>
+    <table class="j">
+      <thead><tr><th>Namuna</th><th>Reaktivlar</th><th>Siljish</th><th>Zaryad</th></tr></thead>
+      <tbody>
+        <tr><td>Zol A</td><td>3 ml KBr(→10) + 5 ml AgNO₃(→40)</td><td>Katod (−) ga</td><td>${S.s2.solA.ok ? "Musbat (+)" : "—"}</td></tr>
+        <tr><td>Zol B</td><td>5 ml KBr(→40) + 4 ml AgNO₃(→15)</td><td>Anod (+) ga</td><td>${S.s2.solB.ok ? "Manfiy (−)" : "—"}</td></tr>
+      </tbody>
+    </table>
+    <h3>3-tajriba: Harakatchanlik (${prop.name})</h3>
+    ${S.s3.records.length ? `<table class="j">
+      <thead><tr><th>#</th><th>t, min</th><th>S, sm</th><th>V, V</th><th>l, sm</th><th>U, sm²/(V·min)</th></tr></thead>
+      <tbody>${S.s3.records.map((r, i) => `<tr><td>${i + 1}</td><td>${f1(r.tMin, 1)}</td><td>${f1(r.S_cm, 2)}</td><td>${r.V}</td><td>${f1(r.l, 1)}</td><td>${f1((r.S_cm * r.l) / (r.V * r.tMin), 4)}</td></tr>`).join("")}</tbody>
+    </table>` : `<p class="note">Hali oʻlchov qayd etilmagan.</p>`}
+    <div class="row" style="margin-top:14px;justify-content:flex-end"><button class="pri" onclick="LabUI.closeModal()">Yopish</button></div>
+  `);
+}
+
+function showHint() {
+  let h = "";
+  if (S.stage === 0) {
+    if (!S.s1.tubes) h = "Loy blokiga 2 ta shisha nayni tiqing (sahnadagi konturni yoki 1-tugmani bosing).";
+    else if (!S.s1.sand) h = "Chapdagi qum stakanini bosib har bir nayga 0,5 sm yuvilgan qum soling.";
+    else if (!S.s1.water) h = "Distillangan suv yuvgichini bosib qum ustidan 2,5 sm suv quying.";
+    else if (!S.s1.electrodes) h = "Mis (Cu) elektrodlarni naylarga tushiring.";
+    else if (S.s1.tMin < 3) h = "2 V batareyani yoqing va tezlashtirish (×10 / ×30) bilan 3+ daqiqa kuzating.";
+    else h = "Anod (+) nayi loyqalandi — demak loy zarrachalari manfiy (−) zaryadlangan!";
+  } else if (S.stage === 1) {
+    const cur = S.s2.activeSol === "A" ? S.s2.solA : S.s2.solB;
+    if (!cur.mixed) h = `Zol ${S.s2.activeSol} uchun KBr, keyin AgNO₃ ni tayyorlab kolbada aralashtiring.`;
+    else if (!cur.loaded) h = "Voronkani bosib AgBr zolini U-simon nayga toʻldiring.";
+    else if (!cur.elec) h = "U-nay tirsaklariga elektrodlarni oʻrnating.";
+    else if (cur.tMin < 2) h = "100 V kenotron toʻgʻrilagichni yoqing va chegara siljishini kuzating.";
+    else if (!cur.ok) h = S.s2.activeSol === "A" ? "Zol A da Ag⁺ ortiqcha — zol katod (−) ga siljiydi, demak zaryadi (+)." : "Zol B da Br⁻ ortiqcha — zol anod (+) ga siljiydi, demak zaryadi (−).";
+    else h = "Endi ikkinchi zolga (Zol A ↔ Zol B) oʻtib uni ham tekshiring!";
+  } else if (S.stage === 2) {
+    if (!S.s3.waterFilled) h = "U-nayga 1/3 balandlikgacha distillangan suv quying.";
+    else if (!S.s3.solLayered) h = "Voronka joʻmragini sekin ochib zolni suv ostiga qatlamlang.";
+    else if (!S.s3.bridges) h = "Agar-agar tuz koʻprikchalarini CuSO₄ stakanlari bilan tutashtiring.";
+    else if (!S.s3.baseMarked) h = "Boshlangʻich zol–suv chegarasini belgilang.";
+    else if (S.s3.records.length === 0) h = "Tokni yoqib kamida 5–20 daqiqa oʻtkazing va «Oʻlchovni yozish» ni bosing.";
+    else {
+      const r = S.s3.records[S.s3.records.length - 1];
+      const u = (r.S_cm * r.l) / (r.V * r.tMin);
+      h = `Formula: U = (${f1(r.S_cm, 2)} × ${f1(r.l, 1)}) / (${r.V} × ${f1(r.tMin, 1)}) ≈ ${f1(u, 4)} sm²/(V·min).`;
+    }
+  } else {
+    h = "Yakuniy 5 ta test savoliga javob bering va hisobotni chop eting!";
+  }
+  toast("💡 " + h, "warn", 5200);
+}
+
+function showIntro() {
+  modal(`
+    <h1>⚡ 4-laboratoriya: Elektroforez va zarracha zaryadi</h1>
+    <p>Ushbu virtual laboratoriyada dispers sistemalarning elektr xossalarini 3 ta bosqichda amaliy oʻrganasiz:</p>
+    <ul>
+      <li><b>1-tajriba (28-rasm):</b> 8×15×4 sm loy blokida 2 V batareya yordamida elektroforez va elektroosmosni kuzatish.</li>
+      <li><b>2-tajriba (29-rasm):</b> Ortiqcha Ag⁺ (Zol A) va ortiqcha Br⁻ (Zol B) bilan AgBr zollarini olish va 100 V tokda zaryad ishorasini aniqlash.</li>
+      <li><b>3-tajriba (30-rasm):</b> Agar-agar koʻprikchali U-nayda kolloid zarrachalarning harakatchanligini <code>U = S·l/(V·t)</code> boʻyicha hisoblash.</li>
+    </ul>
+    <p class="note" style="margin-top:10px">Maslahat: pastki paneldagi <b>×10 / ×30 / ×60</b> tugmalari bilan tajriba vaqtini tezlashtirishingiz mumkin.</p>
+    <div class="row" style="margin-top:16px;justify-content:flex-end"><button class="pri" onclick="LabUI.closeModal()">Boshlash →</button></div>
+  `);
+}
+
+/* ============ INITSIALIZATSIYA ============ */
+LabUI.initShell(LAB_ID);
+document.querySelectorAll("[data-sp]").forEach(btn => {
+  if (+btn.dataset.sp === S.speed) btn.classList.add("on");
+  btn.addEventListener("click", () => {
+    S.speed = +btn.dataset.sp;
+    document.querySelectorAll("[data-sp]").forEach(b => b.classList.toggle("on", +b.dataset.sp === S.speed));
+    SFX.play("click");
+    toast(`Vaqt tezligi: ×${S.speed}`, "", 1800);
+  });
+});
+el("btnTable").addEventListener("click", () => { SFX.play("click"); showJournal(); });
+el("btnHint").addEventListener("click", () => { SFX.play("click"); showHint(); });
+el("btnTheory").addEventListener("click", () => { SFX.play("click"); showTheory(); });
+
+renderAll();
+showIntro();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

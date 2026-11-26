@@ -1,0 +1,1302 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="author" content="Qayumov Hayitali">
+<meta name="description" content="6-laboratoriya ishi: Gidrofil zollarning koagullanishi. Tuxum oqsili (albumin) eritmasini Byuxner voronkasida filtrlash, (NH4)2SO4 bilan qaytar tuzlash va qizdirib qaytmas termik denaturatsiya.">
+<title>6-laboratoriya: Gidrofil zollar (albumin) koagullanishi — Kolloid Kimyo</title>
+<link rel="stylesheet" href="../assets/lab-core.css">
+<style>
+  .pill-row { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .pill-row button { flex:1; min-width:92px; font-size:12.2px; padding:8px 6px; }
+  .meter {
+    height:10px; border-radius:99px; background:#dfeae8; overflow:hidden; margin:6px 0 4px;
+    border:1px solid var(--line);
+  }
+  .meter > div { height:100%; background:linear-gradient(90deg, #1f9d6b, #e89b3c); transition:width .25s; }
+</style>
+</head>
+<body>
+<header class="lab-head">
+  <a class="home-link" href="../index.html">← Bosh sahifa</a>
+  <div class="lab-switch-wrap" id="labSwitchWrap"></div>
+  <div class="brand">6-lab · Gidrofil zollar (albumin)<small>Qaytar tuzlash va qaytmas termik koagullanish</small></div>
+  <nav class="tabs" id="tabs"></nav>
+  <div class="scorechip" id="chip">0 ball</div>
+</header>
+
+<main class="lab-main">
+  <div id="stageWrap">
+    <svg id="scene" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+  <aside id="panel"></aside>
+</main>
+
+<footer class="lab-foot">
+  <span class="lbl">JARAYON TEZLIGI</span>
+  <button data-sp="1">×1</button>
+  <button data-sp="3">×3</button>
+  <button data-sp="6">×6</button>
+  <span class="sp"></span>
+  <button id="btnTable">📋 Jurnal</button>
+  <button id="btnHint">💡 Maslahat</button>
+  <button id="btnTheory">📘 Nazariya</button>
+  <button id="btnSnd">🔊 Ovoz</button>
+  <button id="btnFull">⛶</button>
+  <a class="ig-credit" href="https://instagram.com/hayitali1612" target="_blank" rel="noopener noreferrer" title="Instagram: @hayitali1612">hayitali1612</a>
+</footer>
+
+<div id="toasts"></div>
+<div id="modal"><div class="card" id="modalCard"></div></div>
+
+<script src="../assets/lab-core.js"></script>
+<script>
+"use strict";
+const LAB_ID = 6;
+const { el, clamp, lerp, f1, shuf, toast, modal, closeModal, svgChart, refsHTML } = LabUI;
+
+/* ============ HOLAT (STATE) ============ */
+const S = {
+  stage: 0, // 0: Tayyorlash va Byuxner filtrlash, 1: Qaytar tuzlash, 2: Qaytmas qizdirish, 3: Hisobot
+  speed: 3,
+  // Stage 1: Tuxum oqsili + 100 ml suv + Byuxner voronkasi + suv purkash nasosi
+  s1: {
+    eggAdded: false,
+    mixed: false,
+    paperPlaced: false,
+    paperWet: false,
+    pumpOn: false,
+    filtering: false,
+    filtrateMl: 0, // 0 -> 95 ml
+    done: false,
+    q: {}
+  },
+  // Stage 2: Qaytar koagullanish ((NH4)2SO4 tuzlash)
+  s2: {
+    poured45: false,
+    saltScoops: 0, // 0..6 (har qoshiq = 6 g, 36 g = to'yingan!)
+    saltGrams: 0,
+    saltedOut: false,
+    filteredDry: false,
+    inPureWater: false,
+    stirredRedissolve: false,
+    redissolveProg: 0, // 0..1 animatsiya
+    guess: null,
+    guessOk: false,
+    scoopAnim: 0,
+    q: {}
+  },
+  // Stage 3: Qaytmas koagullanish (termik denaturatsiya 20 -> 75 °C -> 22 °C)
+  s3: {
+    pouredRem: false,
+    thermoIn: false,
+    heaterOn: false,
+    cooling: false,
+    tempC: 20.0,
+    maxTempC: 20.0,
+    coagulated: false,
+    cooled: false,
+    waterTested: false,
+    history: [{ T: 20, turb: 8 }],
+    guess: null,
+    guessOk: false,
+    q: {}
+  },
+  quiz: {}
+};
+
+// Termik denaturatsiya loyqaligi (%): 50-60 °C da keskin o'sadi, qaytmas (maxTempC bo'yicha!)
+function thermalTurbidity(maxT) {
+  if (maxT < 46) return 8;
+  // Sigmoid: 56 °C da 55%, 64 °C da 95%
+  return clamp(8 + 90 / (1 + Math.exp(-(maxT - 56) * 0.42)), 8, 98);
+}
+
+/* ============ SAVOLLAR ============ */
+const STAGE_QS = {
+  0: [
+    {
+      id: "s1q1",
+      p: "1. Tuxum oqsili eritmasini oddiy voronkada emas, balki Byuxner voronkasi va suv purkash nasosi bilan filtrlashning afzalligi nima?",
+      opts: [
+        "Oqsil eritmasi qovushqoq boʻlgani uchun vakuum ostida soʻrib filtrlash jarayonni keskin tezlashtiradi",
+        "Suv purkash nasosi oqsilni qizdirib pishiradi",
+        "Vakuum oqsil makromolekulalarini parchalab yuboradi",
+        "Byuxner voronkasi faqat spirtni filtrlaydi"
+      ],
+      ok: 0
+    },
+    {
+      id: "s1q2",
+      p: "2. Filtrlashni boshlashdan oldin Byuxner voronkasidagi filtr qogʻozni nima uchun distillangan suv bilan namlash kerak?",
+      opts: [
+        "Filtr qogʻoz teshikli tubga mahkam yopishib, chetidan havo va loyqa aralashma oʻtib ketmasligi uchun",
+        "Qogʻozni eritib yuborish uchun",
+        "Albuminni koagullash uchun",
+        "Vakuumni kamaytirish uchun"
+      ],
+      ok: 0
+    }
+  ],
+  1: [
+    {
+      id: "s2q1",
+      p: "1. Ammoniy sulfat (NH₄)₂SO₄ bilan toʻyintirilganda albuminning pagʻa-pagʻa choʻkmaga tushishi (tuzlash) qanday mexanizmga asoslanadi?",
+      opts: [
+        "Tuz ionlari suv molekulalarini bogʻlab olib, oqsil atrofidagi gidrat qobiqni yechadi va zaryadni ekranlaydi (oqsili denaturatsiyalanmaydi)",
+        "Ammoniy sulfat oqsilning peptid bogʻlarini uzib parchalaydi",
+        "Eritma 90 °C gacha qizib ketadi",
+        "Albumin ammoniy sulfat bilan erimaydigan kovalent birikma hosil qiladi"
+      ],
+      ok: 0
+    },
+    {
+      id: "s2q2",
+      p: "2. Tuzlash natijasida olingan albumin choʻkmasi toza distillangan suvga solinganda nega toʻliq qayta erib ketdi?",
+      opts: [
+        "Oqsilning tabiiy (nativ) strukturasi saqlanib qolgani uchun suvda gidrat qobigʻi yana tiklandi — bu qaytar koagullanish",
+        "Distillangan suv oqsilni kislotali gidroliz qildi",
+        "Choʻkma aslida faqat tuz kristallari edi",
+        "Suv harorati 75 °C boʻlgani uchun"
+      ],
+      ok: 0
+    }
+  ],
+  2: [
+    {
+      id: "s3q1",
+      p: "1. Tuxum oqsili (albumin) eritmasini ohista qizdirganda qaysi harorat oraligʻida oq quyqa va pagʻa-pagʻa choʻkma paydo boʻla boshlaydi?",
+      opts: ["50–60 °C dan boshlab", "10–15 °C da", "Faqat 100 °C da qaynaganida", "25–30 °C da"],
+      ok: 0
+    },
+    {
+      id: "s3q2",
+      p: "2. Qizdirib olingan albumin choʻkmasi sovitilgach toza suvda nima uchun qayta erimadi?",
+      opts: [
+        "Qizdirishda oqsilda qaytmas termik denaturatsiya yuz berib, fazoviy (nativ) strukturasi buzildi",
+        "Suv yetarli quyilmadi",
+        "Eritmada ammoniy sulfat koʻp edi",
+        "Oqsil soviganda muzlab qoldi"
+      ],
+      ok: 0
+    }
+  ]
+};
+
+const QUIZ = [
+  {
+    id: "q1",
+    p: "1. Gidrofil zollar (albumin, jelatina) ning elektrolitlarning yuqori konsentratsiyasi taʼsirida gidrat qobigʻini yoʻqotib qaytar choʻkishi nima deyiladi?",
+    opts: ["Tuzlash (vysalivaniye / salting-out)", "Termik denaturatsiya", "Peptizatsiya", "Elektroforez"],
+    ok: 0
+  },
+  {
+    id: "q2",
+    p: "2. 6-laboratoriya ishida albuminni qaytar koagullash (tuzlash) uchun qaysi kristall tuz ishlatildi?",
+    opts: ["Ammoniy sulfat — (NH₄)₂SO₄", "Kumush nitrat — AgNO₃", "Mis kuporosi — CuSO₄", "Kaliy bromid — KBr"],
+    ok: 0
+  },
+  {
+    id: "q3",
+    p: "3. Qaytar va qaytmas koagullanishning asosiy farqi nimada?",
+    opts: [
+      "Qaytar koagullanishda choʻkma toza suvda qayta erib zol hosil qiladi; qaytmas koagullanishda erimaydi",
+      "Qaytar koagullanish faqat qizdirishda roʻy beradi",
+      "Qaytmas koagullanishda choʻkma hosil boʻlmaydi",
+      "Hech qanday farqi yoʻq"
+    ],
+    ok: 0
+  },
+  {
+    id: "q4",
+    p: "4. Tuxum oqsili eritmasi Byuxner voronkasida qaysi idishga soʻrib filtrlanadi?",
+    opts: ["Bunzen kolbasiga (suv purkash nasosiga ulangan)", "U-simon nayga", "Ostvald viskozimetriga", "Byuretkaga"],
+    ok: 0
+  },
+  {
+    id: "q5",
+    p: "5. Oqsilning termik denaturatsiyasi (50–75 °C) qaysi turdagi koagullanishga kiradi?",
+    opts: ["Qaytmas koagullanish", "Qaytar koagullanish", "Tiksotropiya", "Dializ"],
+    ok: 0
+  }
+];
+
+/* ============ BALLAR HISOBI (0..100) ============ */
+function total() {
+  // Stage 1: 18 amaliy + 6 savol = 24
+  let p1 = 0;
+  if (S.s1.eggAdded) p1 += 3;
+  if (S.s1.mixed) p1 += 3;
+  if (S.s1.paperPlaced) p1 += 3;
+  if (S.s1.paperWet) p1 += 3;
+  if (S.s1.pumpOn) p1 += 3;
+  if (S.s1.done) p1 += 3;
+  let q1 = STAGE_QS[0].reduce((a, q) => a + (S.s1.q[q.id] === q.ok ? 3 : 0), 0);
+
+  // Stage 2: 22 amaliy + 6 savol = 28
+  let p2 = 0;
+  if (S.s2.poured45) p2 += 3;
+  if (S.s2.saltedOut) p2 += 5;
+  if (S.s2.filteredDry) p2 += 4;
+  if (S.s2.stirredRedissolve) p2 += 5;
+  if (S.s2.guessOk) p2 += 5;
+  let q2 = STAGE_QS[1].reduce((a, q) => a + (S.s2.q[q.id] === q.ok ? 3 : 0), 0);
+
+  // Stage 3: 22 amaliy + 6 savol = 28
+  let p3 = 0;
+  if (S.s3.pouredRem && S.s3.thermoIn) p3 += 4;
+  if (S.s3.coagulated) p3 += 6;
+  if (S.s3.cooled) p3 += 4;
+  if (S.s3.waterTested) p3 += 4;
+  if (S.s3.guessOk) p3 += 4;
+  let q3 = STAGE_QS[2].reduce((a, q) => a + (S.s3.q[q.id] === q.ok ? 3 : 0), 0);
+
+  // Quiz: 5 * 4 = 20
+  let qz = QUIZ.reduce((a, q) => a + (S.quiz[q.id] === q.ok ? 4 : 0), 0);
+  const tot = p1 + q1 + p2 + q2 + p3 + q3 + qz;
+  return { p1, q1, p2, q2, p3, q3, qz, tot };
+}
+
+function stageDone(i) {
+  if (i === 0) return S.s1.done && STAGE_QS[0].every(q => S.s1.q[q.id] === q.ok);
+  if (i === 1) return S.s2.guessOk && STAGE_QS[1].every(q => S.s2.q[q.id] === q.ok);
+  if (i === 2) return S.s3.guessOk && STAGE_QS[2].every(q => S.s3.q[q.id] === q.ok);
+  return false;
+}
+
+const TAB_NAMES = ["1. Albumin & Byuxner", "2. Qaytar (tuzlash)", "3. Qaytmas (qizdirish)", "4. Hisobot"];
+function renderTabs() {
+  const t = total();
+  const doneAll = stageDone(0) && stageDone(1) && stageDone(2) && QUIZ.every(q => S.quiz[q.id] !== undefined);
+  el("chip").textContent = `${t.tot} / 100 ball`;
+  el("tabs").innerHTML = TAB_NAMES.map((nm, i) => {
+    const cls = [S.stage === i ? "cur" : "", (i < 3 && stageDone(i)) || (i === 3 && doneAll) ? "done" : ""].join(" ");
+    return `<button class="${cls}" onclick="goStage(${i})">${nm}</button>`;
+  }).join("");
+  LabProgress.save(LAB_ID, t.tot, doneAll || t.tot >= 75);
+}
+
+window.goStage = function(i) {
+  if ((i === 1 || i === 2) && !S.s1.done) {
+    SFX.play("warn");
+    return toast("Avval 1-bosqichda tuxum oqsili eritmasini Byuxner voronkasida filtrlab oling!", "warn");
+  }
+  SFX.play("click");
+  S.stage = i;
+  renderAll();
+};
+
+/* ============ ANIMATSIYA (requestAnimationFrame) ============ */
+let lastTs = performance.now();
+let animPhase = 0;
+
+function tick(now) {
+  const dt = Math.min(0.08, (now - lastTs) / 1000);
+  lastTs = now;
+  animPhase += dt;
+
+  let uiRefresh = false;
+
+  // Stage 1: Vakuum filtrlash
+  if (S.s1.filtering && S.s1.filtrateMl < 95) {
+    const prev = Math.floor(S.s1.filtrateMl / 5);
+    S.s1.filtrateMl = clamp(S.s1.filtrateMl + dt * 11 * S.speed, 0, 95);
+    if (Math.floor(S.s1.filtrateMl / 5) !== prev) uiRefresh = true;
+    if (S.s1.filtrateMl >= 95) {
+      S.s1.filtering = false;
+      S.s1.done = true;
+      SFX.play("ok");
+      toast("Filtrlash yakunlandi! ~95 ml tiniq opalesent albumin eritmasi olindi.", "ok", 4500);
+      uiRefresh = true;
+    }
+  }
+
+  // Stage 2: Tuz tushishi & qayta erish animatsiyasi
+  if (S.s2.scoopAnim > 0) S.s2.scoopAnim = Math.max(0, S.s2.scoopAnim - dt * 1.5);
+  if (S.s2.stirredRedissolve && S.s2.redissolveProg < 1) {
+    S.s2.redissolveProg = clamp(S.s2.redissolveProg + dt * 0.45 * S.speed, 0, 1);
+    if (S.s2.redissolveProg >= 1) {
+      SFX.play("ok");
+      toast("Choʻkma toza suvda TOʻLIQ QAYTA ERIDI! Bu — qaytar koagullanish.", "ok", 4500);
+      uiRefresh = true;
+    }
+  }
+
+  // Stage 3: Isitish (20 -> 75 °C) va sovitish (75 -> 22 °C)
+  if (S.s3.heaterOn && S.s3.tempC < 75) {
+    const prevDeg = Math.floor(S.s3.tempC);
+    S.s3.tempC = clamp(S.s3.tempC + dt * 2.8 * S.speed, 20, 75);
+    if (S.s3.tempC > S.s3.maxTempC) S.s3.maxTempC = S.s3.tempC;
+    if (Math.floor(S.s3.tempC) !== prevDeg) {
+      if (Math.floor(S.s3.tempC) % 5 === 0) {
+        S.s3.history.push({ T: Math.round(S.s3.tempC), turb: Math.round(thermalTurbidity(S.s3.maxTempC)) });
+      }
+      if (prevDeg < 52 && S.s3.tempC >= 52) {
+        SFX.play("bubble");
+        toast("52 °C: eritmada oq quyqa (loyqalanish) paydo boʻla boshladi!", "warn", 3600);
+      }
+      if (prevDeg < 64 && S.s3.tempC >= 64 && !S.s3.coagulated) {
+        S.s3.coagulated = true;
+        SFX.play("bell");
+        toast("64 °C: albumin pagʻa-pagʻa oq choʻkma shaklida koagullandi!", "ok", 4200);
+      }
+      uiRefresh = true;
+    }
+    if (S.s3.tempC >= 75) {
+      S.s3.heaterOn = false;
+      S.s3.coagulated = true;
+      SFX.play("beep");
+      toast("75 °C ga yetdi. Isitgich oʻchirildi — endi eritmani sovuting!", "ok", 4200);
+      uiRefresh = true;
+    }
+  } else if (S.s3.cooling && S.s3.tempC > 22) {
+    const prevDeg = Math.floor(S.s3.tempC);
+    S.s3.tempC = clamp(S.s3.tempC - dt * 5.0 * S.speed, 22, 75);
+    if (Math.floor(S.s3.tempC) !== prevDeg) uiRefresh = true;
+    if (S.s3.tempC <= 22) {
+      S.s3.cooling = false;
+      S.s3.cooled = true;
+      SFX.play("ok");
+      toast("Eritma 22 °C gacha sovidi, ammo oq pagʻa-pagʻa choʻkma saqlanib qoldi! Suvda eruvchanligini tekshiring.", "warn", 4600);
+      uiRefresh = true;
+    }
+  }
+
+  updateSceneLive();
+  if (uiRefresh) {
+    if (S.stage === 0 && el("s1FiltRead")) {
+      el("s1FiltRead").innerHTML = `${Math.round(S.s1.filtrateMl)} ml<small>Bunzen kolbasidagi albumin filtrati</small>`;
+      if (S.s1.done) renderAll();
+    } else if (S.stage === 2 && el("s3TempRead")) {
+      el("s3TempRead").innerHTML = `${f1(S.s3.tempC, 1)} °C<small>Maks: ${f1(S.s3.maxTempC, 1)} °C · Loyqalik: ${Math.round(thermalTurbidity(S.s3.maxTempC))}%</small>`;
+      if (!S.s3.heaterOn && !S.s3.cooling) renderAll();
+    } else if (S.stage === 1 && S.s2.redissolveProg >= 1) {
+      renderAll();
+    }
+    renderTabs();
+  }
+  requestAnimationFrame(tick);
+}
+
+/* ============ SVG SAHNA ============ */
+function commonDefs() {
+  return `<defs>
+    <linearGradient id="wallG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d6e4e2"/><stop offset="100%" stop-color="#b4cac7"/>
+    </linearGradient>
+    <linearGradient id="benchG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5d787d"/><stop offset="14%" stop-color="#445d62"/><stop offset="100%" stop-color="#2a3d40"/>
+    </linearGradient>
+    <linearGradient id="glassG" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.62"/>
+      <stop offset="24%" stop-color="#ffffff" stop-opacity="0.1"/>
+      <stop offset="78%" stop-color="#dff2f5" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.46"/>
+    </linearGradient>
+    <linearGradient id="albG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f8f4dc" stop-opacity="0.82"/><stop offset="100%" stop-color="#ebe1b5" stop-opacity="0.88"/>
+    </linearGradient>
+    <linearGradient id="waterG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d0f1fa" stop-opacity="0.72"/><stop offset="100%" stop-color="#9ad8eb" stop-opacity="0.82"/>
+    </linearGradient>
+    <linearGradient id="ceramicG" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffffff"/><stop offset="65%" stop-color="#e9efef"/><stop offset="100%" stop-color="#cfd8d8"/>
+    </linearGradient>
+    <filter id="shd" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#091d20" flood-opacity="0.24"/>
+    </filter>
+  </defs>
+  <rect x="0" y="0" width="1000" height="474" fill="url(#wallG)"/>
+  <g opacity="0.2" stroke="#5d7c7e" stroke-width="1">
+    <line x1="0" y1="120" x2="1000" y2="120"/><line x1="0" y1="240" x2="1000" y2="240"/><line x1="0" y1="360" x2="1000" y2="360"/>
+  </g>
+  <rect x="0" y="470" width="1000" height="130" fill="url(#benchG)"/>
+  <rect x="0" y="468" width="1000" height="5" fill="#81a1a5"/>`;
+}
+
+/* --- SAHNA 1: TUXUM OQSILI & BYUXNER VORONKASI --- */
+function buildScene1() {
+  const s = S.s1;
+  const fProg = s.filtrateMl / 95;
+  return `${commonDefs()}
+  <text x="28" y="36" font-size="18" font-weight="800" fill="#132629">1-bosqich: Tuxum oqsili (albumin) eritmasini tayyorlash va Byuxner filtrlash</text>
+  <text x="28" y="56" font-size="13" fill="#3b5a5e">1–2 ta tuxum oqsili + 100 ml H₂O → Byuxner voronkasi (namlangan filtr qogʻoz) + suv purkash nasosi → Bunzen kolbasi</text>
+
+  <!-- Chap: Tuxum oqsili kosachasi -->
+  <g class="clk ${!s.eggAdded ? "glow" : ""}" onclick="act1('egg')" transform="translate(48,186)" filter="url(#shd)">
+    <path d="M12,38 Q12,78 58,78 Q104,78 104,38 Z" fill="#fffdf6" stroke="#857c68" stroke-width="2"/>
+    <ellipse cx="58" cy="38" rx="46" ry="11" fill="${s.eggAdded ? "#eef2f2" : "#f7efcc"}" stroke="#857c68" stroke-width="1.8"/>
+    ${!s.eggAdded ? `<ellipse cx="58" cy="39" rx="34" ry="7" fill="#fff8d6" opacity="0.9"/>` : ""}
+    <text x="58" y="100" text-anchor="middle" font-size="12" font-weight="800" fill="#132629">Tuxum oqsili</text>
+    <text x="58" y="116" text-anchor="middle" font-size="10.5" fill="#46696e">${s.eggAdded ? "✓ Qoʻshildi" : "100 ml suvga solish"}</text>
+  </g>
+
+  <!-- 100 ml Distillangan suv stakani (tuxum oqsilini ishlash) -->
+  <g class="clk ${s.eggAdded && !s.mixed ? "glow" : ""}" onclick="act1('mix')" transform="translate(182,302)" filter="url(#shd)">
+    <rect x="0" y="18" width="124" height="148" rx="8" fill="#eef8fa" stroke="#45676d" stroke-width="2.2"/>
+    <!-- Suyuqlik -->
+    <rect id="s1BeakerLiq" x="4" y="${54 + fProg * 86}" width="116" height="${Math.max(8, 108 - fProg * 86)}" rx="4" fill="${s.eggAdded ? "url(#albG)" : "url(#waterG)"}"/>
+    ${s.eggAdded && !s.mixed ? `<ellipse cx="62" cy="86" rx="34" ry="12" fill="#fff9db" stroke="#d9cb95" opacity="0.85"/>` : ""}
+    <!-- Shisha tayoqcha -->
+    <line x1="88" y1="-16" x2="54" y2="152" stroke="#7da7b0" stroke-width="5" stroke-linecap="round"/>
+    <rect x="0" y="18" width="124" height="148" rx="8" fill="url(#glassG)"/>
+    <text x="62" y="124" text-anchor="middle" font-size="11.5" font-weight="800" fill="#2c4448">${s.mixed ? "Albumin susp." : "100 ml H₂O"}</text>
+    <text x="62" y="185" text-anchor="middle" font-size="11.5" font-weight="700" fill="#edf5f4">${s.mixed ? "✓ Aralashtirildi" : "Aralashtirish"}</text>
+  </g>
+
+  <!-- Filtr qog'oz va namlash yuvgichi -->
+  <g class="clk ${s.mixed && !s.paperPlaced ? "glow" : ""}" onclick="act1('paper')" transform="translate(340,136)" filter="url(#shd)">
+    <ellipse cx="42" cy="24" rx="36" ry="12" fill="#ffffff" stroke="#859e9c" stroke-width="1.8"/>
+    <text x="42" y="54" text-anchor="middle" font-size="11.5" font-weight="800" fill="#132629">Filtr qogʻoz</text>
+    <text x="42" y="69" text-anchor="middle" font-size="10.5" fill="#46696e">${s.paperPlaced ? "✓ Qoʻyildi" : "Voronkaga qoʻyish"}</text>
+  </g>
+
+  <g class="clk ${s.paperPlaced && !s.paperWet ? "glow" : ""}" onclick="act1('wet')" transform="translate(340,228)" filter="url(#shd)">
+    <path d="M22,22 L54,22 L62,48 L62,102 Q62,110 54,110 L22,110 Q14,110 14,102 L14,48 Z" fill="#e8f6f9" stroke="#45676d" stroke-width="1.8"/>
+    <rect x="17" y="58" width="42" height="49" rx="4" fill="url(#waterG)"/>
+    <path d="M38,22 L38,8 Q38,2 50,2 L74,14" fill="none" stroke="#2c636e" stroke-width="3.5" stroke-linecap="round"/>
+    <text x="38" y="88" text-anchor="middle" font-size="11" font-weight="800" fill="#0e424f">H₂O</text>
+    <text x="38" y="128" text-anchor="middle" font-size="11" font-weight="700" fill="#132629">${s.paperWet ? "✓ Namlandi" : "Filtrni namlash"}</text>
+  </g>
+
+  <!-- MARKAZ: Byuxner voronkasi + Bunzen kolbasi -->
+  <g transform="translate(476,120)" filter="url(#shd)">
+    <!-- Byuxner voronkasi (keramik, teshikli) -->
+    <g class="clk ${s.pumpOn && !s.filtering && !s.done ? "glow" : ""}" onclick="act1('filter')">
+      <rect x="38" y="24" width="124" height="62" rx="5" fill="url(#ceramicG)" stroke="#5c7275" stroke-width="2"/>
+      <!-- Yuqoridagi filtrlanayotgan suyuqlik -->
+      ${s.filtering ? `<rect x="42" y="42" width="116" height="40" fill="url(#albG)"/>` : ""}
+      <!-- Filtr qog'oz va teshikchalar -->
+      <line x1="42" y1="82" x2="158" y2="82" stroke="${s.paperWet ? "#5bb6d6" : "#9aa8a6"}" stroke-width="${s.paperPlaced ? 4.5 : 1.5}" stroke-dasharray="${s.paperPlaced ? "none" : "5 4"}"/>
+      <!-- Konus pastki qismi -->
+      <polygon points="38,86 162,86 112,138 88,138" fill="url(#ceramicG)" stroke="#5c7275" stroke-width="2"/>
+      <rect x="92" y="138" width="16" height="58" fill="#dfe8e8" stroke="#5c7275" stroke-width="1.6"/>
+      <text x="100" y="14" text-anchor="middle" font-size="12.5" font-weight="800" fill="#132629">Byuxner voronkasi</text>
+    </g>
+
+    <!-- Rezina probka -->
+    <polygon points="74,154 126,154 120,180 80,180" fill="#2d3c40" stroke="#111"/>
+
+    <!-- Bunzen kolbasi (yon tarmog'i bilan) -->
+    <path d="M78,176 L122,176 L122,226 L184,334 Q190,348 172,348 L28,348 Q10,348 16,334 L78,226 Z" fill="#eef8fa" stroke="#45676d" stroke-width="2.4"/>
+    <!-- Yon vakuum naychasi -->
+    <rect x="122" y="196" width="46" height="12" rx="3" fill="#eef8fa" stroke="#45676d" stroke-width="2"/>
+
+    <!-- Bunzen kolbasidagi tiniq albumin filtrati -->
+    <clipPath id="bunsenClip">
+      <path d="M81,182 L119,182 L119,227 L180,333 Q185,344 170,344 L30,344 Q15,344 20,333 L81,227 Z"/>
+    </clipPath>
+    <g clip-path="url(#bunsenClip)">
+      <rect id="s1FiltLiq" x="12" y="${(345 - fProg * 96).toFixed(1)}" width="176" height="${(fProg * 96 + 6).toFixed(1)}" fill="url(#albG)"/>
+      <g id="s1FiltDrops"></g>
+    </g>
+    <path d="M78,176 L122,176 L122,226 L184,334 Q190,348 172,348 L28,348 Q10,348 16,334 L78,226 Z" fill="url(#glassG)"/>
+    <text x="100" y="330" text-anchor="middle" font-family="var(--mono)" font-size="12" font-weight="800" fill="#3b3211">${Math.round(s.filtrateMl)} ml filtrat</text>
+    <text x="100" y="368" text-anchor="middle" font-size="12" font-weight="700" fill="#edf5f4">Bunzen kolbasi</text>
+  </g>
+
+  <!-- Vakuum shlangi (Bunzen -> suv purkash nasosi) -->
+  <path d="M644,322 Q712,322 726,258 Q738,205 788,205" fill="none" stroke="#2c3d42" stroke-width="10" stroke-linecap="round"/>
+  <path d="M644,322 Q712,322 726,258 Q738,205 788,205" fill="none" stroke="#4f6c73" stroke-width="4" stroke-dasharray="10 6"/>
+
+  <!-- O'NG: Suv purkash nasosi (Water-jet vacuum pump) -->
+  <g class="clk ${s.paperWet && !s.pumpOn ? "glow" : ""}" onclick="act1('pump')" transform="translate(780,96)" filter="url(#shd)">
+    <!-- Kran -->
+    <rect x="44" y="0" width="24" height="46" rx="4" fill="#899ea3" stroke="#364a4f" stroke-width="2"/>
+    <rect x="18" y="14" width="76" height="14" rx="5" fill="${s.pumpOn ? "#1f9d6b" : "#e89b3c"}" stroke="#1c2f33" stroke-width="1.6"/>
+    <!-- Nasos korpusi (Venturi) -->
+    <rect x="38" y="46" width="36" height="126" rx="8" fill="#5e7c82" stroke="#243a3f" stroke-width="2"/>
+    <rect x="6" y="102" width="34" height="16" rx="4" fill="#5e7c82" stroke="#243a3f" stroke-width="2"/>
+    <!-- Suv oqimi -->
+    <g id="s1WaterJet" opacity="${s.pumpOn ? 1 : 0}">
+      <rect x="48" y="172" width="16" height="186" fill="#77d0f2" opacity="0.72"/>
+      <g id="s1JetBubbles"></g>
+    </g>
+    <!-- Rakovina -->
+    <rect x="12" y="346" width="128" height="24" rx="5" fill="#9fb6b8" stroke="#456063" stroke-width="2"/>
+    <!-- Vakuum manometri -->
+    <rect x="86" y="64" width="96" height="66" rx="10" fill="#172f34" stroke="#0c1b1e" stroke-width="2"/>
+    <text x="134" y="86" text-anchor="middle" font-size="10" font-weight="700" fill="#8eb4ba">VAKUUM NASOSI</text>
+    <text x="134" y="108" text-anchor="middle" font-family="var(--mono)" font-size="15" font-weight="800" fill="${s.pumpOn ? "#8cf5c1" : "#6c868a"}">${s.pumpOn ? "−72 kPa" : "0 kPa"}</text>
+    <text x="134" y="122" text-anchor="middle" font-size="10" fill="#d9eae7">${s.pumpOn ? "ISHLAMOQDA" : "OʻCHIQ (bosing)"}</text>
+    <text x="74" y="390" text-anchor="middle" font-size="11.5" font-weight="700" fill="#edf5f4">Suv purkash nasosi</text>
+  </g>`;
+}
+
+/* --- SAHNA 2: QAYTAR KOAGULLANISH (TUZLASH) --- */
+function buildScene2() {
+  const s = S.s2;
+  const satPct = clamp((s.saltScoops / 6) * 100, 0, 100);
+  const turb1 = s.poured45 ? (s.saltScoops >= 6 ? 95 : s.saltScoops >= 4 ? 52 : s.saltScoops >= 2 ? 22 : 8) : 0;
+  const rediss = s.redissolveProg;
+
+  return `${commonDefs()}
+  <text x="28" y="36" font-size="18" font-weight="800" fill="#132629">2-bosqich: Qaytar koagullanish — kristallik (NH₄)₂SO₄ bilan tuzlash</text>
+  <text x="28" y="56" font-size="13" fill="#3b5a5e">45 ml albumin filtrati + (NH₄)₂SO₄ (toʻyinguncha) → pagʻa-pagʻa choʻkma → filtrlash/quritish → toza suvda QAYTA ERISHI!</text>
+
+  <!-- 1. (NH4)2SO4 tuz bankasi va shpatel -->
+  <g class="clk ${s.poured45 && !s.saltedOut ? "glow" : ""}" onclick="act2('salt')" transform="translate(56,282)" filter="url(#shd)">
+    <rect x="0" y="24" width="114" height="156" rx="10" fill="#eef6f7" stroke="#45676d" stroke-width="2.2"/>
+    <rect x="22" y="2" width="70" height="24" rx="5" fill="#2c4b52"/>
+    <!-- Oq tuz kristallari -->
+    <rect x="6" y="72" width="102" height="104" rx="6" fill="#ffffff" stroke="#d9e4e2"/>
+    <rect x="12" y="88" width="90" height="58" rx="6" fill="#fff7e6" stroke="#d9b77c"/>
+    <text x="57" y="110" text-anchor="middle" font-size="12.5" font-weight="800" fill="#132629">(NH₄)₂SO₄</text>
+    <text x="57" y="128" text-anchor="middle" font-size="10.5" fill="#6b4b12">kristall kukun</text>
+    <text x="57" y="142" text-anchor="middle" font-family="var(--mono)" font-size="10.5" font-weight="700" fill="#1b484f">+6 g / qoshiq</text>
+    <text x="57" y="200" text-anchor="middle" font-size="11.5" font-weight="700" fill="#edf5f4">Ammoniy sulfat</text>
+  </g>
+
+  <!-- 2. Tuzlash stakani (45 ml albumin) -->
+  <g class="clk ${!s.poured45 ? "glow" : ""}" onclick="act2(S.s2.poured45 ? 'salt' : 'pour45')" transform="translate(238,266)" filter="url(#shd)">
+    <rect x="0" y="24" width="166" height="176" rx="10" fill="#eef8fa" stroke="#45676d" stroke-width="2.4"/>
+    ${s.poured45 ? `
+      <rect x="4" y="74" width="158" height="122" rx="5" fill="url(#albG)"/>
+      <rect x="4" y="74" width="158" height="122" rx="5" fill="#ffffff" opacity="${(turb1 / 100 * 0.88).toFixed(2)}"/>
+      <!-- Pag'a-pag'a albumin cho'kmasi (to'yinganda) -->
+      <g id="s2Flocs1"></g>
+      <!-- Tushayotgan tuz kristallari -->
+      <g id="s2SaltFall"></g>
+    ` : `<text x="83" y="122" text-anchor="middle" font-size="12.5" font-weight="700" fill="#46696e">45 ml albumin quyish</text>`}
+    <rect x="0" y="24" width="166" height="176" rx="10" fill="url(#glassG)"/>
+    <text x="83" y="14" text-anchor="middle" font-size="12.5" font-weight="800" fill="#132629">1-stakan: 45 ml albumin</text>
+    <text x="83" y="218" text-anchor="middle" font-family="var(--mono)" font-size="11.5" font-weight="700" fill="#edf5f4">Toʻyinish: ${Math.round(satPct)}% (${s.saltGrams} g)</text>
+  </g>
+
+  <!-- 3. Filtr qog'ozda quritilgan cho'kma -->
+  <g class="clk ${s.saltedOut && !s.filteredDry ? "glow" : ""}" onclick="act2('filterDry')" transform="translate(466,356)" filter="url(#shd)">
+    <ellipse cx="78" cy="86" rx="70" ry="22" fill="#ffffff" stroke="#7c9694" stroke-width="2"/>
+    <ellipse cx="78" cy="82" rx="58" ry="16" fill="#f7faf9" stroke="#c3d4d2" stroke-dasharray="4 3"/>
+    ${s.filteredDry && !s.inPureWater ? `
+      <g fill="#fffdf2" stroke="#d4c79c" stroke-width="1">
+        <circle cx="64" cy="79" r="9"/><circle cx="80" cy="76" r="11"/><circle cx="94" cy="81" r="8"/><circle cx="76" cy="85" r="9"/>
+      </g>
+    ` : ""}
+    <text x="78" y="42" text-anchor="middle" font-size="12" font-weight="800" fill="#132629">Filtr qogʻozda quritish</text>
+    <text x="78" y="126" text-anchor="middle" font-size="11" font-weight="700" fill="#edf5f4">${s.filteredDry ? (s.inPureWater ? "Suvga oʻtkazildi ✓" : "Quritilgan choʻkma ✓") : "Filtrlash va quritish"}</text>
+  </g>
+
+  <!-- 4. Toza distillangan suv stakani (Qayta eritish testi) -->
+  <g class="clk ${(s.filteredDry && !s.inPureWater) || (s.inPureWater && !s.stirredRedissolve) ? "glow" : ""}" onclick="act2(S.s2.inPureWater ? 'stir' : 'toWater')" transform="translate(690,266)" filter="url(#shd)">
+    <rect x="0" y="24" width="184" height="176" rx="10" fill="#eef8fa" stroke="#45676d" stroke-width="2.4"/>
+    <rect x="4" y="74" width="176" height="122" rx="5" fill="${rediss > 0.5 ? "url(#albG)" : "url(#waterG)"}"/>
+    <!-- Cho'kma suvda erib yo'qolishi -->
+    <g id="s2RedissolveFlocs"></g>
+    <!-- Shisha tayoqcha -->
+    <line id="s2StirRod" x1="126" y1="-10" x2="92" y2="178" stroke="#6d99a3" stroke-width="5.5" stroke-linecap="round"/>
+    <rect x="0" y="24" width="184" height="176" rx="10" fill="url(#glassG)"/>
+    <text x="92" y="14" text-anchor="middle" font-size="12.5" font-weight="800" fill="#132629">2-stakan: Toza distill. H₂O</text>
+    <text x="92" y="218" text-anchor="middle" font-size="12" font-weight="800" fill="${rediss >= 1 ? "#8cf5c1" : "#edf5f4"}">${rediss >= 1 ? "✓ TOʻLIQ QAYTA ERIDI!" : s.inPureWater ? "Aralashtirish (bosing)" : "Qayta erish sinovi"}</text>
+  </g>
+
+  <!-- Molekulyar izoh paneli (yuqori) -->
+  <g transform="translate(56,82)" filter="url(#shd)">
+    <rect x="0" y="0" width="888" height="114" rx="14" fill="#ffffff" fill-opacity="0.93" stroke="#c3d8d5" stroke-width="1.6"/>
+    <text x="444" y="24" text-anchor="middle" font-size="12.5" font-weight="800" fill="#0f2e33">Tuzlash (Salting-out) mexanizmi — gidrat qobiqning qaytar yechilishi</text>
+    <!-- 1-holat: Gidratlangan oqsil -->
+    <circle cx="150" cy="68" r="24" fill="#d3f0fa" stroke="#4ba3c4" stroke-width="2" stroke-dasharray="4 2"/>
+    <circle cx="150" cy="68" r="14" fill="#e89b3c"/>
+    <text x="150" y="104" text-anchor="middle" font-size="10.5" font-weight="700" fill="#2c4b52">1. Gidrat qobiqli albumin</text>
+    <text x="295" y="72" text-anchor="middle" font-size="18" font-weight="800" fill="#587276">+ (NH₄)₂SO₄ →</text>
+    <!-- 2-holat: Cho'kma -->
+    <circle cx="430" cy="64" r="12" fill="#e89b3c" stroke="#995807"/><circle cx="452" cy="64" r="12" fill="#e89b3c" stroke="#995807"/><circle cx="441" cy="80" r="12" fill="#e89b3c" stroke="#995807"/>
+    <text x="441" y="104" text-anchor="middle" font-size="10.5" font-weight="700" fill="#8f4f00">2. Gidrat qobiqsiz pagʻalar</text>
+    <text x="588" y="72" text-anchor="middle" font-size="18" font-weight="800" fill="#1f9d6b">+ Toza H₂O →</text>
+    <!-- 3-holat: Qayta erigan -->
+    <circle cx="745" cy="68" r="24" fill="#d3f0fa" stroke="#1f9d6b" stroke-width="2" stroke-dasharray="4 2"/>
+    <circle cx="745" cy="68" r="14" fill="#e89b3c"/>
+    <text x="745" y="104" text-anchor="middle" font-size="10.5" font-weight="800" fill="#126b47">3. Qayta erigan nativ zol!</text>
+  </g>`;
+}
+
+/* --- SAHNA 3: QAYTMAS KOAGULLANISH (TERMIK DENATURATSIYA) --- */
+function buildScene3() {
+  const s = S.s3;
+  const turb = thermalTurbidity(s.maxTempC);
+  const mercH = clamp(((s.tempC - 0) / 100) * 184, 10, 184);
+
+  return `${commonDefs()}
+  <text x="28" y="36" font-size="18" font-weight="800" fill="#132629">3-bosqich: Qaytmas koagullanish — termik denaturatsiya (50–75 °C)</text>
+  <text x="28" y="56" font-size="13" fill="#3b5a5e">Qolgan albumin filtratini 100 °C li termometr nazoratida ohista qizdirish → 50–60 °C quyqa → 60–75 °C pagʻa choʻkma → soviganda erimaydi!</text>
+
+  <!-- Elektr isitgich + Stakan + 100 °C termometr -->
+  <g transform="translate(220,104)" filter="url(#shd)">
+    <!-- Isitgich korpusi -->
+    <g class="clk ${s.thermoIn && !s.coagulated && !s.heaterOn ? "glow" : ""}" onclick="act3('heater')">
+      <rect x="44" y="302" width="212" height="58" rx="10" fill="#23373d" stroke="#0d1a1e" stroke-width="2.2"/>
+      <rect x="64" y="290" width="172" height="14" rx="4" fill="${s.heaterOn ? "#e05324" : "#566e73"}"/>
+      <!-- Qizish nuri -->
+      ${s.heaterOn ? `<ellipse cx="150" cy="292" rx="78" ry="8" fill="#ff7c38" opacity="0.55"/>` : ""}
+      <circle cx="88" cy="331" r="11" fill="${s.heaterOn ? "#ff5b2e" : "#4f686e"}" stroke="#fff" stroke-width="1.5"/>
+      <text x="165" y="336" text-anchor="middle" font-size="12.5" font-weight="800" fill="#fff">${s.heaterOn ? "🔥 ISITILMOQDA" : "ELEKTR PLITKA"}</text>
+    </g>
+
+    <!-- Stakan (albumin) -->
+    <g class="clk ${!s.pouredRem ? "glow" : ""}" onclick="act3('pourRem')">
+      <rect x="74" y="128" width="152" height="162" rx="8" fill="#eef8fa" stroke="#45676d" stroke-width="2.4"/>
+      ${s.pouredRem ? `
+        <rect x="78" y="178" width="144" height="108" rx="4" fill="url(#albG)"/>
+        <rect id="s3TurbRect" x="78" y="178" width="144" height="108" rx="4" fill="#ffffff" opacity="${(turb / 100 * 0.92).toFixed(2)}"/>
+        <g id="s3CoagFlocs"></g>
+        <!-- Issiqlik pufakchalari / bug' -->
+        <g id="s3Steam"></g>
+      ` : `<text x="150" y="218" text-anchor="middle" font-size="12" font-weight="700" fill="#46696e">Qolgan albuminni quyish</text>`}
+      <rect x="74" y="128" width="152" height="162" rx="8" fill="url(#glassG)"/>
+    </g>
+
+    <!-- 100 °C li simob/spirtli termometr -->
+    <g class="clk ${s.pouredRem && !s.thermoIn ? "glow" : ""}" onclick="act3('thermo')">
+      ${s.thermoIn ? `
+        <rect x="192" y="16" width="18" height="236" rx="9" fill="#f7fcfd" stroke="#45676d" stroke-width="1.8"/>
+        <circle cx="201" cy="252" r="11" fill="#d63636" stroke="#7d1717" stroke-width="1.5"/>
+        <rect id="s3Merc" x="198" y="${(248 - mercH).toFixed(1)}" width="6" height="${mercH.toFixed(1)}" rx="2" fill="#d63636"/>
+        <!-- Shkala 0..100 °C -->
+        <g stroke="#29444a" stroke-width="1" font-family="var(--mono)" font-size="9" fill="#132629">
+          <line x1="210" y1="64" x2="218" y2="64"/><text x="222" y="67">100°</text>
+          <line x1="210" y1="101" x2="218" y2="101"/><text x="222" y="104">80°</text>
+          <line x1="210" y1="138" x2="218" y2="138"/><text x="222" y="141" fill="#b82424" font-weight="700">60°</text>
+          <line x1="210" y1="156" x2="218" y2="156"/><text x="222" y="159" fill="#c97200" font-weight="700">50°</text>
+          <line x1="210" y1="193" x2="218" y2="193"/><text x="222" y="196">30°</text>
+          <line x1="210" y1="211" x2="218" y2="211"/><text x="222" y="214">20°</text>
+        </g>
+      ` : `
+        <rect x="260" y="34" width="18" height="190" rx="9" fill="#f7fcfd" stroke="#45676d" stroke-dasharray="4 3"/>
+        <circle cx="269" cy="224" r="10" fill="#d63636" opacity="0.65"/>
+        <text x="269" y="250" text-anchor="middle" font-size="11" font-weight="700" fill="#132629">100 °C termometr</text>
+      `}
+    </g>
+  </g>
+
+  <!-- O'ng taraf: Raqamli harorat displeyi + Suvda erish testi -->
+  <g transform="translate(566,112)" filter="url(#shd)">
+    <rect x="0" y="0" width="370" height="150" rx="14" fill="#172f34" stroke="#0c1b1e" stroke-width="2.2"/>
+    <text x="185" y="28" text-anchor="middle" font-size="11.5" font-weight="700" fill="#8db4ba">HARORAT VA DENATURATSIYA NAZORATI</text>
+    <text id="s3BigTemp" x="112" y="80" text-anchor="middle" font-family="var(--mono)" font-size="34" font-weight="800" fill="${s.tempC >= 50 ? "#ff9b6a" : "#8cf5c1"}">${f1(s.tempC, 1)}°C</text>
+    <text id="s3BigTurb" x="268" y="80" text-anchor="middle" font-family="var(--mono)" font-size="30" font-weight="800" fill="#ffcf73">${Math.round(turb)}%</text>
+    <text x="112" y="102" text-anchor="middle" font-size="10.5" fill="#9fc2c7">Joriy harorat</text>
+    <text x="268" y="102" text-anchor="middle" font-size="10.5" fill="#9fc2c7">Koagullanish darajasi</text>
+    <rect x="24" y="116" width="322" height="20" rx="6" fill="#0d1d21"/>
+    <text id="s3PhaseTxt" x="185" y="130" text-anchor="middle" font-size="11" font-weight="700" fill="#d9eae7">${s.maxTempC < 50 ? "20–49 °C: Tiniq nativ albumin" : s.maxTempC < 60 ? "50–60 °C: Oq quyqa paydo boʻlmoqda!" : "60–75 °C: QAYTMAS termik denaturatsiya!"}</text>
+  </g>
+
+  <!-- Sovigach suvda eruvchanlik testi (o'ng past) -->
+  <g class="clk ${s.cooled && !s.waterTested ? "glow" : ""}" onclick="act3('testWater')" transform="translate(566,286)" filter="url(#shd)">
+    <rect x="0" y="0" width="370" height="168" rx="14" fill="#ffffff" fill-opacity="0.94" stroke="${s.waterTested ? "#d64545" : "#c3d8d5"}" stroke-width="2"/>
+    <text x="185" y="26" text-anchor="middle" font-size="13" font-weight="800" fill="#0f2e33">Sovigach toza suvda eruvchanlik sinovi</text>
+    <!-- Kichik stakan -->
+    <rect x="34" y="44" width="90" height="100" rx="6" fill="#eef8fa" stroke="#45676d" stroke-width="2"/>
+    <rect x="38" y="78" width="82" height="62" rx="3" fill="url(#waterG)"/>
+    ${s.waterTested ? `
+      <!-- Erimagan oq pag'a cho'kma tubida -->
+      <g fill="#ffffff" stroke="#ccc4ac" stroke-width="1">
+        <circle cx="58" cy="128" r="9"/><circle cx="76" cy="124" r="11"/><circle cx="96" cy="129" r="9"/><circle cx="82" cy="133" r="8"/><circle cx="68" cy="133" r="8"/>
+      </g>
+    ` : ""}
+    <text x="242" y="76" text-anchor="middle" font-size="13" font-weight="800" fill="${s.waterTested ? "#b32424" : "#46696e"}">${s.waterTested ? "✗ SUVDA ERIMAYDI!" : s.cooled ? "Sinab koʻrish (bosing)" : "Avval qizdirib sovuting"}</text>
+    <text x="242" y="100" text-anchor="middle" font-size="11.5" fill="#46696e">Polipeptid zanjirlari yoyilib</text>
+    <text x="242" y="118" text-anchor="middle" font-size="11.5" fill="#46696e">qaytmas chigallashgan (denaturatsiya)</text>
+  </g>`;
+}
+
+function buildSceneReport() {
+  const t = total();
+  return `${commonDefs()}
+  <rect x="64" y="52" width="872" height="394" rx="20" fill="#ffffff" fill-opacity="0.95" stroke="#c5d8d5" stroke-width="2" filter="url(#shd)"/>
+  <text x="500" y="98" text-anchor="middle" font-size="22" font-weight="800" fill="#0f2e33">6-LABORATORIYA ISHI NATIJALARI</text>
+  <text x="500" y="124" text-anchor="middle" font-size="14" fill="#587276">Gidrofil zollarning (tuxum oqsili — albumin) qaytar va qaytmas koagullanishi</text>
+
+  <g transform="translate(106,154)">
+    <rect x="0" y="0" width="374" height="205" rx="14" fill="#edf9f3" stroke="#1f9d6b" stroke-width="2"/>
+    <text x="187" y="32" text-anchor="middle" font-size="15" font-weight="800" fill="#126b47">1. QAYTAR KOAGULLANISH (TUZLASH)</text>
+    <text x="187" y="64" text-anchor="middle" font-size="12.5" fill="#132629">Agent: Kristallik (NH₄)₂SO₄ (toʻyintirish)</text>
+    <text x="187" y="90" text-anchor="middle" font-size="12.5" fill="#132629">Mexanizm: Gidrat qobiq yechiladi,</text>
+    <text x="187" y="110" text-anchor="middle" font-size="12.5" fill="#132629">nativ struktura saqlanib qoladi</text>
+    <text x="187" y="144" text-anchor="middle" font-size="14" font-weight="800" fill="#126b47">Toza suvda: TOʻLIQ QAYTA ERIYDI ✓</text>
+    <text x="187" y="180" text-anchor="middle" font-family="var(--mono)" font-size="13" font-weight="700" fill="#126b47">${t.p2 + t.q2} / 28 ball</text>
+  </g>
+
+  <g transform="translate(520,154)">
+    <rect x="0" y="0" width="374" height="205" rx="14" fill="#fdf1f1" stroke="#d64545" stroke-width="2"/>
+    <text x="187" y="32" text-anchor="middle" font-size="15" font-weight="800" fill="#9c2222">2. QAYTMAS KOAGULLANISH (TERMIK)</text>
+    <text x="187" y="64" text-anchor="middle" font-size="12.5" fill="#132629">Agent: Qizdirish (50–75 °C)</text>
+    <text x="187" y="90" text-anchor="middle" font-size="12.5" fill="#132629">Mexanizm: Termik denaturatsiya,</text>
+    <text x="187" y="110" text-anchor="middle" font-size="12.5" fill="#132629">fazoviy struktura qaytmas buziladi</text>
+    <text x="187" y="144" text-anchor="middle" font-size="14" font-weight="800" fill="#9c2222">Toza suvda: ERIMAYDI ✗</text>
+    <text x="187" y="180" text-anchor="middle" font-family="var(--mono)" font-size="13" font-weight="700" fill="#9c2222">${t.p3 + t.q3} / 28 ball</text>
+  </g>
+
+  <text x="500" y="408" text-anchor="middle" font-family="var(--mono)" font-size="18" font-weight="800" fill="#0f2e33">Umumiy natija: ${t.tot} / 100 ball</text>`;
+}
+
+function renderScene() {
+  const svg = el("scene");
+  if (S.stage === 0) svg.innerHTML = buildScene1();
+  else if (S.stage === 1) svg.innerHTML = buildScene2();
+  else if (S.stage === 2) svg.innerHTML = buildScene3();
+  else svg.innerHTML = buildSceneReport();
+  updateSceneLive();
+}
+
+function updateSceneLive() {
+  if (S.stage === 0) {
+    // Suv purkash nasosi pufakchalari
+    const jb = el("s1JetBubbles");
+    if (jb && S.s1.pumpOn) {
+      let h = "";
+      for (let i = 0; i < 8; i++) {
+        const y = 175 + ((animPhase * 150 + i * 24) % 175);
+        const x = 51 + (i % 3) * 4;
+        h += `<circle cx="${x}" cy="${y.toFixed(1)}" r="2.2" fill="#ffffff" opacity="0.75"/>`;
+      }
+      jb.innerHTML = h;
+    }
+    // Filtrat tomchilari va sathi
+    const fProg = S.s1.filtrateMl / 95;
+    const fl = el("s1FiltLiq");
+    if (fl) {
+      fl.setAttribute("y", (345 - fProg * 96).toFixed(1));
+      fl.setAttribute("height", (fProg * 96 + 6).toFixed(1));
+    }
+    const fd = el("s1FiltDrops");
+    if (fd) {
+      if (S.s1.filtering) {
+        let dh = "";
+        for (let i = 0; i < 4; i++) {
+          const y = 200 + ((animPhase * 140 + i * 38) % 130);
+          dh += `<ellipse cx="100" cy="${y.toFixed(1)}" rx="3" ry="5.5" fill="#f2e6b6" stroke="#b8a66e" stroke-width="0.6"/>`;
+        }
+        fd.innerHTML = dh;
+      } else fd.innerHTML = "";
+    }
+  } else if (S.stage === 1) {
+    // 1-stakandagi pag'a-pag'a cho'kma
+    const f1g = el("s2Flocs1");
+    if (f1g) {
+      if (S.s2.saltScoops >= 5) {
+        const cnt = S.s2.saltScoops >= 6 ? 26 : 10;
+        let h = "";
+        if (S.s2.saltScoops >= 6) {
+          h += `<rect x="4" y="162" width="158" height="34" rx="4" fill="#fffdf5" opacity="0.96"/>`;
+        }
+        for (let i = 0; i < cnt; i++) {
+          const x = 18 + ((i * 29) % 130);
+          const y = 90 + ((i * 19 + animPhase * 6) % 92);
+          const r = 3.5 + (i % 3) * 1.6;
+          h += `<circle cx="${x}" cy="${y.toFixed(1)}" r="${r}" fill="#ffffff" stroke="#d9d1b8" stroke-width="0.7"/>`;
+        }
+        f1g.innerHTML = h;
+      } else f1g.innerHTML = "";
+    }
+    // Tushayotgan tuz donachalari
+    const sf = el("s2SaltFall");
+    if (sf) {
+      if (S.s2.scoopAnim > 0) {
+        const p = 1 - S.s2.scoopAnim;
+        let h = "";
+        for (let i = 0; i < 14; i++) {
+          const x = 58 + (i * 17) % 52;
+          const y = 30 + p * 120 + (i % 4) * 9;
+          h += `<rect x="${x}" y="${y.toFixed(1)}" width="3.5" height="3.5" fill="#ffffff" stroke="#b5c7c4" stroke-width="0.4"/>`;
+        }
+        sf.innerHTML = h;
+      } else sf.innerHTML = "";
+    }
+    // 2-stakanda qayta erish animatsiyasi
+    const rf = el("s2RedissolveFlocs");
+    if (rf) {
+      if (S.s2.inPureWater && S.s2.redissolveProg < 0.99) {
+        const rem = 1 - S.s2.redissolveProg;
+        let h = "";
+        const cnt = Math.ceil(16 * rem);
+        for (let i = 0; i < cnt; i++) {
+          const ang = animPhase * (S.s2.stirredRedissolve ? 3.5 : 0.4) + i * 0.9;
+          const rad = 16 + (i % 4) * 12;
+          const x = 92 + Math.cos(ang) * rad;
+          const y = 148 - (S.s2.stirredRedissolve ? 18 : 0) + Math.sin(ang) * 14;
+          const r = (4 + (i % 3) * 1.6) * Math.max(0.25, rem);
+          h += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="#ffffff" stroke="#d4ccb2" opacity="${rem.toFixed(2)}"/>`;
+        }
+        rf.innerHTML = h;
+      } else rf.innerHTML = "";
+    }
+  } else if (S.stage === 2) {
+    const s = S.s3;
+    const turb = thermalTurbidity(s.maxTempC);
+    const tr = el("s3TurbRect");
+    if (tr) tr.setAttribute("opacity", (turb / 100 * 0.92).toFixed(2));
+    const merc = el("s3Merc");
+    if (merc) {
+      const mh = clamp((s.tempC / 100) * 184, 10, 184);
+      merc.setAttribute("y", (248 - mh).toFixed(1));
+      merc.setAttribute("height", mh.toFixed(1));
+    }
+    const bt = el("s3BigTemp"), btu = el("s3BigTurb");
+    if (bt) bt.textContent = `${f1(s.tempC, 1)}°C`;
+    if (btu) btu.textContent = `${Math.round(turb)}%`;
+
+    const cf = el("s3CoagFlocs");
+    if (cf && s.maxTempC >= 52) {
+      const f = clamp((s.maxTempC - 52) / 18, 0, 1);
+      const cnt = Math.floor(6 + f * 24);
+      let h = "";
+      if (f > 0.5) h += `<rect x="78" y="${(286 - f * 28).toFixed(1)}" width="144" height="${(f * 28).toFixed(1)}" rx="3" fill="#fffdf5" opacity="0.96"/>`;
+      for (let i = 0; i < cnt; i++) {
+        const x = 90 + ((i * 23) % 120);
+        const y = 192 + ((i * 17 + (s.heaterOn ? animPhase * 16 : 0)) % 84);
+        const r = 3.2 + (i % 3) * 1.8 * f;
+        h += `<circle cx="${x}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="#ffffff" stroke="#d4ccb0" stroke-width="0.7"/>`;
+      }
+      cf.innerHTML = h;
+    }
+    const st = el("s3Steam");
+    if (st) {
+      if (s.tempC > 48) {
+        let h = "";
+        for (let i = 0; i < 5; i++) {
+          const y = 160 - ((animPhase * 34 + i * 22) % 78);
+          const x = 108 + i * 20 + Math.sin(animPhase * 2 + i) * 6;
+          h += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="7" fill="#ffffff" opacity="${clamp((y - 82) / 90 * 0.42, 0, 0.42).toFixed(2)}"/>`;
+        }
+        st.innerHTML = h;
+      } else st.innerHTML = "";
+    }
+  }
+}
+
+/* ============ AMALLAR ============ */
+window.act1 = function(cmd) {
+  const s = S.s1;
+  if (cmd === "egg") {
+    if (s.eggAdded) return toast("Tuxum oqsili allaqachon 100 ml suvga solingan.", "warn");
+    s.eggAdded = true; SFX.play("splash");
+    toast("Tuxum oqsili 100 ml distillangan suvga solindi.", "ok");
+  } else if (cmd === "mix") {
+    if (!s.eggAdded) return toast("Avval tuxum oqsilini 100 ml suvga soling!", "warn");
+    if (s.mixed) return toast("Eritma allaqachon yaxshilab ishlangan.", "warn");
+    s.mixed = true; SFX.play("stir");
+    toast("Tuxum oqsili 100 ml suvda yaxshilab ishlandi (suspenziya tayyor).", "ok");
+  } else if (cmd === "paper") {
+    if (!s.mixed) return toast("Avval tuxum oqsilini suvda ishlab tayyorlang!", "warn");
+    if (s.paperPlaced) return toast("Filtr qogʻoz Byuxner voronkasiga qoʻyilgan.", "warn");
+    s.paperPlaced = true; SFX.play("paper");
+    toast("Qogʻoz filtr Byuxner voronkasining teshikli tubiga joylashtirildi.", "ok");
+  } else if (cmd === "wet") {
+    if (!s.paperPlaced) return toast("Avval Byuxner voronkasiga filtr qogʻoz qoʻying!", "warn");
+    if (s.paperWet) return toast("Filtr qogʻoz allaqachon namlangan.", "warn");
+    s.paperWet = true; SFX.play("drip");
+    toast("Filtr qogʻoz distillangan suv bilan namlandi — voronka tubiga zich yopishdi.", "ok");
+  } else if (cmd === "pump") {
+    if (!s.paperWet) return toast("Avval filtr qogʻozni distillangan suv bilan namlang!", "warn");
+    s.pumpOn = !s.pumpOn;
+    SFX.play(s.pumpOn ? "vacuum" : "click");
+    toast(s.pumpOn ? "Suv purkash nasosi ishga tushirildi (−72 kPa vakuum)!" : "Nasos oʻchirildi.", s.pumpOn ? "ok" : "");
+  } else if (cmd === "filter") {
+    if (!s.pumpOn) return toast("Avval suv purkash nasosini ishga tushiring!", "warn");
+    if (s.done) return toast("Filtrlash allaqachon yakunlangan (~95 ml albumin filtrati olindi).", "warn");
+    s.filtering = true;
+    SFX.play("pour");
+    toast("Oqsil eritmasi Byuxner voronkasiga quyildi — vakuum ostida soʻrib filtrlanmoqda...", "ok");
+  }
+  renderAll();
+};
+
+window.act2 = function(cmd) {
+  const s = S.s2;
+  if (cmd === "pour45") {
+    if (s.poured45) return toast("45 ml albumin filtrati allaqachon stakanga olingan.", "warn");
+    s.poured45 = true; SFX.play("pour");
+    toast("45 ml tiniq albumin filtrati stakanga quyildi.", "ok");
+  } else if (cmd === "salt") {
+    if (!s.poured45) return toast("Avval 45 ml albumin filtratini stakanga oling!", "warn");
+    if (s.saltedOut) return toast("Eritma toʻyingan va albumin pagʻa-pagʻa boʻlib ajralib chiqdi!", "warn");
+    s.saltScoops = Math.min(6, s.saltScoops + 1);
+    s.saltGrams = s.saltScoops * 6;
+    s.scoopAnim = 1;
+    SFX.play("stir");
+    if (s.saltScoops >= 6) {
+      s.saltedOut = true;
+      SFX.play("bell");
+      toast("Toʻyinishga yetildi (36 g (NH₄)₂SO₄)! Albumin pagʻa-pagʻa oq choʻkma boʻlib ajralib chiqdi.", "ok", 4600);
+    } else {
+      toast(`+6 g (NH₄)₂SO₄ qoʻshildi (jami ${s.saltGrams} g · toʻyinish ${Math.round(s.saltScoops / 6 * 100)}%).`, "");
+    }
+  } else if (cmd === "filterDry") {
+    if (!s.saltedOut) return toast("Avval eritma toʻyinguncha (6 qoshiq) (NH₄)₂SO₄ qoʻshing!", "warn");
+    if (s.filteredDry) return toast("Choʻkma allaqachon filtrlab quritilgan.", "warn");
+    s.filteredDry = true; SFX.play("paper");
+    toast("Albumin choʻkmasi filtrlab ajratildi va filtr qogʻoz yordamida quritildi.", "ok");
+  } else if (cmd === "toWater") {
+    if (!s.filteredDry) return toast("Avval choʻkmani filtrlab qogʻozda quriting!", "warn");
+    if (s.inPureWater) return toast("Choʻkma toza suv stakaniga solingan.", "warn");
+    s.inPureWater = true; SFX.play("splash");
+    toast("Quritilgan albumin choʻkmasi toza distillangan suvga solindi. Endi aralashtiring!", "ok");
+  } else if (cmd === "stir") {
+    if (!s.inPureWater) return toast("Avval quritilgan choʻkmani toza suvga soling!", "warn");
+    if (s.stirredRedissolve) return toast("Choʻkma qayta erimoqda / erib boʻldi.", "");
+    s.stirredRedissolve = true; SFX.play("stir");
+    toast("Shisha tayoqcha bilan aralashtirilmoqda — choʻkma qayta eriyotganini kuzating!", "ok");
+  }
+  renderAll();
+};
+
+window.guess2 = function(kind) {
+  if (S.s2.redissolveProg < 0.9) return toast("Avval choʻkmani toza suvda aralashtirib natijasini koʻring!", "warn");
+  S.s2.guess = kind;
+  if (kind === "rev") {
+    S.s2.guessOk = true; SFX.play("ok");
+    toast("Toʻgʻri! Tuzlash — qaytar koagullanish (albumin suvda qayta eriydi).", "ok");
+  } else {
+    SFX.play("err");
+    toast("Qayta oʻylab koʻring: choʻkma toza suvda toʻliq qayta erib ketdi!", "err");
+  }
+  renderAll();
+};
+
+window.act3 = function(cmd) {
+  const s = S.s3;
+  if (cmd === "pourRem") {
+    if (s.pouredRem) return toast("Qolgan albumin filtrati stakanga quyilgan.", "warn");
+    s.pouredRem = true; SFX.play("pour");
+    toast("Oldingi tajribadan ortib qolgan ~45 ml albumin eritmasi stakanga quyildi.", "ok");
+  } else if (cmd === "thermo") {
+    if (!s.pouredRem) return toast("Avval albumin eritmasini stakanga quying!", "warn");
+    if (s.thermoIn) return toast("100 °C li termometr oʻrnatilgan.", "warn");
+    s.thermoIn = true; SFX.play("click");
+    toast("100 °C gacha oʻlchaydigan termometr eritmaga tushirildi.", "ok");
+  } else if (cmd === "heater") {
+    if (!s.thermoIn) return toast("Avval termometrni tushiring!", "warn");
+    if (s.tempC >= 75) return toast("75 °C ga yetdi — endi sovuting!", "warn");
+    s.cooling = false;
+    s.heaterOn = !s.heaterOn;
+    SFX.play(s.heaterOn ? "heat" : "click");
+    toast(s.heaterOn ? "Ohista isitish boshlandi! 50–60 °C oraligʻini diqqat bilan kuzating." : "Isitgich oʻchirildi.", s.heaterOn ? "ok" : "");
+  } else if (cmd === "cool") {
+    if (!s.coagulated) return toast("Avval haroratni kamida 65–75 °C gacha koʻtarib pagʻa choʻkma hosil qiling!", "warn");
+    s.heaterOn = false;
+    s.cooling = true;
+    SFX.play("whoosh");
+    toast("Isitgich oʻchirildi — choʻkma va eritma xona haroratigacha (22 °C) sovutilmoqda...", "");
+  } else if (cmd === "testWater") {
+    if (!s.cooled) return toast("Avval eritma soviguncha (22 °C) kuting!", "warn");
+    if (s.waterTested) return toast("Suvda eruvchanlik sinovi bajarilgan: choʻkma ERIMAYDI!", "warn");
+    s.waterTested = true; SFX.play("stir");
+    setTimeout(() => SFX.play("warn"), 350);
+    toast("Sovigan choʻkma toza suvda aralashtirildi — ERIMADI! (Qaytmas termik denaturatsiya)", "warn", 4600);
+  }
+  renderAll();
+};
+
+window.guess3 = function(kind) {
+  if (!S.s3.waterTested) return toast("Avval sovigan choʻkmaning suvda eruvchanligini tekshiring!", "warn");
+  S.s3.guess = kind;
+  if (kind === "irrev") {
+    S.s3.guessOk = true; SFX.play("ok");
+    toast("Toʻgʻri! Qizdirishda qaytmas koagullanish (termik denaturatsiya) yuz beradi.", "ok");
+  } else {
+    SFX.play("err");
+    toast("Qayta qarang: choʻkma sovigach toza suvda ham erimadi!", "err");
+  }
+  renderAll();
+};
+
+window.ansStageQ = function(stageIdx, qid, optIdx) {
+  const qObj = STAGE_QS[stageIdx].find(x => x.id === qid);
+  const store = stageIdx === 0 ? S.s1.q : stageIdx === 1 ? S.s2.q : S.s3.q;
+  store[qid] = optIdx;
+  SFX.play(optIdx === qObj.ok ? "ok" : "err");
+  if (optIdx === qObj.ok) toast("Toʻgʻri javob! (+3 ball)", "ok");
+  else toast("Notoʻgʻri. Qayta urinib koʻring!", "err");
+  renderAll();
+};
+
+window.ansQuiz = function(qid, optIdx) {
+  const qObj = QUIZ.find(x => x.id === qid);
+  S.quiz[qid] = optIdx;
+  SFX.play(optIdx === qObj.ok ? "ok" : "err");
+  renderAll();
+};
+
+/* ============ YON PANEL ============ */
+function renderStageQs(stageIdx) {
+  const store = stageIdx === 0 ? S.s1.q : stageIdx === 1 ? S.s2.q : S.s3.q;
+  return `<div class="box"><h4>Nazorat savollari</h4>` +
+    STAGE_QS[stageIdx].map((q, qi) => {
+      const order = shuf(q.opts.length, 61 + stageIdx * 17 + qi * 9);
+      const picked = store[q.id];
+      return `<div class="q"><p>${q.p}</p>` +
+        order.map(oi => {
+          const cls = picked === oi ? (oi === q.ok ? "right" : "wrong") : "";
+          return `<button class="${cls}" onclick="ansStageQ(${stageIdx},'${q.id}',${oi})">${q.opts[oi]}</button>`;
+        }).join("") + `</div>`;
+    }).join("") + `</div>`;
+}
+
+function denatChart() {
+  const pts = S.s3.history.length > 1
+    ? S.s3.history.map(h => ({ x: h.T, y: h.turb }))
+    : [{ x: 20, y: 8 }, { x: 40, y: 8 }, { x: 50, y: 15 }, { x: 56, y: 53 }, { x: 62, y: 91 }, { x: 75, y: 98 }];
+  return svgChart({
+    title: "Albuminning termik denaturatsiya egri chizigʻi",
+    xl: "T, °C", yl: "Loyqalik, %",
+    x0: 20, xm: 80, y0: 0, ym: 105,
+    series: [{ color: "#d64545", dot: "#132629", pts }]
+  });
+}
+
+function renderPanel() {
+  const p = el("panel");
+  if (S.stage === 0) {
+    const s = S.s1;
+    const steps = [
+      { done: s.eggAdded, txt: "1–2 ta tuxum oqsilini 100 ml distillangan suvga solish" },
+      { done: s.mixed, txt: "Tuxum oqsilini suvda yaxshilab aralashtirib ishlash" },
+      { done: s.paperPlaced, txt: "Byuxner voronkasiga qogʻoz filtr qoʻyish" },
+      { done: s.paperWet, txt: "Filtr qogʻozni distillangan suv bilan namlash" },
+      { done: s.pumpOn, txt: "Suv purkash nasosini ishga tushirish" },
+      { done: s.done, txt: "Albumin eritmasini Bunzen kolbasiga soʻrib filtrlash" }
+    ];
+    const curIdx = steps.findIndex(x => !x.done);
+    p.innerHTML = `
+      <h2>1-bosqich: Albumin &amp; Byuxner</h2>
+      <p class="sub">Tuxum oqsilidan tiniq opalesent albumin zolini tayyorlang va vakuum nasosli Byuxner voronkasida filtrlab oling.</p>
+      <ul class="tasks">${steps.map((st, i) => `<li class="${st.done ? "done" : i === curIdx ? "cur" : ""}"><span class="b">${st.done ? "✓" : i + 1}</span><span>${st.txt}</span></li>`).join("")}</ul>
+      <div class="box">
+        <h4>Amallar ketma-ketligi</h4>
+        <div class="grid2">
+          <button onclick="act1('egg')" class="${s.eggAdded ? "on" : ""}">1. Tuxum oqsili</button>
+          <button onclick="act1('mix')" class="${s.mixed ? "on" : ""}" ${!s.eggAdded ? "disabled" : ""}>2. 100 ml da ishlash</button>
+          <button onclick="act1('paper')" class="${s.paperPlaced ? "on" : ""}" ${!s.mixed ? "disabled" : ""}>3. Filtr qogʻoz</button>
+          <button onclick="act1('wet')" class="${s.paperWet ? "on" : ""}" ${!s.paperPlaced ? "disabled" : ""}>4. Suv bilan namlash</button>
+          <button onclick="act1('pump')" class="${s.pumpOn ? "on" : ""}" ${!s.paperWet ? "disabled" : ""}>5. Vakuum nasos</button>
+          <button onclick="act1('filter')" class="${s.done ? "on" : "pri"}" ${!s.pumpOn || s.done ? "disabled" : ""}>6. Soʻrib filtrlash</button>
+        </div>
+        <div class="big" id="s1FiltRead" style="margin-top:8px">${Math.round(s.filtrateMl)} ml<small>Bunzen kolbasidagi albumin filtrati</small></div>
+      </div>
+      ${renderStageQs(0)}
+      ${s.done ? `<button class="next pri" onclick="goStage(1)">Keyingi: 2-bosqich (Qaytar tuzlash) →</button>` : ""}
+    `;
+  } else if (S.stage === 1) {
+    const s = S.s2;
+    const steps = [
+      { done: s.poured45, txt: "45 ml (40–50 ml) albumin filtratini stakanga olish" },
+      { done: s.saltedOut, txt: "Kristallik (NH₄)₂SO₄ kukunini toʻyinguncha oz-ozdan qoʻshish (6 qoshiq)" },
+      { done: s.filteredDry, txt: "Pagʻa-pagʻa choʻkmani filtrlab, filtr qogʻozda quritish" },
+      { done: s.stirredRedissolve, txt: "Choʻkmani toza distillangan suvga solib aralashtirish" },
+      { done: s.guessOk, txt: "Koagullanish turini aniqlash" }
+    ];
+    const curIdx = steps.findIndex(x => !x.done);
+    p.innerHTML = `
+      <h2>2-bosqich: Qaytar koagullanish</h2>
+      <p class="sub">45 ml albumin eritmasini ammoniy sulfat <code>(NH₄)₂SO₄</code> bilan toʻyintirib tuzlang, soʻng choʻkmaning toza suvda qayta erishini kuzating.</p>
+      <ul class="tasks">${steps.map((st, i) => `<li class="${st.done ? "done" : i === curIdx ? "cur" : ""}"><span class="b">${st.done ? "✓" : i + 1}</span><span>${st.txt}</span></li>`).join("")}</ul>
+      <div class="box">
+        <h4>Tuzlash va qayta eritish amallari</h4>
+        <div class="kv"><span>(NH₄)₂SO₄ miqdori:</span><b>${s.saltGrams} g / 36 g (${Math.round(s.saltScoops / 6 * 100)}%)</b></div>
+        <div class="meter"><div style="width:${Math.round(s.saltScoops / 6 * 100)}%"></div></div>
+        <div class="grid2" style="margin-top:8px">
+          <button onclick="act2('pour45')" class="${s.poured45 ? "on" : ""}">1. 45 ml filtrat</button>
+          <button onclick="act2('salt')" class="${s.saltedOut ? "on" : "pri"}" ${!s.poured45 || s.saltedOut ? "disabled" : ""}>2. +6 g (NH₄)₂SO₄ (${s.saltScoops}/6)</button>
+          <button onclick="act2('filterDry')" class="${s.filteredDry ? "on" : ""}" ${!s.saltedOut ? "disabled" : ""}>3. Filtrlash &amp; quritish</button>
+          <button onclick="act2('toWater')" class="${s.inPureWater ? "on" : ""}" ${!s.filteredDry ? "disabled" : ""}>4. Toza suvga solish</button>
+        </div>
+        <button class="next ${s.redissolveProg >= 1 ? "on" : "pri"}" onclick="act2('stir')" ${!s.inPureWater || s.stirredRedissolve ? "disabled" : ""}>${s.redissolveProg >= 1 ? "✓ Choʻkma toʻliq qayta eridi!" : "🥄 5. Toza suvda aralashtirish"}</button>
+      </div>
+      ${s.redissolveProg >= 0.9 ? `
+        <div class="box">
+          <h4>Xulosa: Bu qanday koagullanish turi?</h4>
+          <div class="pill-row">
+            <button onclick="guess2('rev')" class="${s.guess === "rev" ? "on" : ""}">Qaytar koagullanish (tuzlash)</button>
+            <button onclick="guess2('irrev')" class="${s.guess === "irrev" ? "bad" : ""}">Qaytmas koagullanish</button>
+          </div>
+        </div>` : ""}
+      ${renderStageQs(1)}
+      ${stageDone(1) ? `<button class="next pri" onclick="goStage(2)">Keyingi: 3-bosqich (Qaytmas qizdirish) →</button>` : ""}
+    `;
+  } else if (S.stage === 2) {
+    const s = S.s3;
+    const steps = [
+      { done: s.pouredRem, txt: "Qolgan albumin filtratini stakanga quyish" },
+      { done: s.thermoIn, txt: "100 °C li termometrni eritmaga tushirish" },
+      { done: s.coagulated, txt: "Ohista 20 °C → 75 °C gacha qizdirish (50–60 °C quyqa, >60 °C pagʻa)" },
+      { done: s.cooled, txt: "Isitgichni oʻchirib eritmani 22 °C gacha sovutish" },
+      { done: s.waterTested, txt: "Sovigan choʻkmaning toza suvda eruvchanligini tekshirish" },
+      { done: s.guessOk, txt: "Qaytar va qaytmas koagullanishni xulosalash" }
+    ];
+    const curIdx = steps.findIndex(x => !x.done);
+    p.innerHTML = `
+      <h2>3-bosqich: Qaytmas koagullanish</h2>
+      <p class="sub">Qolgan albumin eritmasini termometr nazoratida ohista qizdiring (50–75 °C), sovuting va suvda eruvchanligini tekshiring.</p>
+      <ul class="tasks">${steps.map((st, i) => `<li class="${st.done ? "done" : i === curIdx ? "cur" : ""}"><span class="b">${st.done ? "✓" : i + 1}</span><span>${st.txt}</span></li>`).join("")}</ul>
+      <div class="box">
+        <h4>Isitish va sovitish boshqaruvi</h4>
+        <div class="big" id="s3TempRead">${f1(s.tempC, 1)} °C<small>Maks: ${f1(s.maxTempC, 1)} °C · Loyqalik: ${Math.round(thermalTurbidity(s.maxTempC))}%</small></div>
+        <div class="grid2">
+          <button onclick="act3('pourRem')" class="${s.pouredRem ? "on" : ""}">1. Qolgan filtrat</button>
+          <button onclick="act3('thermo')" class="${s.thermoIn ? "on" : ""}" ${!s.pouredRem ? "disabled" : ""}>2. 100 °C termometr</button>
+          <button onclick="act3('heater')" class="${s.heaterOn ? "on" : "pri"}" ${!s.thermoIn || s.tempC >= 75 ? "disabled" : ""}>${s.heaterOn ? "⏸ Plitkani oʻchirish" : "🔥 3. Ohista isitish"}</button>
+          <button onclick="act3('cool')" class="${s.cooled ? "on" : ""}" ${!s.coagulated || s.cooled ? "disabled" : ""}>❄️ 4. 22 °C ga sovutish</button>
+        </div>
+        <button class="next ${s.waterTested ? "bad" : "dark"}" onclick="act3('testWater')" ${!s.cooled || s.waterTested ? "disabled" : ""}>${s.waterTested ? "✗ Suvda ERIMADI (qaytmas denaturatsiya!)" : "💧 5. Toza suvda eruvchanlikni tekshirish"}</button>
+      </div>
+
+      ${s.maxTempC > 45 ? `<div class="box"><h4>Termik denaturatsiya grafigi</h4>${denatChart()}</div>` : ""}
+
+      ${s.waterTested ? `
+        <div class="box">
+          <h4>Xulosa: Termik qizdirish qanday koagullanish?</h4>
+          <div class="pill-row">
+            <button onclick="guess3('irrev')" class="${s.guess === "irrev" ? "on" : ""}">Qaytmas koagullanish (denaturatsiya)</button>
+            <button onclick="guess3('rev')" class="${s.guess === "rev" ? "bad" : ""}">Qaytar koagullanish</button>
+          </div>
+        </div>` : ""}
+      ${renderStageQs(2)}
+      ${stageDone(2) ? `<button class="next pri" onclick="goStage(3)">Yakuniy hisobot va testga oʻtish →</button>` : ""}
+    `;
+  } else {
+    renderReport();
+  }
+}
+
+function renderReport() {
+  const t = total();
+  const grade = t.tot >= 90 ? "Aʼlo (5)" : t.tot >= 75 ? "Yaxshi (4)" : t.tot >= 60 ? "Qoniqarli (3)" : "Tugallanmagan";
+  el("panel").innerHTML = `<div class="rep">
+    <h2>6-laboratoriya hisoboti</h2>
+    <div class="score">
+      <div class="n">${t.tot}</div>
+      <div><b>${grade}</b><br><span style="font-size:12px;opacity:.82">1-bosqich: ${t.p1 + t.q1}/24 · 2-bosqich: ${t.p2 + t.q2}/28 · 3-bosqich: ${t.p3 + t.q3}/28 · Test: ${t.qz}/20</span></div>
+    </div>
+
+    <div class="box">
+      <h4>Qaytar va qaytmas koagullanish taqqoslash jadvali</h4>
+      <table class="j">
+        <thead><tr><th>Koʻrsatkich</th><th>Tuzlash (2-bosqich)</th><th>Qizdirish (3-bosqich)</th></tr></thead>
+        <tbody>
+          <tr><td>Taʼsir omili</td><td>(NH₄)₂SO₄ (toʻyingan)</td><td>Harorat 50–75 °C</td></tr>
+          <tr><td>Koʻrinishi</td><td>Oq pagʻa-pagʻa choʻkma</td><td>Oq quyqa → pagʻa choʻkma</td></tr>
+          <tr><td>Oqsil strukturasi</td><td>Nativ (saqlanadi)</td><td>Denaturatsiya (buziladi)</td></tr>
+          <tr class="hl"><td>Toza suvda erishi</td><td>Toʻliq eriydi (Qaytar)</td><td>Erimaydi (Qaytmas)</td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top:8px">${denatChart()}</div>
+    </div>
+
+    <div class="box">
+      <h4>Yakuniy test (5 savol × 4 ball = 20 ball)</h4>
+      ${QUIZ.map((q, qi) => {
+        const order = shuf(q.opts.length, 606 + qi * 19);
+        const picked = S.quiz[q.id];
+        return `<div class="q"><p>${q.p}</p>` +
+          order.map(oi => {
+            const cls = picked === oi ? (oi === q.ok ? "right" : "wrong") : "";
+            return `<button class="${cls}" onclick="ansQuiz('${q.id}',${oi})">${q.opts[oi]}</button>`;
+          }).join("") + `</div>`;
+      }).join("")}
+    </div>
+
+    <div class="row noprint">
+      <button class="pri" style="flex:1" onclick="window.print()">🖨️ Hisobotni chop etish</button>
+      <button class="ghost" onclick="location.reload()">↺ Qaytadan boshlash</button>
+    </div>
+  </div>`;
+}
+
+function renderAll() {
+  renderTabs();
+  renderScene();
+  renderPanel();
+}
+
+/* ============ MODALLAR ============ */
+function showTheory() {
+  modal(`
+    <h1>📘 6-laboratoriya nazariyasi</h1>
+    <p><b>Mavzu:</b> Gidrofil zollarning qaytar va qaytmas koagullanishi (tuxum oqsili — albumin misolida).</p>
+    <h3>1. Gidrofil zollarni olish va vakuum filtrlash</h3>
+    <p>Tuxum oqsili (albumin) 100 ml distillangan suvda ishlanganda qovushqoq kolloid eritma va erimagan pardalar aralashmasi hosil boʻladi. Uni tozalash uchun <b>Byuxner voronkasiga</b> qogʻoz filtr qoʻyiladi, distillangan suv bilan namlanadi va <b>suv purkash nasosi</b> yordamida Bunzen kolbasiga soʻrib filtrlanadi.</p>
+    <h3>2. Qaytar koagullanish — Tuzlash (Salting-out)</h3>
+    <p>40–50 ml albumin eritmasiga kristallik ammoniy sulfat <code>(NH₄)₂SO₄</code> toʻyinguncha qoʻshilganda, kuchli gidratlanuvchi <code>NH₄⁺</code> va <code>SO₄²⁻</code> ionlari suv molekulalarini oʻziga bogʻlab, oqsil makromolekulalarining gidrat qobigʻini yechib oladi. Albumin pagʻa-pagʻa choʻkmaga tushadi, lekin uning fazoviy (nativ) strukturasi buzilmaydi. Shu sababli choʻkma toza suvda <b>toʻliq qayta eriydi</b>.</p>
+    <h3>3. Qaytmas koagullanish — Termik denaturatsiya</h3>
+    <p>Albumin eritmasi <b>50–60 °C</b> dan yuqori qizdirilganda oq quyqa, keyin pagʻa-pagʻa choʻkma hosil boʻladi. Yuqori harorat taʼsirida oqsilning ikkilamchi va uchlamchi strukturasini tutib turuvchi vodorod va gidrofob bogʻlar uziladi (<b>denaturatsiya</b>). Sovigandan keyin ham choʻkma suvda <b>qayta erimaydi</b>.</p>
+    ${refsHTML()}
+    <div class="row" style="margin-top:14px;justify-content:flex-end"><button class="pri" onclick="LabUI.closeModal()">Yopish</button></div>
+  `);
+}
+
+function showJournal() {
+  modal(`
+    <h1>📋 Laboratoriya jurnali (6-ish)</h1>
+    <table class="j">
+      <thead><tr><th>Bosqich</th><th>Tajriba</th><th>Kuzatilgan natija</th></tr></thead>
+      <tbody>
+        <tr><td>1-bosqich</td><td>Byuxner filtrlash</td><td>${S.s1.done ? "95 ml tiniq opalesent albumin filtrati olindi ✓" : `${Math.round(S.s1.filtrateMl)} ml`}</td></tr>
+        <tr><td>2-bosqich</td><td>(NH₄)₂SO₄ tuzlash</td><td>${S.s2.saltGrams} g tuz · ${S.s2.redissolveProg >= 1 ? "Toza suvda TOʻLIQ QAYTA ERIDI (Qaytar) ✓" : S.s2.saltedOut ? "Pagʻa choʻkma tushdi" : "Kutilmoqda"}</td></tr>
+        <tr><td>3-bosqich</td><td>Termik qizdirish</td><td>Tₘₐₖₛ = ${f1(S.s3.maxTempC, 1)} °C · ${S.s3.waterTested ? "Sovigach suvda ERIMADI (Qaytmas) ✓" : S.s3.coagulated ? "Pagʻa choʻkma hosil boʻldi" : "Kutilmoqda"}</td></tr>
+      </tbody>
+    </table>
+    <div class="row" style="margin-top:14px;justify-content:flex-end"><button class="pri" onclick="LabUI.closeModal()">Yopish</button></div>
+  `);
+}
+
+function showHint() {
+  let h = "";
+  if (S.stage === 0) {
+    if (!S.s1.eggAdded) h = "Tuxum oqsilini 100 ml distillangan suvga soling.";
+    else if (!S.s1.mixed) h = "Stakanni bosib tuxum oqsilini 100 ml suvda aralashtiring.";
+    else if (!S.s1.paperPlaced) h = "Filtr qogʻozni Byuxner voronkasiga qoʻying.";
+    else if (!S.s1.paperWet) h = "Yuvgichdan suv quyib filtr qogʻozni namlang.";
+    else if (!S.s1.pumpOn) h = "Oʻngdagi suv purkash nasosini ishga tushiring.";
+    else h = "Byuxner voronkasiga albumin eritmasini quyib soʻrib filtrlang!";
+  } else if (S.stage === 1) {
+    if (!S.s2.poured45) h = "45 ml albumin filtratini 1-stakanga oling.";
+    else if (!S.s2.saltedOut) h = "(NH₄)₂SO₄ kukunidan 6 marta (+6 g dan = 36 g) qoʻshib toʻyintiring.";
+    else if (!S.s2.filteredDry) h = "Choʻkmani filtr qogʻozda filtrlab quriting.";
+    else if (!S.s2.inPureWater) h = "Quritilgan choʻkmani 2-stakandagi toza distillangan suvga soling.";
+    else h = "Toza suvda aralashtiring — choʻkma toʻliq qayta eriydi (qaytar koagullanish)!";
+  } else if (S.stage === 2) {
+    if (!S.s3.pouredRem) h = "Qolgan albumin filtratini stakanga quying.";
+    else if (!S.s3.thermoIn) h = "100 °C li termometrni stakanga tushiring.";
+    else if (!S.s3.coagulated) h = "Elektr plitkani yoqib 75 °C gacha ohista isiting (50–60 °C quyqa).";
+    else if (!S.s3.cooled) h = "Eritmani 22 °C gacha sovuting.";
+    else h = "Sovigan choʻkmani toza suvda tekshiring — u erimaydi (qaytmas denaturatsiya)!";
+  } else {
+    h = "Yakuniy 5 ta test savolini yeching va hisobotni chop eting.";
+  }
+  toast("💡 " + h, "warn", 5000);
+}
+
+function showIntro() {
+  modal(`
+    <h1>🥚 6-laboratoriya: Gidrofil zollarning koagullanishi</h1>
+    <p>Ushbu ishda tuxum oqsili (albumin) misolida gidrofil kolloidlarning ikki xil koagullanishini solishtirasiz:</p>
+    <ul>
+      <li><b>1-bosqich:</b> Tuxum oqsilini 100 ml suvda ishlash va Byuxner voronkasi + suv purkash nasosi bilan vakuum filtrlash.</li>
+      <li><b>2-bosqich (Qaytar koagullanish):</b> 45 ml filtratga <code>(NH₄)₂SO₄</code> qoʻshib tuzlash, quritish va toza suvda qayta erishini tekshirish.</li>
+      <li><b>3-bosqich (Qaytmas koagullanish):</b> Qolgan filtratni 50–75 °C gacha qizdirib termik denaturatsiya qilish va sovigach suvda erimasligini isbotlash.</li>
+    </ul>
+    <div class="row" style="margin-top:16px;justify-content:flex-end"><button class="pri" onclick="LabUI.closeModal()">Boshlash →</button></div>
+  `);
+}
+
+/* ============ INITSIALIZATSIYA ============ */
+LabUI.initShell(LAB_ID);
+document.querySelectorAll("[data-sp]").forEach(btn => {
+  if (+btn.dataset.sp === S.speed) btn.classList.add("on");
+  btn.addEventListener("click", () => {
+    S.speed = +btn.dataset.sp;
+    document.querySelectorAll("[data-sp]").forEach(b => b.classList.toggle("on", +b.dataset.sp === S.speed));
+    SFX.play("click");
+    toast(`Jarayon tezligi: ×${S.speed}`, "", 1800);
+  });
+});
+el("btnTable").addEventListener("click", () => { SFX.play("click"); showJournal(); });
+el("btnHint").addEventListener("click", () => { SFX.play("click"); showHint(); });
+el("btnTheory").addEventListener("click", () => { SFX.play("click"); showTheory(); });
+
+renderAll();
+showIntro();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
