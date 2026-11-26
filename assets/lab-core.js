@@ -230,6 +230,19 @@ const LabUI = {
       try { sessionStorage.setItem("kk_last_ig_fx", String(fx)); } catch {}
       ig.classList.add("ig-fx-" + fx);
     }
+    // Mobil ekranda sahnani yig'ish / ochish tugmasi (tajriba payti sahna yuqorida ko'rinib turadi)
+    const sw = document.getElementById("stageWrap");
+    if (sw && !sw.querySelector(".stage-mob-toggle")) {
+      const tb = document.createElement("button");
+      tb.type = "button";
+      tb.className = "stage-mob-toggle";
+      tb.textContent = "⬆ Sahnani yigʻish";
+      tb.addEventListener("click", () => {
+        const c = sw.classList.toggle("collapsed");
+        tb.textContent = c ? "⬇ Sahnani ochish" : "⬆ Sahnani yigʻish";
+      });
+      sw.appendChild(tb);
+    }
   },
   /* Universal SVG grafik generatori (chiziqli, nuqtali + regressiya, ustunli) */
   niceStep(span) {

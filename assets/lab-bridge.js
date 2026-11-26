@@ -69,7 +69,30 @@
         @keyframes kkWav{0%{background-position:0% 50%}100%{background-position:260% 50%}}
         .kk-ig.ig-fx-7{background:linear-gradient(135deg,#b82964,#ff5e96);border-color:#ffc2da;color:#fff;box-shadow:0 4px 18px rgba(255,94,150,.5);animation:kkBrt 2.2s ease-in-out infinite}
         @keyframes kkBrt{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
-        @media (max-width:900px){footer{position:sticky;bottom:0;z-index:30}footer .kk-ig{position:sticky;right:0;z-index:3;flex:none;box-shadow:-8px 0 12px rgba(10,20,38,.85)}}
+        .kk-stage-tog{display:none;position:absolute;right:8px;bottom:8px;z-index:10;padding:5px 10px;font-size:11.5px;font-weight:700;border-radius:999px;background:rgba(15,46,51,.86);color:#edf5f4;border:1px solid rgba(255,255,255,.25);backdrop-filter:blur(6px);cursor:pointer}
+        @media (max-width:900px){
+          header{padding:8px 10px!important;gap:6px 8px!important}
+          header .logo{display:none}
+          header .brand{flex:1 1 100px;min-width:0;font-size:13.5px!important;overflow:hidden;text-overflow:ellipsis}
+          header .brand small{display:none!important}
+          .scorechip{margin-left:auto;padding:4px 9px!important;font-size:11.5px!important}
+          .tabs{order:10;width:100%;margin-left:0!important;-webkit-overflow-scrolling:touch}
+          .tabs button{font-size:12px!important;padding:6px 10px!important}
+          #stageWrap{position:sticky!important;top:0;z-index:15;height:clamp(210px,36vh,290px)!important;min-height:210px!important;box-shadow:0 6px 18px rgba(8,22,25,.22);transition:height .22s ease}
+          #stageWrap.collapsed{height:44px!important;min-height:44px!important}
+          #stageWrap.collapsed #scene{opacity:.18;pointer-events:none}
+          .kk-stage-tog{display:inline-flex;align-items:center;gap:4px}
+          aside{padding:14px 13px 26px!important;overflow:visible!important}
+          .grid4,.grid3{grid-template-columns:repeat(2,1fr)!important}
+          table.j{display:block;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+          #toasts{left:10px!important;right:10px!important;top:10px!important;bottom:auto!important;width:auto!important;transform:none!important}
+          #modal{padding:10px!important}
+          #modal .card,#modal .mc{padding:18px 16px!important;max-height:90dvh!important}
+          footer{position:sticky;bottom:0;z-index:30;border-top:1px solid rgba(255,255,255,.14);flex-wrap:wrap!important;justify-content:space-between;gap:5px!important;padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))!important;overflow-x:visible!important;box-shadow:0 -4px 16px rgba(0,0,0,.28)}
+          footer .sp,footer .lbl,footer #btnFull{display:none!important}
+          footer button{padding:5px 8px!important;font-size:11.5px!important;min-height:32px}
+          footer .kk-ig{position:static;margin-left:auto;padding:5px 10px!important;font-size:11.5px!important}
+        }
       `;
       document.head.appendChild(style);
       const header = document.querySelector("header");
@@ -90,6 +113,18 @@
         const btn = document.getElementById("kkSwBtn"), menu = document.getElementById("kkSwMenu");
         btn.addEventListener("click", e => { e.stopPropagation(); menu.classList.toggle("open"); });
         document.addEventListener("click", () => menu.classList.remove("open"));
+      }
+      const sw = document.getElementById("stageWrap");
+      if (sw && !sw.querySelector(".kk-stage-tog")) {
+        const tb = document.createElement("button");
+        tb.type = "button";
+        tb.className = "kk-stage-tog";
+        tb.textContent = "⬆ Sahnani yigʻish";
+        tb.addEventListener("click", () => {
+          const c = sw.classList.toggle("collapsed");
+          tb.textContent = c ? "⬇ Sahnani ochish" : "⬆ Sahnani yigʻish";
+        });
+        sw.appendChild(tb);
       }
       const footer = document.querySelector("footer");
       if (footer) {
