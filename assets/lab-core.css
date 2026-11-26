@@ -602,6 +602,7 @@ footer.lab-foot .lbl { font-size: 10.5px; letter-spacing: .09em; opacity: .58; w
   #toasts { right: 16px; bottom: 68px; }
   #stageWrap { height: 64vw; min-height: 270px; }
   aside#panel { border-left: none; border-top: 1px solid var(--line); }
+  footer.lab-foot { position: sticky; bottom: 0; z-index: 30; }
 }
 
 @media print {

@@ -66,6 +66,7 @@
         @keyframes kkWav{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
         .kk-ig.ig-fx-7{background:rgba(255,111,165,.22);border-color:rgba(255,148,194,.68);color:#ffe0ee;animation:kkBrt 2.6s ease-in-out infinite}
         @keyframes kkBrt{0%,100%{transform:scale(1)}50%{transform:scale(1.035)}}
+        @media (max-width:900px){footer{position:sticky;bottom:0;z-index:30}}
       `;
       document.head.appendChild(style);
       const header = document.querySelector("header");
