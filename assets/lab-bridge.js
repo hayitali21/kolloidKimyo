@@ -43,30 +43,33 @@
         .kk-menu .n{width:22px;height:22px;border-radius:6px;background:#0f2e33;color:#fff;font-family:monospace;font-size:11px;font-weight:700;display:grid;place-items:center;flex:none}
         .kk-menu a.cur .n{background:#f2a541;color:#1d1405}
         .kk-menu .ok{margin-left:auto;font-size:11px;font-family:monospace;color:#1f9d6b;font-weight:700}
-        .kk-ig{position:relative;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:#f4faf9;text-decoration:none;white-space:nowrap;padding:5px 12px;border-radius:999px;background:rgba(255,255,255,.11);border:1px solid rgba(255,255,255,.24);font-family:ui-monospace,Consolas,monospace;letter-spacing:.02em;overflow:hidden;transition:transform .22s ease,box-shadow .22s ease,background .22s ease,letter-spacing .22s ease}
-        .kk-ig svg{width:14px;height:14px;flex:none;transition:transform .35s ease}
-        .kk-ig:hover{transform:translateY(-2px);color:#fff}
-        .kk-ig.ig-fx-0{background:linear-gradient(120deg,rgba(255,255,255,.12),rgba(242,165,65,.32),rgba(255,255,255,.12));background-size:220% 100%;border-color:rgba(242,165,65,.65);animation:kkShim 3.2s linear infinite}
-        @keyframes kkShim{0%{background-position:200% 0}100%{background-position:-20% 0}}
-        .kk-ig.ig-fx-1{background:linear-gradient(135deg,#f09433,#e6683c 28%,#dc2743 58%,#bc1888);border-color:rgba(255,255,255,.35);box-shadow:0 3px 12px rgba(220,39,67,.35);color:#fff}
-        .kk-ig.ig-fx-2{background:rgba(15,46,51,.92);border-color:#46e0a8;color:#8fffd2;box-shadow:0 0 10px rgba(70,224,168,.25)}
-        .kk-ig.ig-fx-2::after{content:"_";margin-left:1px;animation:kkBlk 1s steps(2,start) infinite}
+        .kk-ig{position:relative;display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:800;color:#fff;text-decoration:none;white-space:nowrap;padding:6px 14px;border-radius:999px;background:linear-gradient(135deg,#f09433,#e6683c,#dc2743,#bc1888);border:1.5px solid rgba(255,255,255,.38);font-family:ui-monospace,Consolas,monospace;letter-spacing:.03em;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.28);transition:transform .22s ease,box-shadow .22s ease,letter-spacing .22s ease}
+        .kk-ig svg{width:15px;height:15px;flex:none;transition:transform .4s ease}
+        .kk-ig:hover{transform:translateY(-2px) scale(1.04);color:#fff}
+        .kk-ig:hover svg{transform:rotate(-12deg) scale(1.15)}
+        .kk-ig.ig-fx-0{background:linear-gradient(120deg,#b86b15,#f5b942,#fff1b8,#e69322,#b86b15);background-size:260% 100%;border-color:#ffe399;color:#1c1002;box-shadow:0 0 18px rgba(245,185,66,.45);animation:kkShim 2.8s linear infinite}
+        @keyframes kkShim{0%{background-position:200% 0}100%{background-position:-60% 0}}
+        .kk-ig.ig-fx-1{background:linear-gradient(135deg,#f09433,#e6683c 25%,#dc2743 55%,#cc2366 78%,#bc1888);background-size:200% 200%;border-color:rgba(255,255,255,.55);box-shadow:0 4px 18px rgba(220,39,67,.55);color:#fff;animation:kkIns 3.5s ease infinite}
+        @keyframes kkIns{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+        .kk-ig.ig-fx-2{background:linear-gradient(135deg,#062823,#0f5c4e);border-color:#46f5b5;color:#7dffd0;box-shadow:0 0 16px rgba(70,245,181,.45)}
+        .kk-ig.ig-fx-2::after{content:"_";margin-left:1px;color:#46f5b5;animation:kkBlk .9s steps(2,start) infinite}
         @keyframes kkBlk{0%,49%{opacity:1}50%,100%{opacity:0}}
-        .kk-ig.ig-fx-3{background:rgba(34,195,214,.2);border-color:rgba(95,240,255,.55);color:#b6f9ff;animation:kkFlt 2.8s ease-in-out infinite}
-        @keyframes kkFlt{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
-        .kk-ig.ig-fx-4{background:rgba(255,255,255,.13);border-color:rgba(255,214,112,.68);color:#ffe9ad;animation:kkPls 2.4s ease-in-out infinite}
-        .kk-ig.ig-fx-4::before{content:"✦";font-size:10px;color:#ffd166;animation:kkSpn 4s linear infinite}
-        @keyframes kkPls{0%,100%{box-shadow:0 0 0 0 rgba(255,209,102,.45)}50%{box-shadow:0 0 0 6px rgba(255,209,102,0)}}
+        .kk-ig.ig-fx-3{background:linear-gradient(135deg,#094d66,#14a3b8);border-color:#7ff4ff;color:#fff;box-shadow:0 5px 18px rgba(20,163,184,.5);animation:kkFlt 2.4s ease-in-out infinite}
+        @keyframes kkFlt{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+        .kk-ig.ig-fx-4{background:linear-gradient(135deg,#2b1d07,#6e480e);border-color:#ffd166;color:#ffeaad;animation:kkPls 2.1s ease-in-out infinite}
+        .kk-ig.ig-fx-4::before{content:"✦";font-size:12px;color:#ffd166;animation:kkSpn 3s linear infinite}
+        @keyframes kkPls{0%,100%{box-shadow:0 0 0 0 rgba(255,209,102,.65)}50%{box-shadow:0 0 0 8px rgba(255,209,102,0)}}
         @keyframes kkSpn{to{transform:rotate(360deg)}}
-        .kk-ig.ig-fx-5{background:rgba(255,255,255,.12);border-color:rgba(255,138,101,.65);color:#ffd9cc}
-        .kk-ig.ig-fx-5::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.38),transparent);transform:translateX(-120%);animation:kkSwp 2.6s ease-in-out infinite}
-        @keyframes kkSwp{0%{transform:translateX(-120%)}55%,100%{transform:translateX(130%)}}
-        .kk-ig.ig-fx-6{background:linear-gradient(90deg,#1b484f,#2c6d75,#1b484f);background-size:200% 100%;border-color:#7ee8d2;color:#e8fffb;animation:kkWav 3.5s ease infinite}
-        .kk-ig.ig-fx-6:hover svg{transform:rotate(360deg) scale(1.15)}
-        @keyframes kkWav{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
-        .kk-ig.ig-fx-7{background:rgba(255,111,165,.22);border-color:rgba(255,148,194,.68);color:#ffe0ee;animation:kkBrt 2.6s ease-in-out infinite}
-        @keyframes kkBrt{0%,100%{transform:scale(1)}50%{transform:scale(1.035)}}
-        @media (max-width:900px){footer{position:sticky;bottom:0;z-index:30}}
+        .kk-ig.ig-fx-5{background:linear-gradient(135deg,#c94b28,#f28d35);border-color:#ffd6b0;color:#fff;box-shadow:0 4px 16px rgba(242,141,53,.45)}
+        .kk-ig.ig-fx-5::before{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 25%,rgba(255,255,255,.65) 50%,transparent 75%);transform:translateX(-130%);animation:kkSwp 2.2s ease-in-out infinite}
+        @keyframes kkSwp{0%{transform:translateX(-130%)}60%,100%{transform:translateX(140%)}}
+        .kk-ig.ig-fx-6{background:linear-gradient(90deg,#0d6e6e,#1cc7a5,#2b86c5,#0d6e6e);background-size:260% 100%;border-color:#a8fff0;color:#fff;box-shadow:0 4px 16px rgba(28,199,165,.45);animation:kkWav 3.2s linear infinite}
+        .kk-ig.ig-fx-6:hover svg{transform:rotate(360deg) scale(1.2)}
+        .kk-ig.ig-fx-6:hover{letter-spacing:.07em}
+        @keyframes kkWav{0%{background-position:0% 50%}100%{background-position:260% 50%}}
+        .kk-ig.ig-fx-7{background:linear-gradient(135deg,#b82964,#ff5e96);border-color:#ffc2da;color:#fff;box-shadow:0 4px 18px rgba(255,94,150,.5);animation:kkBrt 2.2s ease-in-out infinite}
+        @keyframes kkBrt{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+        @media (max-width:900px){footer{position:sticky;bottom:0;z-index:30}footer .kk-ig{position:sticky;right:0;z-index:3;flex:none;box-shadow:-8px 0 12px rgba(10,20,38,.85)}}
       `;
       document.head.appendChild(style);
       const header = document.querySelector("header");
